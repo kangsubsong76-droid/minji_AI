@@ -844,6 +844,40 @@ def read_root():
             transition: opacity 0.2s;
         }
         .pw-btn:active { opacity: 0.85; }
+        .pw-btn-faceid {
+            width: 100%;
+            padding: 14px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+            font-size: 0.98rem;
+            font-weight: 600;
+            cursor: pointer;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        }
+        .pw-btn-faceid:active { transform: scale(0.98); background: rgba(255, 255, 255, 0.15); }
+        .pw-divider {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            gap: 10px;
+            color: #555;
+            font-size: 0.78rem;
+        }
+        .pw-divider::before, .pw-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #232330;
+        }
         .pw-err {
             font-size: 0.82rem;
             color: #ff5555;
@@ -856,14 +890,21 @@ def read_root():
     <!-- ===== 패스워드 게이트 ===== -->
     <div class="pw-gate" id="pwGate">
         <div class="pw-logo">Minji AI</div>
-        <div class="pw-sub">민지에게 접속하려면 비밀번호를 입력하세요</div>
+        <div class="pw-sub" id="pwSubText">Face ID 또는 비밀번호를 입력하세요</div>
         <div class="pw-box">
+            <button class="pw-btn-faceid" id="faceIdBtn" onclick="loginWithFaceID()" style="display:none;">
+                <span style="font-size:1.3rem;">👤</span> <span>Face ID로 잠금 해제</span>
+            </button>
+            <div class="pw-divider" id="pwDivider" style="display:none;">또는 비밀번호</div>
             <input class="pw-input" id="pwInput" type="password"
                    placeholder="••••••••"
                    onkeydown="if(event.key==='Enter') checkPw()"
                    autocomplete="current-password">
             <div class="pw-err" id="pwErr"></div>
-            <button class="pw-btn" onclick="checkPw()">✨ 접속하기</button>
+            <button class="pw-btn" onclick="checkPw()">✨ 비밀번호로 접속</button>
+            <button class="btn-ghost" id="registerFaceIdPrompt" onclick="registerFaceID()" style="display:none; width:100%; margin-top:8px;">
+                <span>📲 이 기기 Face ID 등록하기</span>
+            </button>
         </div>
     </div>
 
@@ -957,19 +998,147 @@ def read_root():
     <audio id="audioPlayer" playsinline></audio>
 
     <script>
-        // ===== 패스워드 게이트 =====
+        // ===== 패스워드 & Face ID 게이트 =====
         const PW_KEY = 'minji_auth';
         const CORRECT_PW = 'minji76';
         const pwGate = document.getElementById('pwGate');
         const pwInput = document.getElementById('pwInput');
         const pwErr = document.getElementById('pwErr');
+        const faceIdBtn = document.getElementById('faceIdBtn');
+        const pwDivider = document.getElementById('pwDivider');
+        const registerFaceIdPrompt = document.getElementById('registerFaceIdPrompt');
+        let isPlatformAuthAvailable = false;
 
-        function checkPw() {
+        async function initAuthGate() {
+            // WebAuthn 생체인증(Face ID / Touch ID) 지원 여부 확인
+            if (window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
+                try {
+                    isPlatformAuthAvailable = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+                } catch(e) { isPlatformAuthAvailable = false; }
+            }
+
+            const isFaceIdRegistered = localStorage.getItem('minji_faceid_registered') === 'true';
+
+            // 이미 비밀번호로 인증된 기기라도, Face ID가 등록되어 있으면 UI 상태 업데이트
+            if (isPlatformAuthAvailable) {
+                if (isFaceIdRegistered) {
+                    if (faceIdBtn) faceIdBtn.style.display = 'inline-flex';
+                    if (pwDivider) pwDivider.style.display = 'flex';
+                } else {
+                    if (registerFaceIdPrompt) registerFaceIdPrompt.style.display = 'block';
+                }
+            }
+
+            // 인증 완료 여부 확인
+            if (localStorage.getItem(PW_KEY) === '1') {
+                pwGate.classList.add('hidden');
+            } else {
+                if (isPlatformAuthAvailable && isFaceIdRegistered) {
+                    // Face ID 등록 기기: 버튼 강조 및 자동 클릭 시도 (제스처 필요 시 사용자가 탭)
+                    setTimeout(() => loginWithFaceID(), 300);
+                } else {
+                    setTimeout(() => pwInput && pwInput.focus(), 200);
+                }
+            }
+        }
+
+        // 1. Face ID 신규 등록 (WebAuthn Passkey)
+        async function registerFaceID() {
+            if (!isPlatformAuthAvailable) {
+                alert("이 기기나 브라우저는 Face ID 생체인증을 지원하지 않습니다. (HTTPS 접속 필요)");
+                return;
+            }
+            try {
+                const challenge = new Uint8Array(32);
+                window.crypto.getRandomValues(challenge);
+                const userId = new Uint8Array(16);
+                window.crypto.getRandomValues(userId);
+
+                const credential = await navigator.credentials.create({
+                    publicKey: {
+                        challenge: challenge,
+                        rp: { name: "Minji AI" },
+                        user: {
+                            id: userId,
+                            name: "owner",
+                            displayName: "Minji AI Master"
+                        },
+                        pubKeyCredParams: [
+                            { type: "public-key", alg: -7 },   // ES256
+                            { type: "public-key", alg: -257 }  // RS256
+                        ],
+                        authenticatorSelection: {
+                            authenticatorAttachment: "platform",
+                            userVerification: "required"
+                        },
+                        timeout: 60000
+                    }
+                });
+
+                if (credential) {
+                    const rawIdStr = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
+                    localStorage.setItem('minji_faceid_registered', 'true');
+                    localStorage.setItem('minji_cred_id', rawIdStr);
+                    localStorage.setItem(PW_KEY, '1');
+                    pwGate.classList.add('hidden');
+                    alert("✨ Face ID 등록 완료! 다음 접속부터는 얼굴 인식으로 즉시 열립니다.");
+                }
+            } catch (err) {
+                console.warn("Face ID 등록 취소/에러:", err);
+                if (err.name !== 'NotAllowedError') {
+                    alert("Face ID 등록 실패: " + err.message);
+                }
+            }
+        }
+
+        // 2. Face ID로 로그인
+        async function loginWithFaceID() {
+            if (!isPlatformAuthAvailable) return;
+            try {
+                const challenge = new Uint8Array(32);
+                window.crypto.getRandomValues(challenge);
+                const credIdBase64 = localStorage.getItem('minji_cred_id');
+                const allowList = credIdBase64 ? [{
+                    type: "public-key",
+                    id: Uint8Array.from(atob(credIdBase64), c => c.charCodeAt(0))
+                }] : [];
+
+                const assertion = await navigator.credentials.get({
+                    publicKey: {
+                        challenge: challenge,
+                        allowCredentials: allowList.length ? allowList : undefined,
+                        userVerification: "required",
+                        timeout: 60000
+                    }
+                });
+
+                if (assertion) {
+                    localStorage.setItem(PW_KEY, '1');
+                    pwGate.classList.add('hidden');
+                }
+            } catch (err) {
+                console.warn("Face ID 인증 취소/실패:", err);
+                // 실패 시 비밀번호 입력창으로 포커스
+                if (pwInput) pwInput.focus();
+            }
+        }
+
+        // 3. 비밀번호 확인
+        async function checkPw() {
             const val = pwInput.value.trim();
             if (val === CORRECT_PW) {
                 localStorage.setItem(PW_KEY, '1');
                 pwGate.classList.add('hidden');
                 setTimeout(() => pwInput.focus && pwInput.blur(), 100);
+
+                // Face ID 지원 기기인데 아직 미등록 상태라면 등록 제안
+                if (isPlatformAuthAvailable && localStorage.getItem('minji_faceid_registered') !== 'true') {
+                    setTimeout(() => {
+                        if (confirm("다음 접속부터 Face ID(얼굴 인식)로 더 빠르게 접속하시겠습니까?")) {
+                            registerFaceID();
+                        }
+                    }, 500);
+                }
             } else {
                 pwErr.innerText = '비밀번호가 틀렸어요 😢';
                 pwInput.classList.add('error');
@@ -982,13 +1151,8 @@ def read_root():
             }
         }
 
-        // 이미 인증된 경우 게이트 즉시 숨기기
-        if (localStorage.getItem(PW_KEY) === '1') {
-            pwGate.classList.add('hidden');
-        } else {
-            // 게이트 표시 시 자동 포커스
-            setTimeout(() => pwInput && pwInput.focus(), 200);
-        }
+        // 초기화 실행
+        initAuthGate();
         // ===========================
 
         const statusText = document.getElementById('statusText');
