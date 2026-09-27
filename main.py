@@ -113,7 +113,7 @@ async def generate_tts(req: TTSRequest):
 
 
 def generate_chat_reply(history: List[Dict[str, str]], user_text: str) -> str:
-    # [압도적 1순위]: 최신 Claude 3.7 Sonnet (현존 최고 플래그십 감성 & 인간다운 구어체)
+    # [압도적 1순위]: Claude Sonnet 5 (최신 세대 최상위 감성 & 완벽한 구어체)
     if anthropic_client:
         try:
             claude_messages = []
@@ -123,7 +123,7 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str) -> str:
             claude_messages.append({"role": "user", "content": user_text})
 
             response = anthropic_client.messages.create(
-                model="claude-3-7-sonnet-20250219",
+                model="claude-sonnet-5",
                 max_tokens=250,
                 temperature=0.75,
                 system=SYSTEM_INSTRUCTION,
@@ -134,24 +134,9 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str) -> str:
                 if reply:
                     return reply
         except Exception as e:
-            print(f"[Claude 3.7 Sonnet Error -> Falling back to 3.5 / Gemini]: {e}")
-            try:
-                # 3.5 Sonnet 백업 시도
-                response = anthropic_client.messages.create(
-                    model="claude-3-5-sonnet-20241022",
-                    max_tokens=250,
-                    temperature=0.75,
-                    system=SYSTEM_INSTRUCTION,
-                    messages=claude_messages
-                )
-                if response and response.content:
-                    reply = response.content[0].text.strip()
-                    if reply:
-                        return reply
-            except Exception as e2:
-                print(f"[Claude 3.5 Fallback Error]: {e2}")
+            print(f"[Claude Sonnet 5 Error -> Gemini 3.8 Fallback]: {e}")
 
-    # 2순위: 최신 Gemini 2.5 Flash 시도 (초고속 플래그십 폴백)
+    # 2순위: 최신 Gemini 3.8 Flash (구글 최신 초고속 모델)
     if gemini_client:
         try:
             contents = []
@@ -165,7 +150,7 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str) -> str:
                 parts=[types.Part.from_text(text=user_text)]
             ))
             response = gemini_client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.8-flash",
                 contents=contents,
                 config=types.GenerateContentConfig(
                     system_instruction=SYSTEM_INSTRUCTION,
@@ -176,7 +161,7 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str) -> str:
             if response and response.text and response.text.strip():
                 return response.text.strip()
         except Exception as e:
-            print(f"[Gemini 2.5 Flash Error -> OpenAI Fallback]: {e}")
+            print(f"[Gemini 3.8 Flash Error -> OpenAI Fallback]: {e}")
 
     # 2순위: 503 대비 초고속 OpenAI gpt-4o-mini 즉시 폴백 (0.4초 초고속 응답)
     if openai_client:
@@ -962,7 +947,7 @@ def read_root():
     <div class="header">
         <div style="display:flex; align-items:center; gap:6px;">
             <div class="header-title">Minji AI</div>
-            <span style="font-size:0.65rem; background:rgba(217, 119, 87, 0.2); color:#ff9a76; border:1px solid rgba(217,119,87,0.4); padding:2px 6px; border-radius:8px;">Claude 3.7</span>
+            <span style="font-size:0.65rem; background:rgba(217, 119, 87, 0.2); color:#ff9a76; border:1px solid rgba(217,119,87,0.4); padding:2px 6px; border-radius:8px;">Sonnet 5.0</span>
         </div>
         <div style="display:flex; gap:6px; align-items:center;">
             <button class="view-mode-btn" onclick="registerFaceID()" title="Face ID 등록/재등록" style="padding:6px 10px; font-size:0.8rem;">
