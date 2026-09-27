@@ -58,7 +58,7 @@ class VisionRequest(BaseModel):
 
 class TTSRequest(BaseModel):
     text: str
-    voice: Optional[str] = "shimmer"  # shimmer: 가늘고 청순한 20대 여성 톤 (노윤서 스타일)
+    voice: Optional[str] = "coral"  # coral: 맑고 얇으며 청명한 20대 노윤서 스타일 톤
 
 class ResetMemoryRequest(BaseModel):
     session_id: Optional[str] = "default_user"
@@ -71,31 +71,27 @@ async def generate_tts(req: TTSRequest):
     
     # 허용 보이스 목록
     valid_voices = ["sage", "coral", "shimmer", "nova", "alloy", "fable", "echo", "onyx", "ash"]
-    selected_voice = req.voice if req.voice in valid_voices else "sage"
+    selected_voice = req.voice if req.voice in valid_voices else "coral"
 
     # 텍스트 정제: 마크다운 및 특수기호 제거로 순수 구어체 음성 보장
     cleaned_text = re.sub(r'[*#_~`\[\]\(\)<>]', '', req.text).strip()
 
     try:
-        # gpt-4o-mini-tts: 노윤서 배우 실제 목소리 분석 기반 정밀 인스트럭션
+        # gpt-4o-mini-tts: 노윤서 인터뷰 실제 음성 분석 기반 - 맑고 얇은 20대 초반 청명 보이스
         VOICE_INSTRUCTIONS = (
-            "You are Minji, a Korean woman in her early 20s. "
-            "Your voice is naturally light and clear — a genuine young woman's voice, not too deep, not too high. "
-            "Think of it as a fresh, clean mid-register voice with a natural youthful quality. "
-            "Speak Korean with a natural Seoul accent — calm, genuine, and slightly soft. "
-            "Your speaking style is thoughtful and unhurried, with natural micro-pauses between phrases. "
-            "You are composed and real — not bubbly, not overly cheerful, not robotic. "
-            "Express warmth through quiet sincerity rather than brightness or volume. "
-            "When emotional, your voice becomes slightly softer and more restrained. "
-            "Do NOT use a deep or husky tone. Do NOT sound like a mature woman or news anchor. "
-            "Sound like a real 22-year-old Korean woman having a genuine conversation. "
-            "Breathe naturally between sentences."
+            "You are Minji, a bright, charming, and naturally light-voiced Korean woman in her early 20s (inspired by actress Roh Yoon-seo in casual interviews). "
+            "Your voice is light, clear, crisp, and fresh — noticeably youthful and airy. "
+            "It is definitely NOT deep, NOT husky, NOT heavy, and NOT mature. "
+            "Speak Korean naturally with a fresh Seoul accent, with cheerful and pleasant subtle upward lilts at sentence endings. "
+            "Sound like a real, adorable 21-year-old friend chatting casually and playfully. "
+            "Do NOT sound like a formal AI assistant or older broadcaster. "
+            "Keep the delivery breezy, lighthearted, and expressively youthful."
         )
         response = openai_client.audio.speech.create(
             model="gpt-4o-mini-tts",
             voice=selected_voice,
             input=cleaned_text,
-            speed=0.94,
+            speed=1.0,
             extra_body={"instructions": VOICE_INSTRUCTIONS}
         )
         return Response(content=response.content, media_type="audio/mpeg")
@@ -952,10 +948,10 @@ def read_root():
             <div style="display:flex; justify-content:center; align-items:center; gap:8px; margin-bottom:2px;">
                 <span style="font-size:0.8rem; color:#aaa;">민지 목소리:</span>
                 <select id="voiceSelect" style="background:#1c1c24; color:#ff9a76; border:1px solid #ff7b54; border-radius:12px; padding:6px 12px; font-size:0.85rem; outline:none; cursor:pointer;">
-                    <option value="sage" selected>💖 가장 자연스러운 사만다 톤 (Sage HD - 추천)</option>
-                    <option value="coral">🌸 다정하고 부드러운 여성 톤 (Coral HD)</option>
-                    <option value="shimmer">✨ 나지막하고 맑은 감성 톤 (Shimmer HD)</option>
-                    <option value="nova">⚡ 밝고 명랑한 톤 (Nova HD)</option>
+                    <option value="coral" selected>🌸 맑고 산뜻한 20대 노윤서 톤 (Coral HD - 추천)</option>
+                    <option value="shimmer">✨ 여리고 가녀린 감성 톤 (Shimmer HD)</option>
+                    <option value="sage">💖 차분하고 깊은 사만다 톤 (Sage HD)</option>
+                    <option value="nova">⚡ 활기차고 빠른 톤 (Nova HD)</option>
                 </select>
             </div>
             <div class="btn-row">
@@ -1324,7 +1320,7 @@ def read_root():
                 }
 
                 const voiceSelect = document.getElementById('voiceSelect');
-                const chosenVoice = voiceSelect ? voiceSelect.value : 'sage';
+                const chosenVoice = voiceSelect ? voiceSelect.value : 'coral';
 
                 const response = await fetch('/api/tts', {
                     method: 'POST',
