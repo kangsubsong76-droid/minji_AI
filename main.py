@@ -637,7 +637,19 @@ def read_root():
                     if (!isMicMuted) startListening();
                 };
 
-                await audioPlayer.play();
+                try {
+                    await audioPlayer.play();
+                } catch (playErr) {
+                    console.warn("[Autoplay Blocked]:", playErr);
+                    statusText.innerText = "🔊 화면을 가볍게 터치하시면 목소리가 재생돼요.";
+                    const playOnce = async () => {
+                        window.removeEventListener('click', playOnce);
+                        window.removeEventListener('touchstart', playOnce);
+                        try { await audioPlayer.play(); } catch(e){}
+                    };
+                    window.addEventListener('click', playOnce, { once: true });
+                    window.addEventListener('touchstart', playOnce, { once: true });
+                }
 
             } catch (err) {
                 console.error("[TTS Play Error]:", err);
@@ -863,6 +875,22 @@ def read_root():
 
         // 민지 연결 초기화
         async function initMinji() {
+            // [iOS Safari 핵심 대응] 사용자의 터치 제스처 스택에서 동기적으로 Audio & AudioContext 잠금 해제(Unlock)
+            try {
+                if (!audioContext) {
+                    window.AudioContext = window.AudioContext || window.webkitAudioContext;
+                    audioContext = new AudioContext();
+                }
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+                // 무음 오디오 재생 후 일시정지로 HTMLAudioElement 언락
+                audioPlayer.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+                audioPlayer.play().then(() => audioPlayer.pause()).catch(e => console.log("Audio unlock:", e));
+            } catch (unlockErr) {
+                console.warn("Audio unlock exception:", unlockErr);
+            }
+
             try {
                 statusText.innerText = "카메라 및 마이크 권한 요청 중...";
                 const stream = await navigator.mediaDevices.getUserMedia({
