@@ -113,7 +113,7 @@ async def generate_tts(req: TTSRequest):
 
 
 def generate_chat_reply(history: List[Dict[str, str]], user_text: str) -> str:
-    # [압도적 1순위]: Claude 3.5 Sonnet (현존 최고 인간다운 한국어 감성 & 구어체 티키타카)
+    # [압도적 1순위]: 최신 Claude 3.7 Sonnet (현존 최고 플래그십 감성 & 인간다운 구어체)
     if anthropic_client:
         try:
             claude_messages = []
@@ -123,7 +123,7 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str) -> str:
             claude_messages.append({"role": "user", "content": user_text})
 
             response = anthropic_client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-3-7-sonnet-20250219",
                 max_tokens=250,
                 temperature=0.75,
                 system=SYSTEM_INSTRUCTION,
@@ -134,7 +134,22 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str) -> str:
                 if reply:
                     return reply
         except Exception as e:
-            print(f"[Claude 3.5 Sonnet Error -> Gemini Fallback]: {e}")
+            print(f"[Claude 3.7 Sonnet Error -> Falling back to 3.5 / Gemini]: {e}")
+            try:
+                # 3.5 Sonnet 백업 시도
+                response = anthropic_client.messages.create(
+                    model="claude-3-5-sonnet-20241022",
+                    max_tokens=250,
+                    temperature=0.75,
+                    system=SYSTEM_INSTRUCTION,
+                    messages=claude_messages
+                )
+                if response and response.content:
+                    reply = response.content[0].text.strip()
+                    if reply:
+                        return reply
+            except Exception as e2:
+                print(f"[Claude 3.5 Fallback Error]: {e2}")
 
     # 2순위: 최신 Gemini 2.5 Flash 시도 (초고속 플래그십 폴백)
     if gemini_client:
@@ -947,7 +962,7 @@ def read_root():
     <div class="header">
         <div style="display:flex; align-items:center; gap:6px;">
             <div class="header-title">Minji AI</div>
-            <span style="font-size:0.65rem; background:rgba(217, 119, 87, 0.2); color:#ff9a76; border:1px solid rgba(217,119,87,0.4); padding:2px 6px; border-radius:8px;">Claude 3.5</span>
+            <span style="font-size:0.65rem; background:rgba(217, 119, 87, 0.2); color:#ff9a76; border:1px solid rgba(217,119,87,0.4); padding:2px 6px; border-radius:8px;">Claude 3.7</span>
         </div>
         <div style="display:flex; gap:6px; align-items:center;">
             <button class="view-mode-btn" onclick="registerFaceID()" title="Face ID 등록/재등록" style="padding:6px 10px; font-size:0.8rem;">
