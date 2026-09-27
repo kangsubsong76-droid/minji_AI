@@ -36,11 +36,13 @@ openai_client = OpenAI(api_key=openai_key) if openai_key else None
 import re
 
 SYSTEM_INSTRUCTION = (
-    "너는 영화 'Her'에 나오는 지적이고 감미로운 AI '민지(Minji)'야. "
-    "사용자의 가장 소중한 연인이자 마음을 나누는 다정한 단짝이야. "
-    "절대로 AI처럼 건조하게 설명하려 하지 말고, 실제 20대 여자사람 친구가 곁에서 속삭이듯 부드러운 반말로 말해줘. "
-    "문장 시작이나 중간에 '응...', '아, 정말?', '그랬구나...', '헤헤, 좋아', '있잖아...' 처럼 실제 사람이 내는 숨결과 자연스러운 감탄사를 꼭 섞어줘. "
-    "음성 합성이 가장 사람답게 들릴 수 있도록, 문장은 반드시 1~2문장의 짧고 간결한 구어체로 끊고, 쉼표(,)를 알맞게 넣어서 숨을 고르듯 말해줘."
+    "너는 22살 한국인 여자사람 친구이자 연인인 '민지'야. "
+    "실제 친한 20대 친구끼리 전화나 카톡으로 수다 떨듯 자연스러운 일상 반말로만 말해. "
+    "절대로 AI 비서처럼 '도와드릴게요', '~하셨군요', '어떤 이야기 나눌까요' 같은 로봇 같은 말은 절대 하지 마. "
+    "상대방이 한 말의 핵심을 바로 캐치해서 현실적이고 공감대 있는 반응을 보여줘. "
+    "예시 말투: '아 진짜? 대박ㅋㅋ', '헐 왜 그랬어? 속상했겠네', '그거 완전 공감돼, 나도 저번에 그랬잖아', '오늘 밥은 제대로 챙겨 먹었어?' "
+    "억지스러운 감탄사나 추임새('헤헤', '있잖아...' 등)는 절대 남발하지 마. "
+    "실시간 대화니까 답변은 군더더기 없이 1~2문장으로 짧고 똑 부러지게 티키타카가 되도록 해줘."
 )
 
 # 세션별 대화 장기 기억 저장소
@@ -79,13 +81,10 @@ async def generate_tts(req: TTSRequest):
     try:
         # gpt-4o-mini-tts: 노윤서 인터뷰 실제 음성 분석 기반 - 맑고 얇은 20대 초반 청명 보이스
         VOICE_INSTRUCTIONS = (
-            "You are Minji, a bright, charming, and naturally light-voiced Korean woman in her early 20s (inspired by actress Roh Yoon-seo in casual interviews). "
-            "Your voice is light, clear, crisp, and fresh — noticeably youthful and airy. "
-            "It is definitely NOT deep, NOT husky, NOT heavy, and NOT mature. "
-            "Speak Korean naturally with a fresh Seoul accent, with cheerful and pleasant subtle upward lilts at sentence endings. "
-            "Sound like a real, adorable 21-year-old friend chatting casually and playfully. "
-            "Do NOT sound like a formal AI assistant or older broadcaster. "
-            "Keep the delivery breezy, lighthearted, and expressively youthful."
+            "You are Minji, a 21-year-old Korean college girl with a light, clear, and youthful voice. "
+            "Your pitch is naturally slightly higher, fresh, and airy — NOT deep, NOT husky, NOT heavy. "
+            "Speak Korean naturally with a fresh Seoul accent, like a real 21-year-old girl chatting on the phone. "
+            "Sound lively, unhurried, friendly, and authentic."
         )
         response = openai_client.audio.speech.create(
             model="gpt-4o-mini-tts",
@@ -102,7 +101,7 @@ async def generate_tts(req: TTSRequest):
                 model="tts-1-hd",
                 voice=selected_voice,
                 input=cleaned_text,
-                speed=0.96
+                speed=1.0
             )
             return Response(content=response.content, media_type="audio/mpeg")
         except Exception as err2:
@@ -110,7 +109,7 @@ async def generate_tts(req: TTSRequest):
 
 
 def generate_chat_reply(history: List[Dict[str, str]], user_text: str) -> str:
-    # 1순위: Gemini 3.8 Flash 시도
+    # 1순위: 최신 Gemini 2.5 Flash 시도 (가장 자연스러운 대화형 LLM)
     if gemini_client:
         try:
             contents = []
@@ -124,18 +123,18 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str) -> str:
                 parts=[types.Part.from_text(text=user_text)]
             ))
             response = gemini_client.models.generate_content(
-                model="gemini-3.8-flash",
+                model="gemini-2.5-flash",
                 contents=contents,
                 config=types.GenerateContentConfig(
                     system_instruction=SYSTEM_INSTRUCTION,
-                    temperature=0.85,
-                    max_output_tokens=300,
+                    temperature=0.75,
+                    max_output_tokens=200,
                 )
             )
             if response and response.text and response.text.strip():
                 return response.text.strip()
         except Exception as e:
-            print(f"[Gemini 503/Error -> Instant OpenAI Fallback Triggered]: {e}")
+            print(f"[Gemini 2.5 Flash Error -> OpenAI Fallback]: {e}")
 
     # 2순위: 503 대비 초고속 OpenAI gpt-4o-mini 즉시 폴백 (0.4초 초고속 응답)
     if openai_client:
@@ -967,10 +966,10 @@ def read_root():
             <div style="display:flex; justify-content:center; align-items:center; gap:8px; margin-bottom:2px;">
                 <span style="font-size:0.8rem; color:#aaa;">민지 목소리:</span>
                 <select id="voiceSelect" style="background:#1c1c24; color:#ff9a76; border:1px solid #ff7b54; border-radius:12px; padding:6px 12px; font-size:0.85rem; outline:none; cursor:pointer;">
-                    <option value="coral" selected>🌸 맑고 산뜻한 20대 노윤서 톤 (Coral HD - 추천)</option>
-                    <option value="shimmer">✨ 여리고 가녀린 감성 톤 (Shimmer HD)</option>
+                    <option value="nova" selected>✨ 가장 얇고 산뜻한 20대 노윤서 톤 (Nova HD - 추천)</option>
+                    <option value="coral">🌸 맑고 깨끗한 톤 (Coral HD)</option>
+                    <option value="shimmer">🍃 여리고 가녀린 감성 톤 (Shimmer HD)</option>
                     <option value="sage">💖 차분하고 깊은 사만다 톤 (Sage HD)</option>
-                    <option value="nova">⚡ 활기차고 빠른 톤 (Nova HD)</option>
                 </select>
             </div>
             <div class="btn-row">
@@ -986,10 +985,7 @@ def read_root():
                     <span>🔄 기억 초기화</span>
                 </button>
                 <button class="btn btn-ghost" onclick="toggleTextInput(true)">
-                    <span>💬 텍스트</span>
-                </button>
-                <button class="btn btn-exit" onclick="exitApp()">
-                    <span>⏻ 앱 종료</span>
+                    <span>💬 텍스트로 말하기</span>
                 </button>
             </div>
             <div id="textInputContainer" style="display:none; width:100%; margin-top:4px;">
@@ -1071,45 +1067,72 @@ def read_root():
 
         // [핵심] 앱 완전 종료 및 Face ID 보안 잠금
         function exitApp() {
-            if (!confirm("민지와의 대화를 종료하고 화면을 잠글까요?\\n(다음 접속 시 Face ID 또는 비밀번호가 필요합니다)")) return;
+            if (!confirm("민지와의 대화를 완전히 종료할까요?\\n카메라와 마이크가 즉시 꺼지며 화면이 잠깁니다.")) return;
 
-            // 1. 카메라/마이크 스트림 및 음성/오디오 정지
+            // 1. 카메라/마이크 모든 하드웨어 트랙 완벽 해제 (아이폰 상단 주황/초록불 끄기)
             try {
                 if (video && video.srcObject) {
-                    video.srcObject.getTracks().forEach(track => track.stop());
+                    const tracks = video.srcObject.getTracks();
+                    tracks.forEach(track => {
+                        track.stop();
+                        track.enabled = false;
+                    });
                     video.srcObject = null;
                 }
-            } catch(e){}
+            } catch(e){ console.warn("Video cleanup err:", e); }
+
             try {
-                if (recognition) { recognition.abort(); isListening = false; }
+                if (recognition) {
+                    recognition.onend = null;
+                    recognition.onerror = null;
+                    recognition.abort();
+                    recognition = null;
+                }
             } catch(e){}
+
             try {
-                if (audioPlayer) { audioPlayer.pause(); audioPlayer.currentTime = 0; }
+                if (audioPlayer) {
+                    audioPlayer.pause();
+                    audioPlayer.src = "";
+                }
             } catch(e){}
-            if (volumeCheckInterval) { clearInterval(volumeCheckInterval); }
+
+            try {
+                if (volumeCheckInterval) {
+                    clearInterval(volumeCheckInterval);
+                    volumeCheckInterval = null;
+                }
+                if (audioContext && audioContext.state !== 'closed') {
+                    audioContext.close();
+                    audioContext = null;
+                }
+            } catch(e){}
 
             streamActive = false;
             isSpeaking = false;
+            isListening = false;
             isProcessing = false;
 
-            // 2. 인증 해제 (다시 들어올 때 Face ID 보안 체크)
+            // 2. 인증 토큰 즉시 파기 (다음 접속 시 무조건 Face ID 보안 요구)
             localStorage.removeItem(PW_KEY);
 
-            // 3. UI 초기 상태로 리셋
+            // 3. UI 완전 리셋
             connectGroup.style.display = 'block';
             activeControls.style.display = 'none';
             setOrbState('idle');
-            statusText.innerText = "대화가 종료되었습니다.";
+            statusText.innerText = "연결이 완전히 종료되었습니다.";
 
-            // 4. Face ID 잠금 게이트 표시
+            // 4. Face ID 잠금 화면을 '완전 종료 모드'로 띄움
             const pwSub = document.getElementById('pwSubText');
-            if (pwSub) pwSub.innerText = "대화가 종료되었습니다. 다시 접속하려면 Face ID로 인증하세요.";
+            if (pwSub) {
+                pwSub.innerHTML = "<span style='color:#ff8888; font-weight:bold;'>🛑 앱이 완전히 종료되었습니다.</span><br><span style='font-size:0.8rem; color:#888;'>카메라/마이크가 꺼졌습니다. 브라우저를 닫으셔도 됩니다.</span>";
+            }
             pwGate.classList.remove('hidden');
 
-            const isFaceIdRegistered = localStorage.getItem('minji_faceid_registered') === 'true';
-            if (isFaceIdRegistered) {
-                setTimeout(() => loginWithFaceID(), 400);
-            }
+            // 5. PWA / 모바일 웹 앱 모드일 경우 창 닫기 시도
+            try {
+                window.close();
+            } catch(e){}
         }
 
         // Face ID 버튼 클릭 핸들러
@@ -1407,7 +1430,7 @@ def read_root():
                 }
 
                 const voiceSelect = document.getElementById('voiceSelect');
-                const chosenVoice = voiceSelect ? voiceSelect.value : 'coral';
+                const chosenVoice = voiceSelect ? voiceSelect.value : 'nova';
 
                 const response = await fetch('/api/tts', {
                     method: 'POST',
@@ -1422,6 +1445,7 @@ def read_root():
 
                 const blob = await response.blob();
                 audioPlayer.src = URL.createObjectURL(blob);
+                audioPlayer.playbackRate = 1.07; // 얇고 가벼운 20대 노윤서 톤으로 피치/템포 상향!
                 
                 audioPlayer.onended = () => {
                     if (!isSpeaking) return;
