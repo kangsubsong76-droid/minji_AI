@@ -1116,19 +1116,41 @@ def read_root():
     <!-- ===== 패스워드 게이트 ===== -->
     <div class="pw-gate" id="pwGate">
         <div class="pw-logo">Minji AI</div>
-        <div class="pw-sub" id="pwSubText">Face ID 또는 비밀번호를 입력하세요</div>
+        <div class="pw-sub" id="pwSubText">원터치로 바로 시작하거나 Face ID를 사용하세요</div>
         <div class="pw-box">
+            <!-- 1. 원터치 바로 시작 (최우선 간편 접속) -->
+            <button class="pw-btn" onclick="quickLogin()" style="background: linear-gradient(135deg, #ff7b54, #ff5e62); font-size:1.05rem; padding:15px; box-shadow:0 8px 24px rgba(255,107,84,0.45); width:100%;">
+                ✨ 원터치 바로 시작 (minji76)
+            </button>
+
+            <!-- 2. Face ID 생체 인증 버튼 -->
             <button class="pw-btn-faceid" id="faceIdBtn" onclick="handleFaceIdClick()">
                 <span style="font-size:1.3rem;">👤</span> <span id="faceIdBtnText">Face ID로 잠금 해제</span>
             </button>
-            <div class="pw-divider" id="pwDivider">또는 비밀번호</div>
-            <input class="pw-input" id="pwInput" type="password"
-                   placeholder="••••••••"
-                   onkeydown="if(event.key==='Enter') checkPw()"
-                   autocomplete="current-password">
+
+            <div class="pw-divider" id="pwDivider">또는 비밀번호 확인</div>
+
+            <!-- 3. 비밀번호 입력 필드 (자동 대문자 방지 및 눈 아이콘) -->
+            <div style="position:relative; width:100%;">
+                <input class="pw-input" id="pwInput" type="password"
+                       placeholder="비밀번호 (minji76)"
+                       value="minji76"
+                       autocapitalize="none"
+                       autocorrect="off"
+                       spellcheck="false"
+                       onkeydown="if(event.key==='Enter') checkPw()"
+                       autocomplete="current-password"
+                       style="padding-right: 48px; letter-spacing: 2px;">
+                <button type="button" onclick="togglePwVisibility()" 
+                        style="position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; color:#888; font-size:1.15rem; cursor:pointer; padding:6px;">
+                    <span id="pwEyeIcon">👁️</span>
+                </button>
+            </div>
             <div class="pw-err" id="pwErr"></div>
-            <button class="pw-btn" onclick="checkPw()">✨ 비밀번호로 접속</button>
-            <button class="btn-ghost" id="registerFaceIdPrompt" onclick="registerFaceID()" style="width:100%; margin-top:8px;">
+            <button class="btn-ghost" onclick="checkPw()" style="width:100%; padding:13px; border-radius:18px; font-weight:600;">
+                <span>🔑 입력한 비밀번호로 접속</span>
+            </button>
+            <button class="btn-ghost" id="registerFaceIdPrompt" onclick="registerFaceID()" style="width:100%; margin-top:2px; font-size:0.82rem; color:#888;">
                 <span>📲 이 기기 Face ID 신규 등록</span>
             </button>
         </div>
@@ -1266,13 +1288,28 @@ def read_root():
                 pwGate.classList.add('hidden');
             } else {
                 pwGate.classList.remove('hidden');
-                if (isPlatformAuthAvailable && isFaceIdRegistered) {
-                    // Face ID 등록된 경우: 사용자가 탭하거나 자동 시도
-                    setTimeout(() => loginWithFaceID(), 400);
+            }
+        }
+
+        // 비밀번호 보이기/숨기기 토글
+        function togglePwVisibility() {
+            const input = document.getElementById('pwInput');
+            const icon = document.getElementById('pwEyeIcon');
+            if (input) {
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    if (icon) icon.innerText = '🔒';
                 } else {
-                    setTimeout(() => pwInput && pwInput.focus(), 200);
+                    input.type = 'password';
+                    if (icon) icon.innerText = '👁️';
                 }
             }
+        }
+
+        // [핵심] 원터치 바로 시작 (비밀번호 확인 생략 및 즉시 진입)
+        function quickLogin() {
+            localStorage.setItem(PW_KEY, '1');
+            pwGate.classList.add('hidden');
         }
 
         // 화면 수동 잠금
@@ -1333,23 +1370,20 @@ def read_root():
             isListening = false;
             isProcessing = false;
 
-            // 2. 인증 토큰 즉시 파기 (종료 후 재부팅 시 보안 인증 요구)
-            localStorage.removeItem(PW_KEY);
-
-            // 3. UI 기본 컨트롤 숨김
+            // 2. UI 기본 컨트롤 숨김
             connectGroup.style.display = 'block';
             activeControls.style.display = 'none';
             setOrbState('idle');
             statusText.innerText = "전원이 완전히 꺼졌습니다.";
 
-            // 4. [핵심] 로그인 화면으로 떨어지지 않고 완전한 전원 꺼짐(True Shutdown) 화면 진입!
+            // 3. [핵심] 로그인 화면으로 떨어지지 않고 완전한 전원 꺼짐(True Shutdown) 화면 진입!
             pwGate.classList.add('hidden');
             const shutdownScreen = document.getElementById('shutdownScreen');
             if (shutdownScreen) {
                 shutdownScreen.style.display = 'flex';
             }
 
-            // 5. PWA / 모바일 웹 앱 모드일 경우 창 닫기 시도
+            // 4. PWA / 모바일 웹 앱 모드일 경우 창 닫기 시도
             try {
                 window.close();
             } catch(e){}
@@ -1371,14 +1405,14 @@ def read_root():
             if (shutdownScreen) {
                 shutdownScreen.style.display = 'none';
             }
-            // 전원 다시 켤 때 보안 인증 게이트 호출
-            initAuthGate();
+            pwGate.classList.add('hidden');
+            statusText.innerText = "전원이 켜졌습니다. 민지와 대화해 보세요.";
         }
 
         // Face ID 버튼 클릭 핸들러
         async function handleFaceIdClick() {
             if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-                alert("⚠️ Face ID는 애플 보안 정책상 ngrok의 HTTPS 주소(https://...)에서만 작동합니다.\\n\\n주소창이 https:// 인지 확인해주세요!");
+                alert("⚠️ Face ID는 보안 정책상 HTTPS 주소(https://...)에서만 작동합니다.\n주소창이 https:// 인지 확인해주세요!");
                 return;
             }
             const isFaceIdRegistered = localStorage.getItem('minji_faceid_registered') === 'true';
@@ -1392,7 +1426,7 @@ def read_root():
         // 1. Face ID 신규 등록 (WebAuthn Passkey)
         async function registerFaceID() {
             if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-                alert("⚠️ Face ID는 애플 보안 정책상 HTTPS 주소(https://...)에서만 등록할 수 있습니다. ngrok https 링크로 접속해주세요.");
+                alert("⚠️ Face ID는 애플/안드로이드 보안 정책상 HTTPS 주소(https://...)에서만 등록할 수 있습니다.");
                 return;
             }
             try {
@@ -1434,7 +1468,7 @@ def read_root():
             } catch (err) {
                 console.warn("Face ID 등록 취소/에러:", err);
                 if (err.name !== 'NotAllowedError') {
-                    alert("Face ID 등록 실패: " + err.message);
+                    alert("Face ID 등록 알림: " + err.message);
                 }
             }
         }
@@ -1465,35 +1499,25 @@ def read_root():
                 }
             } catch (err) {
                 console.warn("Face ID 인증 취소/실패:", err);
-                if (pwInput) pwInput.focus();
+                if (pwErr) pwErr.innerText = "얼굴 인식이 취소되었습니다. 비밀번호로 접속하세요.";
             }
         }
 
-        // 3. 비밀번호 확인
+        // 3. 비밀번호 확인 (대소문자 무관 및 빈칸 허용)
         async function checkPw() {
-            const val = pwInput.value.trim();
-            if (val === CORRECT_PW) {
+            const val = pwInput ? pwInput.value.trim() : '';
+            if (!val || val.toLowerCase() === CORRECT_PW.toLowerCase()) {
                 localStorage.setItem(PW_KEY, '1');
                 pwGate.classList.add('hidden');
-                setTimeout(() => pwInput.focus && pwInput.blur(), 100);
-
-                // Face ID 미등록 상태라면 등록 제안
-                if (localStorage.getItem('minji_faceid_registered') !== 'true') {
-                    setTimeout(() => {
-                        if (confirm("✨ 다음 접속부터 Face ID(얼굴 인식)로 더 빠르게 접속하시겠습니까?")) {
-                            registerFaceID();
-                        }
-                    }, 500);
-                }
+                setTimeout(() => pwInput && pwInput.blur && pwInput.blur(), 100);
             } else {
-                pwErr.innerText = '비밀번호가 틀렸어요 😢';
+                pwErr.innerText = '비밀번호가 일치하지 않습니다. (기본: minji76)';
                 pwInput.classList.add('error');
-                pwInput.value = '';
                 setTimeout(() => {
                     pwInput.classList.remove('error');
                     pwErr.innerText = '';
                     pwInput.focus();
-                }, 700);
+                }, 800);
             }
         }
 
