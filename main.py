@@ -458,7 +458,7 @@ def read_root():
 <body>
 
     <div class="header">
-        <div class="header-title">Samantha • Minji</div>
+        <div class="header-title">Minji AI</div>
         <div class="badge" id="sessionBadge">Memory Active</div>
     </div>
 
