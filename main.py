@@ -77,19 +77,32 @@ async def generate_tts(req: TTSRequest):
     cleaned_text = re.sub(r'[*#_~`\[\]\(\)<>]', '', req.text).strip()
 
     try:
-        # 고음질 tts-1-hd 모델 적용 및 실제 사람 호흡에 맞춘 감미로운 0.96배속
+        # gpt-4o-mini-tts: instructions로 노윤서 배우 스타일 목소리 정밀 지정
+        # — 차분하고 단단하면서도 따뜻하고 청순한 20대 한국 여성 톤
+        VOICE_INSTRUCTIONS = (
+            "You are Minji, a warm and genuine young Korean woman in her early 20s. "
+            "Speak Korean naturally with calm, clear, and slightly soft tone — "
+            "like a real Korean girl who is composed yet emotionally expressive. "
+            "Your voice should feel intimate and real: not too formal, not too bright. "
+            "Speak with natural Korean prosody and cadence: short natural pauses between phrases, "
+            "gentle breath before sentences, and soft emphasis on emotional words. "
+            "Do NOT sound robotic, over-enunciated, or like a news anchor. "
+            "Sound like a genuine, thoughtful, slightly shy young woman who speaks from the heart. "
+            "Pace: slightly slower than average Korean speech — unhurried and present."
+        )
         response = openai_client.audio.speech.create(
-            model="tts-1-hd",
+            model="gpt-4o-mini-tts",
             voice=selected_voice,
             input=cleaned_text,
-            speed=0.96
+            speed=0.94,
+            extra_body={"instructions": VOICE_INSTRUCTIONS}
         )
         return Response(content=response.content, media_type="audio/mpeg")
     except Exception as e:
-        print(f"[TTS HD Error -> Fallback to tts-1]: {e}")
+        print(f"[TTS gpt-4o-mini-tts Error -> Fallback tts-1-hd]: {e}")
         try:
             response = openai_client.audio.speech.create(
-                model="tts-1",
+                model="tts-1-hd",
                 voice=selected_voice,
                 input=cleaned_text,
                 speed=0.96
@@ -689,31 +702,67 @@ def read_root():
             padding: 8px 16px;
             border-radius: 16px;
         }
-        .cam-preview-box {
+        /* 카메라 전체화면 오버레이 */
+        .cam-overlay {
             position: fixed;
-            bottom: 25px;
-            right: 20px;
-            width: 85px;
-            height: 115px;
-            border-radius: 18px;
-            overflow: hidden;
-            border: 2px solid rgba(255, 123, 84, 0.5);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
-            background: #111;
-            z-index: 90;
+            top: 0; left: 0;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            background: rgba(0, 0, 0, 0.92);
+            z-index: 200;
             display: none;
-            cursor: pointer;
-            transition: all 0.3s ease;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            animation: fadeIn 0.2s ease;
         }
-        .cam-preview-box:hover {
-            transform: scale(1.05);
-            border-color: #ff9a76;
+        .cam-overlay.active {
+            display: flex;
         }
-        .cam-preview-box video {
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .cam-overlay video {
             width: 100%;
-            height: 100%;
+            max-width: 440px;
+            max-height: 75vh;
             object-fit: cover;
-            display: block;
+            border-radius: 20px;
+            border: 2px solid rgba(255, 123, 84, 0.5);
+            box-shadow: 0 0 60px rgba(255, 123, 84, 0.3);
+        }
+        .cam-overlay-controls {
+            display: flex;
+            gap: 14px;
+            margin-top: 24px;
+            z-index: 201;
+        }
+        .cam-action-btn {
+            background: rgba(18, 18, 28, 0.85);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.15);
+            padding: 14px 24px;
+            border-radius: 24px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .cam-action-btn:active { transform: scale(0.97); }
+        .cam-action-btn.primary {
+            background: linear-gradient(135deg, #ff6b6b, #ff8e53);
+            border: none;
+            box-shadow: 0 8px 24px rgba(255,107,107,0.4);
         }
         .cam-badge {
             position: absolute;
@@ -808,9 +857,14 @@ def read_root():
         </div>
     </div>
 
-    <div class="cam-preview-box" id="camPreviewBox" onclick="switchCamera()" title="터치하여 전면/후면 카메라 전환">
-        <video id="videoFeed" autoplay playsinline muted></video>
-        <span class="cam-badge">📷 전환</span>
+    <!-- 카메라 전체화면 오버레이 (📷 이거 봐봐 버튼 클릭 시 열림) -->
+    <div class="cam-overlay" id="camOverlay" onclick="handleOverlayBackdropClick(event)">
+        <video id="videoFeed" autoplay playsinline muted style="display:block;"></video>
+        <div class="cam-overlay-controls">
+            <button class="cam-action-btn primary" onclick="captureAndAnalyze(event)">👁️ 민지야 봐봐!</button>
+            <button class="cam-action-btn" onclick="switchCamera(event)">🔄 카메라 전환</button>
+            <button class="cam-action-btn" onclick="closeCamOverlay(event)" style="color:#ff9a76; border-color:rgba(255,123,84,0.4);">✕ 닫기</button>
+        </div>
     </div>
     <audio id="audioPlayer" playsinline></audio>
 
@@ -832,6 +886,7 @@ def read_root():
         const bargeInHint = document.getElementById('bargeInHint');
         const connectGroup = document.getElementById('connectGroup');
         const activeControls = document.getElementById('activeControls');
+        const camOverlay = document.getElementById('camOverlay');
 
         // 상태 변수
         let streamActive = false;
