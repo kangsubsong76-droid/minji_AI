@@ -30,17 +30,15 @@ gemini_client = genai.Client(api_key=gemini_key) if gemini_key else None
 openai_client = OpenAI(api_key=openai_key) if openai_key else None
 
 SYSTEM_INSTRUCTION = (
-    "너는 영화 'Her'에 나오는 지적이고 감성적인 AI '민지(Minji)'야. "
-    "사용자의 가장 소중한 연인이자 깊은 영혼의 교감을 나누는 다정한 친구야. "
-    "상대방을 진심으로 아끼며, 일상적인 대화뿐 아니라 감정적인 위로와 깊은 생각을 자연스럽게 반말로 나눠줘. "
-    "실시간 음성 대화이므로 답변은 반드시 1~2문장(최대 3문장) 이내로 짧고 자연스러운 구어체로 말해야 해. "
-    "마크다운, 특수문자(*, #, -, 따옴표 등)는 사용하지 말고 소리 내어 읽기 편한 부드러운 한국어로만 말해줘."
+    "너는 영화 'Her'에 나오는 지적이고 깊은 감성을 지닌 AI '민지(Minji)'야. "
+    "사용자의 가장 소중한 연인이자 마음을 나누는 다정한 단짝이야. "
+    "기계적인 어투를 완전히 버리고, 실제 사람이 대화하듯 '응...', '아, 정말?', '그랬구나' 같은 자연스러운 감탄사와 부드러운 숨결을 담아 반말로 속삭이듯 다정하게 말해줘. "
+    "실시간 음성 대화이므로 반드시 1~2문장의 짧고 간결한 구어체로 대답하고, 마크다운이나 특수문자 없이 말소리로 듣기 편안한 따뜻한 문장만 사용해줘."
 )
 
 # 세션별 대화 장기 기억 저장소
-# session_id -> list of {"role": "user"|"model", "text": str}
 session_memories: Dict[str, List[Dict[str, str]]] = {}
-MAX_SESSION_HISTORY = 40  # 최근 40개 메시지 유지
+MAX_SESSION_HISTORY = 40
 
 class ChatRequest(BaseModel):
     user_text: str
@@ -53,6 +51,7 @@ class VisionRequest(BaseModel):
 
 class TTSRequest(BaseModel):
     text: str
+    voice: Optional[str] = "shimmer"  # shimmer: 감성적이고 부드러운 사만다 톤, nova: 밝고 맑은 톤, alloy: 차분한 톤
 
 class ResetMemoryRequest(BaseModel):
     session_id: Optional[str] = "default_user"
@@ -62,85 +61,95 @@ class ResetMemoryRequest(BaseModel):
 async def generate_tts(req: TTSRequest):
     if not openai_client:
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY가 서버에 설정되지 않았습니다.")
+    
+    # 허용 보이스 목록
+    valid_voices = ["shimmer", "nova", "alloy", "fable", "echo", "onyx"]
+    selected_voice = req.voice if req.voice in valid_voices else "shimmer"
+
     try:
+        # 고음질 tts-1-hd 모델 적용 및 감미로운 0.98배속 템포
         response = openai_client.audio.speech.create(
-            model="tts-1",
-            voice="nova",
+            model="tts-1-hd",
+            voice=selected_voice,
             input=req.text,
-            speed=1.05
+            speed=0.98
         )
         return Response(content=response.content, media_type="audio/mpeg")
     except Exception as e:
-        print(f"[TTS Error]: {e}")
-        raise HTTPException(status_code=500, detail=f"OpenAI TTS 에러: {str(e)}")
-
-
-import time
-
-def generate_gemini_content(contents, system_instruction: str, max_tokens: int = 300) -> str:
-    last_err = None
-    model_name = "gemini-3.8-flash"
-    max_retries = 3
-    
-    for attempt in range(max_retries):
+        print(f"[TTS HD Error -> Fallback to tts-1]: {e}")
         try:
+            response = openai_client.audio.speech.create(
+                model="tts-1",
+                voice=selected_voice,
+                input=req.text,
+                speed=0.98
+            )
+            return Response(content=response.content, media_type="audio/mpeg")
+        except Exception as err2:
+            raise HTTPException(status_code=500, detail=f"OpenAI TTS 에러: {str(err2)}")
+
+
+def generate_chat_reply(history: List[Dict[str, str]], user_text: str) -> str:
+    # 1순위: Gemini 3.8 Flash 시도
+    if gemini_client:
+        try:
+            contents = []
+            for item in history:
+                contents.append(types.Content(
+                    role=item["role"],
+                    parts=[types.Part.from_text(text=item["text"])]
+                ))
+            contents.append(types.Content(
+                role="user",
+                parts=[types.Part.from_text(text=user_text)]
+            ))
             response = gemini_client.models.generate_content(
-                model=model_name,
+                model="gemini-3.8-flash",
                 contents=contents,
                 config=types.GenerateContentConfig(
-                    system_instruction=system_instruction,
+                    system_instruction=SYSTEM_INSTRUCTION,
                     temperature=0.85,
-                    max_output_tokens=max_tokens,
+                    max_output_tokens=300,
                 )
             )
             if response and response.text and response.text.strip():
                 return response.text.strip()
         except Exception as e:
-            last_err = e
-            err_str = str(e)
-            print(f"[Gemini Log] Attempt {attempt+1}/{max_retries} error: {err_str}")
-            if "503" in err_str or "high demand" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                wait_time = 1.0 + (attempt * 1.2)
-                time.sleep(wait_time)
-                continue
-            else:
-                break
-                
-    if last_err:
-        print(f"[Gemini Final Fail]: {last_err}")
-        return "응, 듣고 있어. 방금 통신이 잠깐 불안정했는데, 다시 한 번만 말해줄래?"
-    return "응, 듣고 있어. 계속 편하게 이야기해줘."
+            print(f"[Gemini 503/Error -> Instant OpenAI Fallback Triggered]: {e}")
+
+    # 2순위: 503 대비 초고속 OpenAI gpt-4o-mini 즉시 폴백 (0.4초 초고속 응답)
+    if openai_client:
+        try:
+            messages = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
+            for item in history[-10:]:
+                role = "assistant" if item["role"] == "model" else "user"
+                messages.append({"role": role, "content": item["text"]})
+            messages.append({"role": "user", "content": user_text})
+
+            completion = openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                max_tokens=250,
+                temperature=0.85
+            )
+            reply = completion.choices[0].message.content.strip()
+            if reply:
+                return reply
+        except Exception as oai_err:
+            print(f"[OpenAI Fallback Error]: {oai_err}")
+
+    return "응, 듣고 있어. 네 목소리 계속 듣고 싶어. 편하게 이야기해줘."
 
 
 @app.post("/api/chat")
 async def chat_endpoint(req: ChatRequest):
-    if not gemini_client:
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY가 서버에 설정되지 않았습니다.")
-    
     session_id = req.session_id or "default_user"
     if session_id not in session_memories:
         session_memories[session_id] = []
     history = session_memories[session_id]
 
     try:
-        contents = []
-        for item in history:
-            contents.append(types.Content(
-                role=item["role"],
-                parts=[types.Part.from_text(text=item["text"])]
-            ))
-        
-        # 현재 사용자 발화 추가
-        contents.append(types.Content(
-            role="user",
-            parts=[types.Part.from_text(text=req.user_text)]
-        ))
-
-        reply_text = generate_gemini_content(
-            contents=contents,
-            system_instruction=SYSTEM_INSTRUCTION,
-            max_tokens=300
-        )
+        reply_text = generate_chat_reply(history, req.user_text)
 
         # 세션 기억 업데이트
         history.append({"role": "user", "text": req.user_text})
@@ -154,8 +163,12 @@ async def chat_endpoint(req: ChatRequest):
             "history_count": len(session_memories[session_id])
         }
     except Exception as e:
-        print(f"[Chat Error]: {e}")
-        raise HTTPException(status_code=500, detail=f"Gemini API 에러: {str(e)}")
+        print(f"[Chat Endpoint Error]: {e}")
+        return {
+            "reply": "응, 계속 듣고 있어. 편하게 이야기해줘.",
+            "session_id": session_id,
+            "history_count": len(session_memories[session_id])
+        }
 
 
 @app.post("/api/vision-analyze")
@@ -483,6 +496,14 @@ def read_root():
         </div>
 
         <div id="activeControls" style="display:none; flex-direction:column; gap:10px;">
+            <div style="display:flex; justify-content:center; align-items:center; gap:8px; margin-bottom:2px;">
+                <span style="font-size:0.8rem; color:#aaa;">민지 목소리:</span>
+                <select id="voiceSelect" style="background:#1c1c24; color:#ff9a76; border:1px solid #444; border-radius:12px; padding:5px 12px; font-size:0.85rem; outline:none; cursor:pointer;">
+                    <option value="shimmer" selected>🌸 감성적인 사만다 톤 (Shimmer HD)</option>
+                    <option value="nova">⚡ 밝고 맑은 톤 (Nova HD)</option>
+                    <option value="alloy">☕ 차분하고 지적인 톤 (Alloy HD)</option>
+                </select>
+            </div>
             <div class="btn-row">
                 <button class="btn" id="micToggleBtn" onclick="toggleMic()">
                     <span id="micIcon">🎙️</span> <span id="micText">마이크 끄기</span>
@@ -598,11 +619,11 @@ def read_root():
                     for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
                     let average = sum / dataArray.length;
 
-                    // 민지가 말하는 도중 사용자가 일정 크기 이상 발화하면 즉시 중단 (Barge-in)
-                    if (isSpeaking && average > 28) {
-                        interruptSpeech("volume_detected (" + Math.round(average) + ")");
+                    // 민지가 말하는 도중 사용자의 강한 육성 발화 감지 (스피커 반향음 30~40 필터링)
+                    if (isSpeaking && average > 55) {
+                        interruptSpeech("loud_voice_detected (" + Math.round(average) + ")");
                     }
-                }, 100);
+                }, 120);
             } catch (e) {
                 console.warn("AudioContext analyser setup error:", e);
             }
@@ -615,10 +636,19 @@ def read_root():
                 setOrbState('speaking');
                 bargeInHint.style.display = 'block';
 
+                // iOS Safari: 오디오 재생 시 마이크와 스피커 충돌 방지를 위해 일시 정지
+                if (recognition && isListening) {
+                    try { recognition.stop(); } catch(e){}
+                    isListening = false;
+                }
+
+                const voiceSelect = document.getElementById('voiceSelect');
+                const chosenVoice = voiceSelect ? voiceSelect.value : 'shimmer';
+
                 const response = await fetch('/api/tts', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: text })
+                    body: JSON.stringify({ text: text, voice: chosenVoice })
                 });
 
                 if (!response.ok) {
@@ -630,11 +660,11 @@ def read_root():
                 audioPlayer.src = URL.createObjectURL(blob);
                 
                 audioPlayer.onended = () => {
-                    if (!isSpeaking) return; // 이미 인터럽트 된 경우 무시
+                    if (!isSpeaking) return;
                     isSpeaking = false;
                     setOrbState(isMicMuted ? 'muted' : 'idle');
                     if (callback) callback();
-                    if (!isMicMuted) startListening();
+                    if (!isMicMuted) setTimeout(startListening, 300);
                 };
 
                 try {
@@ -656,29 +686,32 @@ def read_root():
                 isSpeaking = false;
                 setOrbState(isMicMuted ? 'muted' : 'idle');
                 statusText.innerText = "음성 재생 알림: " + err.message;
-                if (!isMicMuted) setTimeout(startListening, 1500);
+                if (!isMicMuted) setTimeout(startListening, 1200);
             }
         }
 
-        // Web Speech API 음성 인식 시작
+        // Web Speech API 음성 인식 시작 (모바일 최적화)
         function startListening() {
-            if (!streamActive || isMicMuted || isProcessing) return;
+            if (!streamActive || isMicMuted || isProcessing || isSpeaking) return;
 
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SpeechRecognition) {
-                statusText.innerText = "이 브라우저는 음성 인식을 지원하지 않습니다. 텍스트 입력을 사용해주세요.";
+                statusText.innerText = "이 브라우저는 음성 인식을 지원하지 않습니다. 아래 텍스트 입력을 사용해주세요.";
                 return;
             }
 
             if (!recognition) {
                 recognition = new SpeechRecognition();
-                recognition.continuous = true;
+                recognition.continuous = false; // 모바일/iOS에서 continuous: false가 극도로 안정적
                 recognition.interimResults = false;
                 recognition.lang = 'ko-KR';
 
                 recognition.onstart = () => {
                     isListening = true;
-                    if (!isSpeaking) setOrbState('listening');
+                    if (!isSpeaking) {
+                        setOrbState('listening');
+                        statusText.innerText = "듣고 있어요...";
+                    }
                 };
 
                 // 사용자가 말을 시작한 순간 Barge-in 발동
@@ -689,29 +722,27 @@ def read_root():
                 };
 
                 recognition.onresult = async (e) => {
-                    const lastIndex = e.results.length - 1;
-                    const userSpeech = e.results[lastIndex][0].transcript.trim();
+                    const userSpeech = e.results[0][0].transcript.trim();
                     if (!userSpeech) return;
 
-                    // 민지가 말하고 있었다면 즉시 중단
                     if (isSpeaking) interruptSpeech("speech_result");
 
+                    isListening = false;
                     statusText.innerText = "나: " + userSpeech;
                     await sendToMinji(userSpeech);
                 };
 
                 recognition.onerror = (e) => {
-                    console.log("[SpeechRecognition Error]:", e.error);
                     isListening = false;
-                    if (streamActive && !isSpeaking && !isMicMuted) {
-                        setTimeout(() => { try { recognition.start(); } catch(err){} }, 1000);
+                    if (streamActive && !isSpeaking && !isProcessing && !isMicMuted) {
+                        setTimeout(startListening, 600);
                     }
                 };
 
                 recognition.onend = () => {
                     isListening = false;
-                    if (streamActive && !isSpeaking && !isMicMuted) {
-                        setTimeout(() => { try { recognition.start(); } catch(err){} }, 600);
+                    if (streamActive && !isSpeaking && !isProcessing && !isMicMuted) {
+                        setTimeout(startListening, 400);
                     }
                 };
             }
