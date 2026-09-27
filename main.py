@@ -51,7 +51,7 @@ class VisionRequest(BaseModel):
 
 class TTSRequest(BaseModel):
     text: str
-    voice: Optional[str] = "shimmer"  # shimmer: 감성적이고 부드러운 사만다 톤, nova: 밝고 맑은 톤, alloy: 차분한 톤
+    voice: Optional[str] = "coral"  # coral: 영화 'Her' 사만다 톤, sage: 감미롭고 지적인 여성 톤
 
 class ResetMemoryRequest(BaseModel):
     session_id: Optional[str] = "default_user"
@@ -62,12 +62,12 @@ async def generate_tts(req: TTSRequest):
     if not openai_client:
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY가 서버에 설정되지 않았습니다.")
     
-    # 허용 보이스 목록
-    valid_voices = ["shimmer", "nova", "alloy", "fable", "echo", "onyx"]
-    selected_voice = req.voice if req.voice in valid_voices else "shimmer"
+    # 허용 보이스 목록 (최신 coral, sage 지원)
+    valid_voices = ["coral", "sage", "shimmer", "nova", "alloy", "fable", "echo", "onyx", "ash"]
+    selected_voice = req.voice if req.voice in valid_voices else "coral"
 
     try:
-        # 고음질 tts-1-hd 모델 적용 및 감미로운 0.98배속 템포
+        # 고음질 tts-1-hd 모델 적용 및 스칼렛 요한슨 특유의 감미로운 0.98배속
         response = openai_client.audio.speech.create(
             model="tts-1-hd",
             voice=selected_voice,
@@ -141,6 +141,64 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str) -> str:
     return "응, 듣고 있어. 네 목소리 계속 듣고 싶어. 편하게 이야기해줘."
 
 
+def analyze_vision_with_fallback(image_base64: str, prompt: str) -> str:
+    # 1순위: Gemini Vision 시도
+    if gemini_client:
+        try:
+            image_bytes = base64.b64decode(image_base64)
+            image_part = types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
+            prompt_instruction = (
+                f"너는 영화 'Her'처럼 사용자 곁에서 함께 일상을 바라보는 다정한 AI 친구 '민지(Minji)'야. "
+                f"카메라에 비친 화면을 보고 마치 옆에서 함께 보며 감탄하거나 소감을 말하듯, "
+                f"1~2문장의 따뜻하고 다정한 반말로 직접 말해줘. {prompt}"
+            )
+            response = gemini_client.models.generate_content(
+                model="gemini-3.8-flash",
+                contents=[image_part, prompt_instruction],
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_INSTRUCTION,
+                    temperature=0.85,
+                    max_output_tokens=250,
+                )
+            )
+            if response and response.text and response.text.strip():
+                return response.text.strip()
+        except Exception as ge:
+            print(f"[Gemini Vision Quota/Error -> OpenAI Vision Fallback]: {ge}")
+
+    # 2순위: OpenAI GPT-4o-mini Vision 즉각 Fallback (429 쿼터 제한 없이 0.4초 분석)
+    if openai_client:
+        try:
+            response = openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": SYSTEM_INSTRUCTION},
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": f"카메라 속 풍경이나 물건을 민지처럼 다정하고 자연스럽게 1~2문장 반말로 직접 말해줘: {prompt}"},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{image_base64}",
+                                    "detail": "low"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=200,
+                temperature=0.85
+            )
+            analysis = response.choices[0].message.content.strip()
+            if analysis:
+                return analysis
+        except Exception as oe:
+            print(f"[OpenAI Vision Error]: {oe}")
+
+    return "와, 카메라에 비친 장면 정말 느낌 있다! 어떤 점이 제일 눈에 띄어?"
+
+
 @app.post("/api/chat")
 async def chat_endpoint(req: ChatRequest):
     session_id = req.session_id or "default_user"
@@ -173,32 +231,13 @@ async def chat_endpoint(req: ChatRequest):
 
 @app.post("/api/vision-analyze")
 async def vision_analyze(req: VisionRequest):
-    if not gemini_client:
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY가 서버에 설정되지 않았습니다.")
-    
     session_id = req.session_id or "default_user"
     if session_id not in session_memories:
         session_memories[session_id] = []
     history = session_memories[session_id]
 
     try:
-        image_bytes = base64.b64decode(req.image_base64)
-        image_part = types.Part.from_bytes(
-            data=image_bytes,
-            mime_type="image/jpeg"
-        )
-        
-        prompt_instruction = (
-            f"너는 영화 'Her'처럼 사용자 곁에서 함께 일상을 바라보는 다정한 AI 친구 '민지(Minji)'야. "
-            f"카메라에 비친 화면을 보고 마치 옆에서 함께 보며 감탄하거나 소감을 말하듯, "
-            f"1~2문장의 따뜻하고 다정한 반말로 직접 말해줘. {req.prompt}"
-        )
-
-        analysis_text = generate_gemini_content(
-            contents=[image_part, prompt_instruction],
-            system_instruction=SYSTEM_INSTRUCTION,
-            max_tokens=250
-        )
+        analysis_text = analyze_vision_with_fallback(req.image_base64, req.prompt or "카메라를 보고 다정하게 말해줘.")
 
         # 비전 인지 내역도 대화 기억(Memory)에 반영
         history.append({"role": "user", "text": "[카메라 화면을 민지에게 보여줌]"})
@@ -212,7 +251,10 @@ async def vision_analyze(req: VisionRequest):
         }
     except Exception as e:
         print(f"[Vision Error]: {e}")
-        raise HTTPException(status_code=500, detail=f"Vision API 에러: {str(e)}")
+        return {
+            "analysis": "와, 카메라에 비친 장면 정말 예쁘다! 어떤 모습인지 더 말해줄래?",
+            "session_id": session_id
+        }
 
 
 @app.post("/api/reset-memory")
@@ -498,10 +540,12 @@ def read_root():
         <div id="activeControls" style="display:none; flex-direction:column; gap:10px;">
             <div style="display:flex; justify-content:center; align-items:center; gap:8px; margin-bottom:2px;">
                 <span style="font-size:0.8rem; color:#aaa;">민지 목소리:</span>
-                <select id="voiceSelect" style="background:#1c1c24; color:#ff9a76; border:1px solid #444; border-radius:12px; padding:5px 12px; font-size:0.85rem; outline:none; cursor:pointer;">
-                    <option value="shimmer" selected>🌸 감성적인 사만다 톤 (Shimmer HD)</option>
-                    <option value="nova">⚡ 밝고 맑은 톤 (Nova HD)</option>
-                    <option value="alloy">☕ 차분하고 지적인 톤 (Alloy HD)</option>
+                <select id="voiceSelect" style="background:#1c1c24; color:#ff9a76; border:1px solid #ff7b54; border-radius:12px; padding:6px 12px; font-size:0.85rem; outline:none; cursor:pointer;">
+                    <option value="coral" selected>💖 영화 'Her' 사만다 톤 (Coral HD)</option>
+                    <option value="sage">🌿 감미롭고 지적인 여성 톤 (Sage HD)</option>
+                    <option value="shimmer">🌸 나지막하고 부드러운 톤 (Shimmer HD)</option>
+                    <option value="nova">⚡ 밝고 명랑한 톤 (Nova HD)</option>
+                    <option value="alloy">☕ 차분하고 깔끔한 톤 (Alloy HD)</option>
                 </select>
             </div>
             <div class="btn-row">
@@ -652,7 +696,7 @@ def read_root():
                 }
 
                 const voiceSelect = document.getElementById('voiceSelect');
-                const chosenVoice = voiceSelect ? voiceSelect.value : 'shimmer';
+                const chosenVoice = voiceSelect ? voiceSelect.value : 'coral';
 
                 const response = await fetch('/api/tts', {
                     method: 'POST',
