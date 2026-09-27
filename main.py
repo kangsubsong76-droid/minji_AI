@@ -876,15 +876,17 @@ def read_root():
         .pw-gate {
             position: fixed;
             inset: 0;
-            z-index: 9999;
+            z-index: 99999;
             background: #09090d;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             gap: 24px;
+            pointer-events: auto;
+            touch-action: manipulation;
         }
-        .pw-gate.hidden { display: none; }
+        .pw-gate.hidden { display: none !important; }
         .pw-logo {
             font-size: 2.8rem;
             font-weight: 800;
@@ -904,6 +906,7 @@ def read_root():
             align-items: center;
             gap: 14px;
             width: 280px;
+            pointer-events: auto;
         }
         .pw-input {
             width: 100%;
@@ -937,6 +940,8 @@ def read_root():
             cursor: pointer;
             box-shadow: 0 8px 24px rgba(255,107,107,0.35);
             transition: opacity 0.2s;
+            touch-action: manipulation;
+            pointer-events: auto;
         }
         .pw-btn:active { opacity: 0.85; }
         .pw-btn-faceid {
@@ -947,6 +952,10 @@ def read_root():
             background: rgba(255, 255, 255, 0.08);
             color: #fff;
             font-size: 0.98rem;
+            font-weight: 600;
+            cursor: pointer;
+            touch-action: manipulation;
+            pointer-events: auto;
             font-weight: 600;
             cursor: pointer;
             backdrop-filter: blur(12px);
@@ -1119,8 +1128,8 @@ def read_root():
         <div class="pw-sub" id="pwSubText">Face ID 또는 보안 비밀번호로 인증하세요</div>
         <div class="pw-box">
             <!-- 1. 최우선: Face ID / PC Windows Hello 생체 인증 버튼 -->
-            <button class="pw-btn-faceid" id="faceIdBtn" onclick="handleFaceIdClick()" 
-                    style="width:100%; padding:16px 20px; font-size:1.05rem; border-color:rgba(255,123,84,0.45); background:linear-gradient(135deg, rgba(255,123,84,0.18), rgba(255,107,107,0.12));">
+            <button class="pw-btn-faceid" id="faceIdBtn" onclick="handleFaceIdClick()" type="button"
+                    style="width:100%; padding:16px 20px; font-size:1.05rem; border-color:rgba(255,123,84,0.45); background:linear-gradient(135deg, rgba(255,123,84,0.18), rgba(255,107,107,0.12)); cursor:pointer;">
                 <span id="faceIdIcon" style="font-size:1.4rem;">👤</span>
                 <span id="faceIdBtnText" style="font-weight:700;">Face ID로 잠금 해제</span>
             </button>
@@ -1147,10 +1156,10 @@ def read_root():
                 </button>
             </div>
             <div class="pw-err" id="pwErr"></div>
-            <button class="pw-btn" onclick="checkPw()" style="width:100%; padding:14px; font-weight:700;">
+            <button class="pw-btn" id="pwSubmitBtn" onclick="checkPw()" type="button" style="width:100%; padding:14px; font-weight:700; cursor:pointer;">
                 <span>🔒 비밀번호로 잠금 해제</span>
             </button>
-            <button class="btn-ghost" id="registerFaceIdPrompt" onclick="registerFaceID()" style="width:100%; margin-top:2px; font-size:0.82rem; color:#888;">
+            <button class="btn-ghost" id="registerFaceIdPrompt" onclick="registerFaceID()" type="button" style="width:100%; margin-top:2px; font-size:0.82rem; color:#888; cursor:pointer;">
                 <span>📲 이 기기 Face ID / 생체인증 등록</span>
             </button>
         </div>
@@ -1328,9 +1337,15 @@ def read_root():
 
                 // 인증 완료 여부 확인
                 if (localStorage.getItem(PW_KEY) === '1') {
-                    if (pwGate) pwGate.classList.add('hidden');
+                    if (pwGate) {
+                        pwGate.classList.add('hidden');
+                        pwGate.style.display = 'none';
+                    }
                 } else {
-                    if (pwGate) pwGate.classList.remove('hidden');
+                    if (pwGate) {
+                        pwGate.classList.remove('hidden');
+                        pwGate.style.display = 'flex';
+                    }
                 }
             } catch(e) {
                 console.error("initAuthGate error:", e);
@@ -1353,13 +1368,16 @@ def read_root():
         // 화면 수동 잠금
         function lockApp() {
             localStorage.removeItem(PW_KEY);
-            if (pwGate) pwGate.classList.remove('hidden');
+            if (pwGate) {
+                pwGate.classList.remove('hidden');
+                pwGate.style.display = 'flex';
+            }
             initAuthGate();
         }
 
         // [핵심] 앱 완전 종료 및 보안 잠금
         function exitApp() {
-            if (!confirm("민지 AI를 완전히 종료하고 보안 잠금할까요?\n카메라와 마이크가 즉시 꺼지며 전원이 안전하게 차단됩니다.")) return;
+            if (!confirm(`민지 AI를 완전히 종료하고 보안 잠금할까요?\n카메라와 마이크가 즉시 꺼지며 전원이 안전하게 차단됩니다.`)) return;
 
             // 1. 카메라/마이크 모든 하드웨어 트랙 완벽 해제
             try {
@@ -1415,7 +1433,10 @@ def read_root():
             if (statusText) statusText.innerText = "전원이 완전히 꺼졌습니다.";
 
             // 3. 완전 종료 OLED 화면 표시
-            if (pwGate) pwGate.classList.add('hidden');
+            if (pwGate) {
+                pwGate.classList.add('hidden');
+                pwGate.style.display = 'none';
+            }
             if (shutdownScreen) {
                 shutdownScreen.style.display = 'flex';
             }
@@ -1431,7 +1452,7 @@ def read_root():
                 window.close();
             } catch(e){}
             setTimeout(() => {
-                alert("브라우저의 보안 정책상 탭이 자동으로 닫히지 않을 수 있습니다.\n현재 창(탭)이나 브라우저를 직접 닫아주세요.");
+                alert(`브라우저의 보안 정책상 탭이 자동으로 닫히지 않을 수 있습니다.\n현재 창(탭)이나 브라우저를 직접 닫아주세요.`);
             }, 300);
         }
 
@@ -1448,7 +1469,7 @@ def read_root():
         // Face ID / Windows Hello 버튼 클릭 핸들러
         async function handleFaceIdClick() {
             if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-                alert("⚠️ 생체 인증은 보안 정책상 HTTPS 주소(https://...)에서만 작동합니다.\n주소창이 https:// 인지 확인해주세요!");
+                alert(`⚠️ 생체 인증은 보안 정책상 HTTPS 주소(https://...)에서만 작동합니다.\n주소창이 https:// 인지 확인해주세요!`);
                 return;
             }
             const isFaceIdRegistered = localStorage.getItem('minji_faceid_registered') === 'true';
@@ -1462,11 +1483,11 @@ def read_root():
         // 1. Face ID / Windows Hello 신규 등록 (Passkey)
         async function registerFaceID() {
             if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-                alert("⚠️ 생체 인증은 보안 정책상 HTTPS 주소에서만 등록할 수 있습니다.");
+                alert(`⚠️ 생체 인증은 보안 정책상 HTTPS 주소에서만 등록할 수 있습니다.`);
                 return;
             }
             if (!window.PublicKeyCredential) {
-                alert("이 브라우저는 생체인증(WebAuthn)을 지원하지 않습니다. 비밀번호(minji76)로 접속해 주세요.");
+                alert(`이 브라우저는 생체인증(WebAuthn)을 지원하지 않습니다. 비밀번호(minji76)로 접속해 주세요.`);
                 return;
             }
 
@@ -1504,7 +1525,10 @@ def read_root():
                     localStorage.setItem('minji_faceid_registered', 'true');
                     localStorage.setItem('minji_cred_id', rawIdStr);
                     localStorage.setItem(PW_KEY, '1');
-                    if (pwGate) pwGate.classList.add('hidden');
+                    if (pwGate) {
+                        pwGate.classList.add('hidden');
+                        pwGate.style.display = 'none';
+                    }
                     alert(`✨ ${bio.name} 등록 완료! 이제 원터치 얼굴/생체인식으로 바로 열립니다.`);
                     initAuthGate();
                 }
@@ -1538,7 +1562,10 @@ def read_root():
 
                 if (assertion) {
                     localStorage.setItem(PW_KEY, '1');
-                    if (pwGate) pwGate.classList.add('hidden');
+                    if (pwGate) {
+                        pwGate.classList.add('hidden');
+                        pwGate.style.display = 'none';
+                    }
                     if (pwErr) pwErr.innerText = '';
                 }
             } catch (err) {
@@ -1556,11 +1583,14 @@ def read_root():
                 const val = pwInput ? pwInput.value.trim() : '';
                 if (!val || val.toLowerCase() === CORRECT_PW.toLowerCase()) {
                     localStorage.setItem(PW_KEY, '1');
-                    if (pwGate) pwGate.classList.add('hidden');
+                    if (pwGate) {
+                        pwGate.classList.add('hidden');
+                        pwGate.style.display = 'none';
+                    }
                     setTimeout(() => pwInput && pwInput.blur && pwInput.blur(), 100);
 
                     // Face ID 미등록 상태라면 등록 권장
-                    if (localStorage.getItem('minji_faceid_registered') !== 'true') {
+                    if (isPlatformAuthAvailable && localStorage.getItem('minji_faceid_registered') !== 'true') {
                         setTimeout(() => {
                             const bio = getBiometricInfo();
                             if (confirm(`✨ 다음 접속부터 ${bio.name}로 더 안전하고 빠르게 접속하시겠습니까?`)) {
@@ -1582,9 +1612,31 @@ def read_root():
             } catch(e) {
                 console.error("checkPw err:", e);
                 localStorage.setItem(PW_KEY, '1');
-                if (pwGate) pwGate.classList.add('hidden');
+                if (pwGate) {
+                    pwGate.classList.add('hidden');
+                    pwGate.style.display = 'none';
+                }
             }
         }
+
+        // 전역 함수 노출 (HTML onclick 및 모바일 이벤트 보장)
+        window.getBiometricInfo = getBiometricInfo;
+        window.initAuthGate = initAuthGate;
+        window.togglePwVisibility = togglePwVisibility;
+        window.lockApp = lockApp;
+        window.exitApp = exitApp;
+        window.attemptCloseWindow = attemptCloseWindow;
+        window.resumeFromShutdown = resumeFromShutdown;
+        window.handleFaceIdClick = handleFaceIdClick;
+        window.registerFaceID = registerFaceID;
+        window.loginWithFaceID = loginWithFaceID;
+        window.checkPw = checkPw;
+
+        // 이벤트 리스너 명시적 등록 (터치/클릭 확실한 동작 보장)
+        if (faceIdBtn) faceIdBtn.addEventListener('click', handleFaceIdClick);
+        const submitPwBtn = document.getElementById('pwSubmitBtn');
+        if (submitPwBtn) submitPwBtn.addEventListener('click', checkPw);
+        if (registerFaceIdPrompt) registerFaceIdPrompt.addEventListener('click', registerFaceID);
 
         // 초기화 실행
         initAuthGate();
