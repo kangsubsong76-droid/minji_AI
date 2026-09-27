@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from google import genai
 from google.genai import types
@@ -22,6 +23,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+os.makedirs("static/avatar", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 gemini_key = os.getenv("GEMINI_API_KEY", "")
 openai_key = os.getenv("OPENAI_API_KEY", "")
@@ -424,6 +428,124 @@ def read_root():
             50% { transform: scale(1.16); }
         }
 
+        /* 노윤서 스타일 실사 아바타 비주얼라이저 */
+        .avatar-wrapper {
+            position: relative;
+            width: 220px;
+            height: 220px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 35px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .avatar-glow {
+            position: absolute;
+            width: 220px;
+            height: 220px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255, 123, 84, 0.4) 0%, rgba(255, 154, 118, 0) 70%);
+            filter: blur(25px);
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+        }
+
+        .avatar-frame {
+            position: relative;
+            width: 175px;
+            height: 175px;
+            border-radius: 50%;
+            overflow: hidden;
+            border: 3px solid rgba(255, 123, 84, 0.7);
+            box-shadow: 0 0 45px rgba(255, 123, 84, 0.5);
+            animation: avatarBreathe 4s infinite ease-in-out;
+            transition: all 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+            background: #111;
+        }
+
+        .avatar-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transition: opacity 0.25s ease;
+        }
+
+        /* 아바타 상태 1: 경청 중 (Listening) */
+        .avatar-wrapper.listening .avatar-frame {
+            border-color: #00f2fe;
+            box-shadow: 0 0 60px rgba(0, 242, 254, 0.85);
+            animation: avatarListenPulse 1.4s infinite ease-in-out;
+        }
+        .avatar-wrapper.listening .avatar-glow {
+            background: radial-gradient(circle, rgba(0, 242, 254, 0.5) 0%, rgba(79, 172, 254, 0) 70%);
+        }
+
+        /* 아바타 상태 2: 생각 중 (Thinking) */
+        .avatar-wrapper.thinking .avatar-frame {
+            border-color: #fe5196;
+            box-shadow: 0 0 60px rgba(254, 81, 150, 0.85);
+            animation: avatarThinkPulse 2s infinite ease-in-out;
+        }
+        .avatar-wrapper.thinking .avatar-glow {
+            background: radial-gradient(circle, rgba(254, 81, 150, 0.5) 0%, rgba(144, 85, 255, 0) 70%);
+        }
+
+        /* 아바타 상태 3: 말하는 중 (Speaking) */
+        .avatar-wrapper.speaking .avatar-frame {
+            border-color: #ff7b54;
+            box-shadow: 0 0 70px rgba(255, 120, 80, 0.95);
+            animation: avatarSpeakWave 0.75s infinite ease-in-out;
+        }
+        .avatar-wrapper.speaking .avatar-glow {
+            background: radial-gradient(circle, rgba(255, 120, 80, 0.6) 0%, rgba(255, 60, 60, 0) 70%);
+        }
+
+        /* 아바타 상태 4: 음소거 (Muted) */
+        .avatar-wrapper.muted .avatar-frame {
+            border-color: #555;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.08);
+            filter: grayscale(0.85);
+            animation: none;
+        }
+
+        @keyframes avatarBreathe {
+            0%, 100% { transform: scale(0.97); }
+            50% { transform: scale(1.03); }
+        }
+        @keyframes avatarListenPulse {
+            0%, 100% { transform: scale(0.98); }
+            50% { transform: scale(1.08); }
+        }
+        @keyframes avatarThinkPulse {
+            0%, 100% { transform: scale(1.0); }
+            50% { transform: scale(1.04); }
+        }
+        @keyframes avatarSpeakWave {
+            0%, 100% { transform: scale(1.0); }
+            50% { transform: scale(1.12); }
+        }
+
+        .view-mode-btn {
+            background: rgba(255, 123, 84, 0.15);
+            color: #ff9a76;
+            border: 1px solid rgba(255, 123, 84, 0.35);
+            font-size: 0.75rem;
+            padding: 4px 10px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .view-mode-btn:hover {
+            background: rgba(255, 123, 84, 0.3);
+            border-color: #ff7b54;
+        }
+
         .status-container {
             min-height: 80px;
             display: flex;
@@ -558,13 +680,27 @@ def read_root():
 
     <div class="header">
         <div class="header-title">Minji AI</div>
-        <div class="badge" id="sessionBadge">Memory Active</div>
+        <div style="display:flex; gap:8px; align-items:center;">
+            <button class="view-mode-btn" id="viewModeBtn" onclick="toggleViewMode()" title="화면 모드 전환">
+                <span id="viewModeIcon">🔮</span> <span id="viewModeText">오라클 모드</span>
+            </button>
+            <div class="badge" id="sessionBadge">Memory Active</div>
+        </div>
     </div>
 
     <div class="main-stage">
-        <div class="orb-wrapper" onclick="handleOrbClick()">
+        <!-- 1. 노윤서 스타일 실사 아바타 모드 (기본) -->
+        <div class="avatar-wrapper" id="avatarWrapper" onclick="handleVisualClick()" title="민지에게 말 걸기">
+            <div class="avatar-glow" id="avatarGlow"></div>
+            <div class="avatar-frame">
+                <img id="avatarImg" src="/static/avatar/idle.jpg" alt="Minji AI Avatar" class="avatar-img">
+            </div>
+        </div>
+
+        <!-- 2. Her 오라클 구체 모드 -->
+        <div class="orb-wrapper" id="orbWrapper" onclick="handleVisualClick()" style="display:none;" title="민지에게 말 걸기">
             <div class="orb-glow" id="orbGlow"></div>
-            <div class="orb" id="avatarOrb" title="민지에게 말 걸기"></div>
+            <div class="orb" id="avatarOrb"></div>
         </div>
         
         <div class="status-container">
@@ -629,6 +765,12 @@ def read_root():
         const statusText = document.getElementById('statusText');
         const stateLabel = document.getElementById('stateLabel');
         const avatarOrb = document.getElementById('avatarOrb');
+        const orbWrapper = document.getElementById('orbWrapper');
+        const avatarWrapper = document.getElementById('avatarWrapper');
+        const avatarImg = document.getElementById('avatarImg');
+        const viewModeBtn = document.getElementById('viewModeBtn');
+        const viewModeIcon = document.getElementById('viewModeIcon');
+        const viewModeText = document.getElementById('viewModeText');
         const video = document.getElementById('videoFeed');
         const audioPlayer = document.getElementById('audioPlayer');
         const micToggleBtn = document.getElementById('micToggleBtn');
@@ -650,6 +792,44 @@ def read_root():
         let micSource = null;
         let volumeCheckInterval = null;
 
+        // 아바타 이미지 프리로드
+        const avatarImages = {
+            idle: "/static/avatar/idle.jpg",
+            listening: "/static/avatar/listening.jpg",
+            thinking: "/static/avatar/thinking.jpg",
+            speaking: "/static/avatar/speaking.jpg"
+        };
+        for (const key in avatarImages) {
+            const img = new Image();
+            img.src = avatarImages[key];
+        }
+
+        // 화면 뷰 모드 관리 (실사 아바타 vs 오라클 구체)
+        let currentViewMode = localStorage.getItem("minji_view_mode") || "avatar";
+        function applyViewMode() {
+            if (currentViewMode === "orb") {
+                if (avatarWrapper) avatarWrapper.style.display = "none";
+                if (orbWrapper) orbWrapper.style.display = "flex";
+                if (viewModeIcon) viewModeIcon.innerText = "👩";
+                if (viewModeText) viewModeText.innerText = "아바타 모드";
+            } else {
+                if (avatarWrapper) avatarWrapper.style.display = "flex";
+                if (orbWrapper) orbWrapper.style.display = "none";
+                if (viewModeIcon) viewModeIcon.innerText = "🔮";
+                if (viewModeText) viewModeText.innerText = "오라클 모드";
+            }
+        }
+        function toggleViewMode() {
+            currentViewMode = (currentViewMode === "avatar") ? "orb" : "avatar";
+            localStorage.setItem("minji_view_mode", currentViewMode);
+            applyViewMode();
+        }
+        applyViewMode();
+
+        function handleVisualClick() {
+            handleOrbClick();
+        }
+
         // 세션 ID (로컬 브라우저 고유값 보존)
         let sessionId = localStorage.getItem("minji_session_id");
         if (!sessionId) {
@@ -660,21 +840,29 @@ def read_root():
         // 상태 업데이트 헬퍼
         function setOrbState(state) {
             avatarOrb.className = 'orb ' + (state || '');
+            if (avatarWrapper) {
+                avatarWrapper.className = 'avatar-wrapper ' + (state || '');
+            }
             if (state === 'listening') {
                 stateLabel.innerText = "Listening";
                 stateLabel.style.color = "#00f2fe";
+                if (avatarImg) avatarImg.src = avatarImages.listening;
             } else if (state === 'speaking') {
                 stateLabel.innerText = "Speaking";
                 stateLabel.style.color = "#ff7b54";
+                if (avatarImg) avatarImg.src = avatarImages.speaking;
             } else if (state === 'thinking') {
                 stateLabel.innerText = "Thinking";
                 stateLabel.style.color = "#fe5196";
+                if (avatarImg) avatarImg.src = avatarImages.thinking;
             } else if (state === 'muted') {
                 stateLabel.innerText = "Muted";
                 stateLabel.style.color = "#888";
+                if (avatarImg) avatarImg.src = avatarImages.idle;
             } else {
                 stateLabel.innerText = "Idle";
                 stateLabel.style.color = "#aaa";
+                if (avatarImg) avatarImg.src = avatarImages.idle;
             }
         }
 
