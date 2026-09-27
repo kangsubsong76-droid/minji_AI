@@ -776,9 +776,96 @@ def read_root():
             border-radius: 6px;
             pointer-events: none;
         }
+
+        /* ===== 패스워드 게이트 ===== */
+        .pw-gate {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: #09090d;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 24px;
+        }
+        .pw-gate.hidden { display: none; }
+        .pw-logo {
+            font-size: 2.8rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #ff9a76, #ff6b6b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -1px;
+        }
+        .pw-sub {
+            font-size: 0.9rem;
+            color: #555;
+            margin-top: -16px;
+        }
+        .pw-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+            width: 280px;
+        }
+        .pw-input {
+            width: 100%;
+            background: #131318;
+            border: 1.5px solid #2a2a38;
+            border-radius: 20px;
+            padding: 14px 20px;
+            color: #fff;
+            font-size: 1.1rem;
+            text-align: center;
+            letter-spacing: 4px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .pw-input:focus { border-color: #ff7b54; }
+        .pw-input.error { border-color: #ff4444; animation: shake 0.35s ease; }
+        @keyframes shake {
+            0%,100% { transform: translateX(0); }
+            20%,60% { transform: translateX(-8px); }
+            40%,80% { transform: translateX(8px); }
+        }
+        .pw-btn {
+            width: 100%;
+            padding: 14px;
+            border-radius: 20px;
+            border: none;
+            background: linear-gradient(135deg, #ff7b54, #ff6b6b);
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(255,107,107,0.35);
+            transition: opacity 0.2s;
+        }
+        .pw-btn:active { opacity: 0.85; }
+        .pw-err {
+            font-size: 0.82rem;
+            color: #ff5555;
+            min-height: 18px;
+        }
     </style>
 </head>
 <body>
+
+    <!-- ===== 패스워드 게이트 ===== -->
+    <div class="pw-gate" id="pwGate">
+        <div class="pw-logo">Minji AI</div>
+        <div class="pw-sub">민지에게 접속하려면 비밀번호를 입력하세요</div>
+        <div class="pw-box">
+            <input class="pw-input" id="pwInput" type="password"
+                   placeholder="••••••••"
+                   onkeydown="if(event.key==='Enter') checkPw()"
+                   autocomplete="current-password">
+            <div class="pw-err" id="pwErr"></div>
+            <button class="pw-btn" onclick="checkPw()">✨ 접속하기</button>
+        </div>
+    </div>
 
     <div class="header">
         <div class="header-title">Minji AI</div>
@@ -870,6 +957,40 @@ def read_root():
     <audio id="audioPlayer" playsinline></audio>
 
     <script>
+        // ===== 패스워드 게이트 =====
+        const PW_KEY = 'minji_auth';
+        const CORRECT_PW = 'minji76';
+        const pwGate = document.getElementById('pwGate');
+        const pwInput = document.getElementById('pwInput');
+        const pwErr = document.getElementById('pwErr');
+
+        function checkPw() {
+            const val = pwInput.value.trim();
+            if (val === CORRECT_PW) {
+                localStorage.setItem(PW_KEY, '1');
+                pwGate.classList.add('hidden');
+                setTimeout(() => pwInput.focus && pwInput.blur(), 100);
+            } else {
+                pwErr.innerText = '비밀번호가 틀렸어요 😢';
+                pwInput.classList.add('error');
+                pwInput.value = '';
+                setTimeout(() => {
+                    pwInput.classList.remove('error');
+                    pwErr.innerText = '';
+                    pwInput.focus();
+                }, 700);
+            }
+        }
+
+        // 이미 인증된 경우 게이트 즉시 숨기기
+        if (localStorage.getItem(PW_KEY) === '1') {
+            pwGate.classList.add('hidden');
+        } else {
+            // 게이트 표시 시 자동 포커스
+            setTimeout(() => pwInput && pwInput.focus(), 200);
+        }
+        // ===========================
+
         const statusText = document.getElementById('statusText');
         const stateLabel = document.getElementById('stateLabel');
         const avatarOrb = document.getElementById('avatarOrb');
