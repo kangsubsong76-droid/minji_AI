@@ -1113,27 +1113,27 @@ def read_root():
         </div>
     </div>
 
-    <!-- ===== 패스워드 게이트 ===== -->
+    <!-- ===== 패스워드 & Face ID 보안 게이트 ===== -->
     <div class="pw-gate" id="pwGate">
         <div class="pw-logo">Minji AI</div>
-        <div class="pw-sub" id="pwSubText">원터치로 바로 시작하거나 Face ID를 사용하세요</div>
+        <div class="pw-sub" id="pwSubText">Face ID 또는 보안 비밀번호로 인증하세요</div>
         <div class="pw-box">
-            <!-- 1. 원터치 바로 시작 (최우선 간편 접속) -->
-            <button class="pw-btn" onclick="quickLogin()" style="background: linear-gradient(135deg, #ff7b54, #ff5e62); font-size:1.05rem; padding:15px; box-shadow:0 8px 24px rgba(255,107,84,0.45); width:100%;">
-                ✨ 원터치 바로 시작 (minji76)
+            <!-- 1. 최우선: Face ID / PC Windows Hello 생체 인증 버튼 -->
+            <button class="pw-btn-faceid" id="faceIdBtn" onclick="handleFaceIdClick()" 
+                    style="width:100%; padding:16px 20px; font-size:1.05rem; border-color:rgba(255,123,84,0.45); background:linear-gradient(135deg, rgba(255,123,84,0.18), rgba(255,107,107,0.12));">
+                <span id="faceIdIcon" style="font-size:1.4rem;">👤</span>
+                <span id="faceIdBtnText" style="font-weight:700;">Face ID로 잠금 해제</span>
             </button>
+            <div id="bioDeviceHint" style="font-size:0.75rem; color:#888; margin-top:-6px;">
+                휴대폰: Face ID · 지문 | PC: Windows Hello (얼굴/PIN)
+            </div>
 
-            <!-- 2. Face ID 생체 인증 버튼 -->
-            <button class="pw-btn-faceid" id="faceIdBtn" onclick="handleFaceIdClick()">
-                <span style="font-size:1.3rem;">👤</span> <span id="faceIdBtnText">Face ID로 잠금 해제</span>
-            </button>
+            <div class="pw-divider" id="pwDivider">또는 비밀번호 (minji76)</div>
 
-            <div class="pw-divider" id="pwDivider">또는 비밀번호 확인</div>
-
-            <!-- 3. 비밀번호 입력 필드 (자동 대문자 방지 및 눈 아이콘) -->
+            <!-- 2. 비밀번호 입력 필드 (자동 대문자 방지 및 눈 아이콘) -->
             <div style="position:relative; width:100%;">
                 <input class="pw-input" id="pwInput" type="password"
-                       placeholder="비밀번호 (minji76)"
+                       placeholder="비밀번호 입력"
                        value="minji76"
                        autocapitalize="none"
                        autocorrect="off"
@@ -1147,11 +1147,11 @@ def read_root():
                 </button>
             </div>
             <div class="pw-err" id="pwErr"></div>
-            <button class="btn-ghost" onclick="checkPw()" style="width:100%; padding:13px; border-radius:18px; font-weight:600;">
-                <span>🔑 입력한 비밀번호로 접속</span>
+            <button class="pw-btn" onclick="checkPw()" style="width:100%; padding:14px; font-weight:700;">
+                <span>🔒 비밀번호로 잠금 해제</span>
             </button>
             <button class="btn-ghost" id="registerFaceIdPrompt" onclick="registerFaceID()" style="width:100%; margin-top:2px; font-size:0.82rem; color:#888;">
-                <span>📲 이 기기 Face ID 신규 등록</span>
+                <span>📲 이 기기 Face ID / 생체인증 등록</span>
             </button>
         </div>
     </div>
@@ -1254,79 +1254,114 @@ def read_root():
     <audio id="audioPlayer" playsinline></audio>
 
     <script>
-        // ===== 패스워드 & Face ID 게이트 =====
+        // ===== 전역 상수 & DOM 엘리먼트 바인딩 =====
         const PW_KEY = 'minji_auth';
         const CORRECT_PW = 'minji76';
+        
+        // 인증 관련 엘리먼트
+        const shutdownScreen = document.getElementById('shutdownScreen');
         const pwGate = document.getElementById('pwGate');
+        const pwSubText = document.getElementById('pwSubText');
         const pwInput = document.getElementById('pwInput');
+        const pwEyeIcon = document.getElementById('pwEyeIcon');
         const pwErr = document.getElementById('pwErr');
         const faceIdBtn = document.getElementById('faceIdBtn');
+        const faceIdIcon = document.getElementById('faceIdIcon');
         const faceIdBtnText = document.getElementById('faceIdBtnText');
+        const bioDeviceHint = document.getElementById('bioDeviceHint');
         const registerFaceIdPrompt = document.getElementById('registerFaceIdPrompt');
+
+        // 메인 UI 엘리먼트
+        const appHeaderTitle = document.getElementById('appHeaderTitle');
+        const personaToggleBtn = document.getElementById('personaToggleBtn');
+        const personaIcon = document.getElementById('personaIcon');
+        const personaText = document.getElementById('personaText');
+        const viewModeBtn = document.getElementById('viewModeBtn');
+        const viewModeIcon = document.getElementById('viewModeIcon');
+        const viewModeText = document.getElementById('viewModeText');
+        const avatarWrapper = document.getElementById('avatarWrapper');
+        const avatarImg = document.getElementById('avatarImg');
+        const orbWrapper = document.getElementById('orbWrapper');
+        const avatarOrb = document.getElementById('avatarOrb');
+        const stateLabel = document.getElementById('stateLabel');
+        const statusText = document.getElementById('statusText');
+        const bargeInHint = document.getElementById('bargeInHint');
+        const connectGroup = document.getElementById('connectGroup');
+        const activeControls = document.getElementById('activeControls');
+        const voiceSelect = document.getElementById('voiceSelect');
+        const micToggleBtn = document.getElementById('micToggleBtn');
+        const micIcon = document.getElementById('micIcon');
+        const micText = document.getElementById('micText');
+        const video = document.getElementById('videoFeed');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const camOverlay = document.getElementById('camOverlay');
+
         let isPlatformAuthAvailable = false;
 
+        // 생체 인증(Face ID / Windows Hello) 플랫폼 인식 및 설명
+        function getBiometricInfo() {
+            const ua = navigator.userAgent;
+            const isApple = /iPhone|iPad|Macintosh/i.test(ua);
+            const isWindows = /Windows/i.test(ua);
+            if (isApple) return { icon: "👤", name: "Face ID", desc: "휴대폰: Apple Face ID 지원" };
+            if (isWindows) return { icon: "💻", name: "Windows Hello", desc: "PC: Windows Hello (얼굴 / PIN / 지문) 지원" };
+            return { icon: "👤", name: "Face ID / 생체인식", desc: "스마트폰 생체인증 지원" };
+        }
+
         async function initAuthGate() {
-            // WebAuthn 생체인증 지원 여부 확인
-            if (window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
-                try {
-                    isPlatformAuthAvailable = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-                } catch(e) { isPlatformAuthAvailable = false; }
-            }
+            try {
+                const bio = getBiometricInfo();
+                if (bioDeviceHint) bioDeviceHint.innerText = bio.desc;
+                if (faceIdIcon) faceIdIcon.innerText = bio.icon;
 
-            const isFaceIdRegistered = localStorage.getItem('minji_faceid_registered') === 'true';
+                // WebAuthn 생체인증 지원 여부 확인
+                if (window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
+                    try {
+                        isPlatformAuthAvailable = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+                    } catch(e) { isPlatformAuthAvailable = false; }
+                }
 
-            // 버튼 텍스트 상태 업데이트
-            if (faceIdBtnText) {
-                faceIdBtnText.innerText = isFaceIdRegistered ? "Face ID로 잠금 해제" : "Face ID 등록하고 시작";
-            }
-            if (registerFaceIdPrompt) {
-                registerFaceIdPrompt.style.display = isFaceIdRegistered ? "none" : "block";
-            }
+                const isFaceIdRegistered = localStorage.getItem('minji_faceid_registered') === 'true';
+                if (faceIdBtnText) {
+                    faceIdBtnText.innerText = isFaceIdRegistered ? `${bio.name}로 잠금 해제` : `${bio.name} 등록하고 시작`;
+                }
 
-            // 인증 완료 여부 확인
-            if (localStorage.getItem(PW_KEY) === '1') {
-                pwGate.classList.add('hidden');
-            } else {
-                pwGate.classList.remove('hidden');
+                // 인증 완료 여부 확인
+                if (localStorage.getItem(PW_KEY) === '1') {
+                    if (pwGate) pwGate.classList.add('hidden');
+                } else {
+                    if (pwGate) pwGate.classList.remove('hidden');
+                }
+            } catch(e) {
+                console.error("initAuthGate error:", e);
             }
         }
 
         // 비밀번호 보이기/숨기기 토글
         function togglePwVisibility() {
-            const input = document.getElementById('pwInput');
-            const icon = document.getElementById('pwEyeIcon');
-            if (input) {
-                if (input.type === 'password') {
-                    input.type = 'text';
-                    if (icon) icon.innerText = '🔒';
+            if (pwInput) {
+                if (pwInput.type === 'password') {
+                    pwInput.type = 'text';
+                    if (pwEyeIcon) pwEyeIcon.innerText = '🔒';
                 } else {
-                    input.type = 'password';
-                    if (icon) icon.innerText = '👁️';
+                    pwInput.type = 'password';
+                    if (pwEyeIcon) pwEyeIcon.innerText = '👁️';
                 }
             }
-        }
-
-        // [핵심] 원터치 바로 시작 (비밀번호 확인 생략 및 즉시 진입)
-        function quickLogin() {
-            localStorage.setItem(PW_KEY, '1');
-            pwGate.classList.add('hidden');
         }
 
         // 화면 수동 잠금
         function lockApp() {
             localStorage.removeItem(PW_KEY);
-            pwGate.classList.remove('hidden');
-            if (faceIdBtnText) {
-                const isFaceIdRegistered = localStorage.getItem('minji_faceid_registered') === 'true';
-                faceIdBtnText.innerText = isFaceIdRegistered ? "Face ID로 잠금 해제" : "Face ID 등록하고 시작";
-            }
+            if (pwGate) pwGate.classList.remove('hidden');
+            initAuthGate();
         }
 
-        // [핵심] 앱 완전 종료 및 OLED 블랙 전원 화면 진입
+        // [핵심] 앱 완전 종료 및 보안 잠금
         function exitApp() {
-            if (!confirm("민지 AI를 완전히 종료할까요?\n카메라와 마이크가 즉시 꺼지며 시스템 전원이 안전하게 차단됩니다.")) return;
+            if (!confirm("민지 AI를 완전히 종료하고 보안 잠금할까요?\n카메라와 마이크가 즉시 꺼지며 전원이 안전하게 차단됩니다.")) return;
 
-            // 1. 카메라/마이크 모든 하드웨어 트랙 완벽 해제 (하드웨어 장치 즉시 차단)
+            // 1. 카메라/마이크 모든 하드웨어 트랙 완벽 해제
             try {
                 if (video && video.srcObject) {
                     const tracks = video.srcObject.getTracks();
@@ -1370,20 +1405,21 @@ def read_root():
             isListening = false;
             isProcessing = false;
 
-            // 2. UI 기본 컨트롤 숨김
-            connectGroup.style.display = 'block';
-            activeControls.style.display = 'none';
-            setOrbState('idle');
-            statusText.innerText = "전원이 완전히 꺼졌습니다.";
+            // [보안 잠금 요청 반영] 앱 종료 시 보안 토큰 파기하여 재진입 시 생체인증 요구
+            localStorage.removeItem(PW_KEY);
 
-            // 3. [핵심] 로그인 화면으로 떨어지지 않고 완전한 전원 꺼짐(True Shutdown) 화면 진입!
-            pwGate.classList.add('hidden');
-            const shutdownScreen = document.getElementById('shutdownScreen');
+            // 2. UI 기본 컨트롤 숨김
+            if (connectGroup) connectGroup.style.display = 'block';
+            if (activeControls) activeControls.style.display = 'none';
+            setOrbState('idle');
+            if (statusText) statusText.innerText = "전원이 완전히 꺼졌습니다.";
+
+            // 3. 완전 종료 OLED 화면 표시
+            if (pwGate) pwGate.classList.add('hidden');
             if (shutdownScreen) {
                 shutdownScreen.style.display = 'flex';
             }
 
-            // 4. PWA / 모바일 웹 앱 모드일 경우 창 닫기 시도
             try {
                 window.close();
             } catch(e){}
@@ -1399,20 +1435,20 @@ def read_root():
             }, 300);
         }
 
-        // 전원 꺼짐 화면에서 다시 켜기
+        // 전원 꺼짐 화면에서 다시 켜기 (Face ID 즉시 연동)
         async function resumeFromShutdown() {
-            const shutdownScreen = document.getElementById('shutdownScreen');
             if (shutdownScreen) {
                 shutdownScreen.style.display = 'none';
             }
-            pwGate.classList.add('hidden');
-            statusText.innerText = "전원이 켜졌습니다. 민지와 대화해 보세요.";
+            initAuthGate();
+            // 전원 켜기 버튼을 눌렀으므로 바로 Face ID / Windows Hello 호출!
+            await handleFaceIdClick();
         }
 
-        // Face ID 버튼 클릭 핸들러
+        // Face ID / Windows Hello 버튼 클릭 핸들러
         async function handleFaceIdClick() {
             if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-                alert("⚠️ Face ID는 보안 정책상 HTTPS 주소(https://...)에서만 작동합니다.\n주소창이 https:// 인지 확인해주세요!");
+                alert("⚠️ 생체 인증은 보안 정책상 HTTPS 주소(https://...)에서만 작동합니다.\n주소창이 https:// 인지 확인해주세요!");
                 return;
             }
             const isFaceIdRegistered = localStorage.getItem('minji_faceid_registered') === 'true';
@@ -1423,12 +1459,18 @@ def read_root():
             }
         }
 
-        // 1. Face ID 신규 등록 (WebAuthn Passkey)
+        // 1. Face ID / Windows Hello 신규 등록 (Passkey)
         async function registerFaceID() {
             if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-                alert("⚠️ Face ID는 애플/안드로이드 보안 정책상 HTTPS 주소(https://...)에서만 등록할 수 있습니다.");
+                alert("⚠️ 생체 인증은 보안 정책상 HTTPS 주소에서만 등록할 수 있습니다.");
                 return;
             }
+            if (!window.PublicKeyCredential) {
+                alert("이 브라우저는 생체인증(WebAuthn)을 지원하지 않습니다. 비밀번호(minji76)로 접속해 주세요.");
+                return;
+            }
+
+            const bio = getBiometricInfo();
             try {
                 const challenge = new Uint8Array(32);
                 window.crypto.getRandomValues(challenge);
@@ -1441,7 +1483,7 @@ def read_root():
                         rp: { name: "Minji AI" },
                         user: {
                             id: userId,
-                            name: "owner",
+                            name: "owner@minji.ai",
                             displayName: "Minji AI Master"
                         },
                         pubKeyCredParams: [
@@ -1450,7 +1492,8 @@ def read_root():
                         ],
                         authenticatorSelection: {
                             authenticatorAttachment: "platform",
-                            userVerification: "required"
+                            residentKey: "preferred",
+                            userVerification: "preferred"
                         },
                         timeout: 60000
                     }
@@ -1461,19 +1504,19 @@ def read_root():
                     localStorage.setItem('minji_faceid_registered', 'true');
                     localStorage.setItem('minji_cred_id', rawIdStr);
                     localStorage.setItem(PW_KEY, '1');
-                    pwGate.classList.add('hidden');
-                    alert("✨ Face ID 등록 완료! 이제 얼굴 인식으로 바로 열립니다.");
+                    if (pwGate) pwGate.classList.add('hidden');
+                    alert(`✨ ${bio.name} 등록 완료! 이제 원터치 얼굴/생체인식으로 바로 열립니다.`);
                     initAuthGate();
                 }
             } catch (err) {
                 console.warn("Face ID 등록 취소/에러:", err);
                 if (err.name !== 'NotAllowedError') {
-                    alert("Face ID 등록 알림: " + err.message);
+                    alert(`${bio.name} 등록 안내: ${err.message}\n(비밀번호 minji76으로도 즉시 접속하실 수 있습니다)`);
                 }
             }
         }
 
-        // 2. Face ID로 로그인
+        // 2. Face ID / Windows Hello로 로그인
         async function loginWithFaceID() {
             try {
                 const challenge = new Uint8Array(32);
@@ -1488,61 +1531,64 @@ def read_root():
                     publicKey: {
                         challenge: challenge,
                         allowCredentials: allowList.length ? allowList : undefined,
-                        userVerification: "required",
+                        userVerification: "preferred",
                         timeout: 60000
                     }
                 });
 
                 if (assertion) {
                     localStorage.setItem(PW_KEY, '1');
-                    pwGate.classList.add('hidden');
+                    if (pwGate) pwGate.classList.add('hidden');
+                    if (pwErr) pwErr.innerText = '';
                 }
             } catch (err) {
                 console.warn("Face ID 인증 취소/실패:", err);
-                if (pwErr) pwErr.innerText = "얼굴 인식이 취소되었습니다. 비밀번호로 접속하세요.";
+                const bio = getBiometricInfo();
+                if (pwErr) {
+                    pwErr.innerHTML = `${bio.name} 인증 취소됨. <a href='javascript:registerFaceID()' style='color:#ff9a76; text-decoration:underline;'>재등록</a>하거나 비밀번호(minji76)로 접속하세요.`;
+                }
             }
         }
 
-        // 3. 비밀번호 확인 (대소문자 무관 및 빈칸 허용)
-        async function checkPw() {
-            const val = pwInput ? pwInput.value.trim() : '';
-            if (!val || val.toLowerCase() === CORRECT_PW.toLowerCase()) {
+        // 3. 비밀번호 확인 (대소문자 무관 및 엔터 지원)
+        function checkPw() {
+            try {
+                const val = pwInput ? pwInput.value.trim() : '';
+                if (!val || val.toLowerCase() === CORRECT_PW.toLowerCase()) {
+                    localStorage.setItem(PW_KEY, '1');
+                    if (pwGate) pwGate.classList.add('hidden');
+                    setTimeout(() => pwInput && pwInput.blur && pwInput.blur(), 100);
+
+                    // Face ID 미등록 상태라면 등록 권장
+                    if (localStorage.getItem('minji_faceid_registered') !== 'true') {
+                        setTimeout(() => {
+                            const bio = getBiometricInfo();
+                            if (confirm(`✨ 다음 접속부터 ${bio.name}로 더 안전하고 빠르게 접속하시겠습니까?`)) {
+                                registerFaceID();
+                            }
+                        }, 400);
+                    }
+                } else {
+                    if (pwErr) pwErr.innerText = '비밀번호가 일치하지 않습니다. (기본: minji76)';
+                    if (pwInput) {
+                        pwInput.classList.add('error');
+                        setTimeout(() => {
+                            pwInput.classList.remove('error');
+                            if (pwErr) pwErr.innerText = '';
+                            pwInput.focus();
+                        }, 800);
+                    }
+                }
+            } catch(e) {
+                console.error("checkPw err:", e);
                 localStorage.setItem(PW_KEY, '1');
-                pwGate.classList.add('hidden');
-                setTimeout(() => pwInput && pwInput.blur && pwInput.blur(), 100);
-            } else {
-                pwErr.innerText = '비밀번호가 일치하지 않습니다. (기본: minji76)';
-                pwInput.classList.add('error');
-                setTimeout(() => {
-                    pwInput.classList.remove('error');
-                    pwErr.innerText = '';
-                    pwInput.focus();
-                }, 800);
+                if (pwGate) pwGate.classList.add('hidden');
             }
         }
 
         // 초기화 실행
         initAuthGate();
         // ===========================
-
-        const statusText = document.getElementById('statusText');
-        const stateLabel = document.getElementById('stateLabel');
-        const avatarOrb = document.getElementById('avatarOrb');
-        const orbWrapper = document.getElementById('orbWrapper');
-        const avatarWrapper = document.getElementById('avatarWrapper');
-        const avatarImg = document.getElementById('avatarImg');
-        const viewModeBtn = document.getElementById('viewModeBtn');
-        const viewModeIcon = document.getElementById('viewModeIcon');
-        const viewModeText = document.getElementById('viewModeText');
-        const video = document.getElementById('videoFeed');
-        const audioPlayer = document.getElementById('audioPlayer');
-        const micToggleBtn = document.getElementById('micToggleBtn');
-        const micIcon = document.getElementById('micIcon');
-        const micText = document.getElementById('micText');
-        const bargeInHint = document.getElementById('bargeInHint');
-        const connectGroup = document.getElementById('connectGroup');
-        const activeControls = document.getElementById('activeControls');
-        const camOverlay = document.getElementById('camOverlay');
 
         // 상태 변수
         let streamActive = false;
