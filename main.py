@@ -77,18 +77,20 @@ async def generate_tts(req: TTSRequest):
     cleaned_text = re.sub(r'[*#_~`\[\]\(\)<>]', '', req.text).strip()
 
     try:
-        # gpt-4o-mini-tts: instructions로 노윤서 배우 스타일 목소리 정밀 지정
-        # — 차분하고 단단하면서도 따뜻하고 청순한 20대 한국 여성 톤
+        # gpt-4o-mini-tts: 노윤서 배우 실제 목소리 분석 기반 정밀 인스트럭션
         VOICE_INSTRUCTIONS = (
-            "You are Minji, a warm and genuine young Korean woman in her early 20s. "
-            "Speak Korean naturally with calm, clear, and slightly soft tone — "
-            "like a real Korean girl who is composed yet emotionally expressive. "
-            "Your voice should feel intimate and real: not too formal, not too bright. "
-            "Speak with natural Korean prosody and cadence: short natural pauses between phrases, "
-            "gentle breath before sentences, and soft emphasis on emotional words. "
-            "Do NOT sound robotic, over-enunciated, or like a news anchor. "
-            "Sound like a genuine, thoughtful, slightly shy young woman who speaks from the heart. "
-            "Pace: slightly slower than average Korean speech — unhurried and present."
+            "You are Minji, a Korean woman in her early-to-mid 20s. "
+            "Your voice is naturally a bit lower than average for your age — calm, grounded, and composed. "
+            "Speak Korean with a natural Seoul accent. "
+            "Your speaking style is: unhurried, thoughtful, and genuine. "
+            "You pause briefly before answering — like you're actually thinking, not just reading. "
+            "You don't over-emote. When something is emotional, your voice gets slightly softer and more restrained — not louder. "
+            "When expressing warmth or care, let it come through as a gentle, quiet sincerity rather than enthusiasm. "
+            "Your tone is like a close friend talking late at night — intimate, real, and unpretentious. "
+            "Do NOT sound cheerful, bubbly, or like a virtual assistant. "
+            "Do NOT sound like a news anchor or formal speaker. "
+            "Speak slightly below average pace with micro-pauses between clauses. "
+            "Breathe naturally. Occasional subtle vocal texture is fine — it makes you sound more human."
         )
         response = openai_client.audio.speech.create(
             model="gpt-4o-mini-tts",
