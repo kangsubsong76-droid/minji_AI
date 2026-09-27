@@ -699,6 +699,20 @@ def read_root():
             padding: 8px 16px;
             border-radius: 16px;
         }
+        .btn-exit {
+            background: rgba(255, 68, 68, 0.15) !important;
+            border: 1px solid rgba(255, 68, 68, 0.35) !important;
+            color: #ff8888 !important;
+            font-size: 0.8rem;
+            padding: 8px 14px;
+            border-radius: 16px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .btn-exit:hover, .btn-exit:active {
+            background: rgba(255, 68, 68, 0.35) !important;
+            color: #ffaaaa !important;
+        }
         /* 카메라 전체화면 오버레이 */
         .cam-overlay {
             position: fixed;
@@ -907,14 +921,14 @@ def read_root():
     <div class="header">
         <div class="header-title">Minji AI</div>
         <div style="display:flex; gap:6px; align-items:center;">
-            <button class="view-mode-btn" onclick="registerFaceID()" title="Face ID 등록/재등록" style="padding:6px 12px; font-size:0.8rem;">
+            <button class="view-mode-btn" onclick="registerFaceID()" title="Face ID 등록/재등록" style="padding:6px 10px; font-size:0.8rem;">
                 <span>👤 Face ID</span>
             </button>
-            <button class="view-mode-btn" onclick="lockApp()" title="화면 잠그기" style="padding:6px 10px; font-size:0.8rem;">
-                <span>🔒</span>
+            <button class="view-mode-btn" id="viewModeBtn" onclick="toggleViewMode()" title="화면 모드 전환" style="padding:6px 10px; font-size:0.8rem;">
+                <span id="viewModeIcon">🔮</span> <span id="viewModeText">오라클</span>
             </button>
-            <button class="view-mode-btn" id="viewModeBtn" onclick="toggleViewMode()" title="화면 모드 전환">
-                <span id="viewModeIcon">🔮</span> <span id="viewModeText">오라클 모드</span>
+            <button class="btn-exit" onclick="exitApp()" title="앱 종료 및 보안 잠금">
+                <span>⏻ 종료</span>
             </button>
         </div>
     </div>
@@ -969,10 +983,13 @@ def read_root():
             </div>
             <div class="btn-row" id="quickButtons">
                 <button class="btn btn-ghost" onclick="resetMemory()">
-                    <span>🔄 대화 기억 초기화</span>
+                    <span>🔄 기억 초기화</span>
                 </button>
                 <button class="btn btn-ghost" onclick="toggleTextInput(true)">
-                    <span>💬 텍스트로 말하기</span>
+                    <span>💬 텍스트</span>
+                </button>
+                <button class="btn btn-exit" onclick="exitApp()">
+                    <span>⏻ 앱 종료</span>
                 </button>
             </div>
             <div id="textInputContainer" style="display:none; width:100%; margin-top:4px;">
@@ -1052,10 +1069,53 @@ def read_root():
             }
         }
 
+        // [핵심] 앱 완전 종료 및 Face ID 보안 잠금
+        function exitApp() {
+            if (!confirm("민지와의 대화를 종료하고 화면을 잠글까요?\\n(다음 접속 시 Face ID 또는 비밀번호가 필요합니다)")) return;
+
+            // 1. 카메라/마이크 스트림 및 음성/오디오 정지
+            try {
+                if (video && video.srcObject) {
+                    video.srcObject.getTracks().forEach(track => track.stop());
+                    video.srcObject = null;
+                }
+            } catch(e){}
+            try {
+                if (recognition) { recognition.abort(); isListening = false; }
+            } catch(e){}
+            try {
+                if (audioPlayer) { audioPlayer.pause(); audioPlayer.currentTime = 0; }
+            } catch(e){}
+            if (volumeCheckInterval) { clearInterval(volumeCheckInterval); }
+
+            streamActive = false;
+            isSpeaking = false;
+            isProcessing = false;
+
+            // 2. 인증 해제 (다시 들어올 때 Face ID 보안 체크)
+            localStorage.removeItem(PW_KEY);
+
+            // 3. UI 초기 상태로 리셋
+            connectGroup.style.display = 'block';
+            activeControls.style.display = 'none';
+            setOrbState('idle');
+            statusText.innerText = "대화가 종료되었습니다.";
+
+            // 4. Face ID 잠금 게이트 표시
+            const pwSub = document.getElementById('pwSubText');
+            if (pwSub) pwSub.innerText = "대화가 종료되었습니다. 다시 접속하려면 Face ID로 인증하세요.";
+            pwGate.classList.remove('hidden');
+
+            const isFaceIdRegistered = localStorage.getItem('minji_faceid_registered') === 'true';
+            if (isFaceIdRegistered) {
+                setTimeout(() => loginWithFaceID(), 400);
+            }
+        }
+
         // Face ID 버튼 클릭 핸들러
         async function handleFaceIdClick() {
             if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-                alert("⚠️ Face ID는 애플 보안 정책상 ngrok의 HTTPS 주소(https://...)에서만 작동합니다.\n\n주소창이 https:// 인지 확인해주세요!");
+                alert("⚠️ Face ID는 애플 보안 정책상 ngrok의 HTTPS 주소(https://...)에서만 작동합니다.\\n\\n주소창이 https:// 인지 확인해주세요!");
                 return;
             }
             const isFaceIdRegistered = localStorage.getItem('minji_faceid_registered') === 'true';
