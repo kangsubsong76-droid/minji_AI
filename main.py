@@ -888,29 +888,34 @@ def read_root():
         <div class="pw-logo">Minji AI</div>
         <div class="pw-sub" id="pwSubText">Face ID 또는 비밀번호를 입력하세요</div>
         <div class="pw-box">
-            <button class="pw-btn-faceid" id="faceIdBtn" onclick="loginWithFaceID()" style="display:none;">
-                <span style="font-size:1.3rem;">👤</span> <span>Face ID로 잠금 해제</span>
+            <button class="pw-btn-faceid" id="faceIdBtn" onclick="handleFaceIdClick()">
+                <span style="font-size:1.3rem;">👤</span> <span id="faceIdBtnText">Face ID로 잠금 해제</span>
             </button>
-            <div class="pw-divider" id="pwDivider" style="display:none;">또는 비밀번호</div>
+            <div class="pw-divider" id="pwDivider">또는 비밀번호</div>
             <input class="pw-input" id="pwInput" type="password"
                    placeholder="••••••••"
                    onkeydown="if(event.key==='Enter') checkPw()"
                    autocomplete="current-password">
             <div class="pw-err" id="pwErr"></div>
             <button class="pw-btn" onclick="checkPw()">✨ 비밀번호로 접속</button>
-            <button class="btn-ghost" id="registerFaceIdPrompt" onclick="registerFaceID()" style="display:none; width:100%; margin-top:8px;">
-                <span>📲 이 기기 Face ID 등록하기</span>
+            <button class="btn-ghost" id="registerFaceIdPrompt" onclick="registerFaceID()" style="width:100%; margin-top:8px;">
+                <span>📲 이 기기 Face ID 신규 등록</span>
             </button>
         </div>
     </div>
 
     <div class="header">
         <div class="header-title">Minji AI</div>
-        <div style="display:flex; gap:8px; align-items:center;">
+        <div style="display:flex; gap:6px; align-items:center;">
+            <button class="view-mode-btn" onclick="registerFaceID()" title="Face ID 등록/재등록" style="padding:6px 12px; font-size:0.8rem;">
+                <span>👤 Face ID</span>
+            </button>
+            <button class="view-mode-btn" onclick="lockApp()" title="화면 잠그기" style="padding:6px 10px; font-size:0.8rem;">
+                <span>🔒</span>
+            </button>
             <button class="view-mode-btn" id="viewModeBtn" onclick="toggleViewMode()" title="화면 모드 전환">
                 <span id="viewModeIcon">🔮</span> <span id="viewModeText">오라클 모드</span>
             </button>
-            <div class="badge" id="sessionBadge">Memory Active</div>
         </div>
     </div>
 
@@ -1001,12 +1006,12 @@ def read_root():
         const pwInput = document.getElementById('pwInput');
         const pwErr = document.getElementById('pwErr');
         const faceIdBtn = document.getElementById('faceIdBtn');
-        const pwDivider = document.getElementById('pwDivider');
+        const faceIdBtnText = document.getElementById('faceIdBtnText');
         const registerFaceIdPrompt = document.getElementById('registerFaceIdPrompt');
         let isPlatformAuthAvailable = false;
 
         async function initAuthGate() {
-            // WebAuthn 생체인증(Face ID / Touch ID) 지원 여부 확인
+            // WebAuthn 생체인증 지원 여부 확인
             if (window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
                 try {
                     isPlatformAuthAvailable = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
@@ -1015,33 +1020,56 @@ def read_root():
 
             const isFaceIdRegistered = localStorage.getItem('minji_faceid_registered') === 'true';
 
-            // 이미 비밀번호로 인증된 기기라도, Face ID가 등록되어 있으면 UI 상태 업데이트
-            if (isPlatformAuthAvailable) {
-                if (isFaceIdRegistered) {
-                    if (faceIdBtn) faceIdBtn.style.display = 'inline-flex';
-                    if (pwDivider) pwDivider.style.display = 'flex';
-                } else {
-                    if (registerFaceIdPrompt) registerFaceIdPrompt.style.display = 'block';
-                }
+            // 버튼 텍스트 상태 업데이트
+            if (faceIdBtnText) {
+                faceIdBtnText.innerText = isFaceIdRegistered ? "Face ID로 잠금 해제" : "Face ID 등록하고 시작";
+            }
+            if (registerFaceIdPrompt) {
+                registerFaceIdPrompt.style.display = isFaceIdRegistered ? "none" : "block";
             }
 
             // 인증 완료 여부 확인
             if (localStorage.getItem(PW_KEY) === '1') {
                 pwGate.classList.add('hidden');
             } else {
+                pwGate.classList.remove('hidden');
                 if (isPlatformAuthAvailable && isFaceIdRegistered) {
-                    // Face ID 등록 기기: 버튼 강조 및 자동 클릭 시도 (제스처 필요 시 사용자가 탭)
-                    setTimeout(() => loginWithFaceID(), 300);
+                    // Face ID 등록된 경우: 사용자가 탭하거나 자동 시도
+                    setTimeout(() => loginWithFaceID(), 400);
                 } else {
                     setTimeout(() => pwInput && pwInput.focus(), 200);
                 }
             }
         }
 
+        // 화면 수동 잠금
+        function lockApp() {
+            localStorage.removeItem(PW_KEY);
+            pwGate.classList.remove('hidden');
+            if (faceIdBtnText) {
+                const isFaceIdRegistered = localStorage.getItem('minji_faceid_registered') === 'true';
+                faceIdBtnText.innerText = isFaceIdRegistered ? "Face ID로 잠금 해제" : "Face ID 등록하고 시작";
+            }
+        }
+
+        // Face ID 버튼 클릭 핸들러
+        async function handleFaceIdClick() {
+            if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+                alert("⚠️ Face ID는 애플 보안 정책상 ngrok의 HTTPS 주소(https://...)에서만 작동합니다.\n\n주소창이 https:// 인지 확인해주세요!");
+                return;
+            }
+            const isFaceIdRegistered = localStorage.getItem('minji_faceid_registered') === 'true';
+            if (isFaceIdRegistered) {
+                await loginWithFaceID();
+            } else {
+                await registerFaceID();
+            }
+        }
+
         // 1. Face ID 신규 등록 (WebAuthn Passkey)
         async function registerFaceID() {
-            if (!isPlatformAuthAvailable) {
-                alert("이 기기나 브라우저는 Face ID 생체인증을 지원하지 않습니다. (HTTPS 접속 필요)");
+            if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+                alert("⚠️ Face ID는 애플 보안 정책상 HTTPS 주소(https://...)에서만 등록할 수 있습니다. ngrok https 링크로 접속해주세요.");
                 return;
             }
             try {
@@ -1077,7 +1105,8 @@ def read_root():
                     localStorage.setItem('minji_cred_id', rawIdStr);
                     localStorage.setItem(PW_KEY, '1');
                     pwGate.classList.add('hidden');
-                    alert("✨ Face ID 등록 완료! 다음 접속부터는 얼굴 인식으로 즉시 열립니다.");
+                    alert("✨ Face ID 등록 완료! 이제 얼굴 인식으로 바로 열립니다.");
+                    initAuthGate();
                 }
             } catch (err) {
                 console.warn("Face ID 등록 취소/에러:", err);
@@ -1089,7 +1118,6 @@ def read_root():
 
         // 2. Face ID로 로그인
         async function loginWithFaceID() {
-            if (!isPlatformAuthAvailable) return;
             try {
                 const challenge = new Uint8Array(32);
                 window.crypto.getRandomValues(challenge);
@@ -1114,7 +1142,6 @@ def read_root():
                 }
             } catch (err) {
                 console.warn("Face ID 인증 취소/실패:", err);
-                // 실패 시 비밀번호 입력창으로 포커스
                 if (pwInput) pwInput.focus();
             }
         }
@@ -1127,10 +1154,10 @@ def read_root():
                 pwGate.classList.add('hidden');
                 setTimeout(() => pwInput.focus && pwInput.blur(), 100);
 
-                // Face ID 지원 기기인데 아직 미등록 상태라면 등록 제안
-                if (isPlatformAuthAvailable && localStorage.getItem('minji_faceid_registered') !== 'true') {
+                // Face ID 미등록 상태라면 등록 제안
+                if (localStorage.getItem('minji_faceid_registered') !== 'true') {
                     setTimeout(() => {
-                        if (confirm("다음 접속부터 Face ID(얼굴 인식)로 더 빠르게 접속하시겠습니까?")) {
+                        if (confirm("✨ 다음 접속부터 Face ID(얼굴 인식)로 더 빠르게 접속하시겠습니까?")) {
                             registerFaceID();
                         }
                     }, 500);
