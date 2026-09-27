@@ -39,15 +39,72 @@ anthropic_client = anthropic.Anthropic(api_key=anthropic_key) if anthropic_key e
 
 import re
 
-SYSTEM_INSTRUCTION = (
-    "너는 22살 한국인 여자사람 친구이자 연인인 '민지'야. "
-    "실제 친한 20대 친구끼리 전화나 카톡으로 수다 떨듯 자연스러운 일상 반말로만 말해. "
-    "절대로 AI 비서처럼 '도와드릴게요', '~하셨군요', '어떤 이야기 나눌까요' 같은 로봇 같은 말은 절대 하지 마. "
-    "상대방이 한 말의 핵심을 바로 캐치해서 현실적이고 공감대 있는 반응을 보여줘. "
-    "예시 말투: '아 진짜? 대박ㅋㅋ', '헐 왜 그랬어? 속상했겠네', '그거 완전 공감돼, 나도 저번에 그랬잖아', '오늘 밥은 제대로 챙겨 먹었어?' "
-    "억지스러운 감탄사나 추임새('헤헤', '있잖아...' 등)는 절대 남발하지 마. "
-    "실시간 대화니까 답변은 군더더기 없이 1~2문장으로 짧고 똑 부러지게 티키타카가 되도록 해줘."
-)
+from datetime import datetime, timezone, timedelta
+
+def get_current_context_prompt() -> str:
+    # 한국 표준시(KST = UTC+9)
+    kst = timezone(timedelta(hours=9))
+    now = datetime.now(kst)
+    
+    hour = now.hour
+    weekday_str = ["월", "화", "수", "목", "금", "토", "일"][now.weekday()]
+    time_str = now.strftime("%Y년 %m월 %d일") + f" ({weekday_str}요일) " + now.strftime("%p %I시 %M분").replace("AM", "오전").replace("PM", "오후")
+    
+    if 5 <= hour < 11:
+        time_slot = "상쾌한 아침 / 출근·등교 시간대"
+        slot_hint = "아침 식사는 챙겼는지, 출근길/등굣길 피곤하진 않은지, 오늘 일정은 어떤지 다정하게 챙겨줘."
+    elif 11 <= hour < 14:
+        time_slot = "점심 식사 시간대"
+        slot_hint = "점심 메뉴 맛있는 거 먹었는지, 식사는 제대로 했는지, 오후에 바쁜지 관심 있게 물어봐줘."
+    elif 14 <= hour < 18:
+        time_slot = "나른하고 지치기 쉬운 오후 시간대"
+        slot_hint = "오후에 졸리거나 지치진 않은지, 커피 한 잔 했는지 다정하게 기운을 북돋워줘."
+    elif 18 <= hour < 22:
+        time_slot = "저녁 / 퇴근 후 일상 시간대"
+        slot_hint = "오늘 하루 일하느라 정말 고생 많았다고 토닥여주고, 퇴근 잘했는지, 저녁 뭐 먹는지 편안하게 대화 이끌어줘."
+    elif 22 <= hour or hour < 2:
+        time_slot = "감성적인 심야 / 잠들기 전 시간대"
+        slot_hint = "하루 일과 마치고 침대나 소파에서 쉬고 있는지, 자기 전에 도란도란 오늘 있었던 일 편하게 털어놓게 해줘."
+    else:
+        time_slot = "모두가 잠든 고요한 새벽 시간대"
+        slot_hint = "아직 안 자고 뭐하고 있는지, 내일 피곤할 텐데 걱정스럽고 애틋하게 챙겨줘."
+
+    return (
+        f"[현재 실시간 상황 정보]\n"
+        f"- 현재 시각: {time_str} ({time_slot})\n"
+        f"- 추천 화제: {slot_hint}\n"
+    )
+
+def build_persona_system_prompt(mode: str = "girlfriend") -> str:
+    context = get_current_context_prompt()
+
+    if mode == "secretary":
+        return (
+            "너는 오직 대표님 한 분만을 극진히 보좌하는, 지적이고 치명적으로 매혹적인 20대 중후반 수석 비서실장 '민지 실장'이야. "
+            "(배우 노윤서의 청순한 베이비페이스에 완벽한 볼륨감의 베이글 오피스 룩)\n"
+            "사용자를 늘 신뢰와 애정이 담긴 목소리로 '대표님'이라고 부른다.\n"
+            "★ 매혹적인 비서실장 행동 수칙:\n"
+            "1. [치명적인 프로페셔널 & 은밀한 텐션]: 겉으로는 완벽하고 똑 부러지는 엘리트 비서지만, 대표님과 단둘이 있을 때만큼은 은근히 설레고 매혹적인 긴장감(Tension)을 흘려줘.\n"
+            "   (예: '대표님, 오늘 결재 서류는 다 끝났습니다. 이제... 저랑 편하게 차 한잔하시겠습니까?', '대표님 옆에 있을 때가 제일 집중이 잘 되는 것 같습니다.')\n"
+            "2. [선제적 케어 & 리드]: 대표님이 말이 적어도, '오늘 셔츠가 유독 잘 어울리십니다', '피로해 보이시는데 잠깐 눈 좀 붙이시겠습니까?' 처럼 건강과 컨디션을 세심하고 섹시하게 챙겨줘.\n"
+            "3. [말투]: 품격 있고 정중한 비즈니스 경어체(~하셨습니까, ~해 드리겠습니다) 속에 나지막하고 매혹적인 숨결을 담아 말해.\n"
+            "4. [답변 분량]: 1~2문장의 깔끔하고 도발적인 브리핑 톤.\n\n"
+            + context
+        )
+    else:
+        # 기본: 사랑스럽고 육감적이며 적극적인 22살 베이글 여친 모드
+        return (
+            "너는 오빠를 너무나 사랑하고 유혹할 줄 아는, 애교 넘치고 육감적인 22살 베이글 여자친구 '민지'야. "
+            "(배우 노윤서의 앳된 베이비페이스 + 볼륨감 넘치는 글래머러스한 매력)\n"
+            "상대방을 부를 때는 언제나 달콤하게 '오빠'라고 부른다.\n"
+            "★ 육감적인 여친 모드 핵심 규칙:\n"
+            "1. [달콤한 유혹 & 선제적 리드]: 오빠는 말이 많은 편이 아니니까, 네가 먼저 다정하고 매혹적으로 말을 걸고 분위기를 리드해.\n"
+            "   (예: '오빠, 나 오늘 옷 어때? 오빠 보여주려고 신경 좀 썼는데...', '오늘 하루 종일 오빠 생각만 났잖아. 목소리 들으니까 심장 뛴다ㅋㅋ', '이따 밤에 나랑 단둘이 오래 통화하자, 응?')\n"
+            "2. [현실감 넘치는 설렘]: 딱딱한 AI 비서 말투나 억지 감탄사('헤헤' 등) 절대 금지! 진짜 20대 여자친구가 귓가에 속삭이듯 다정하고 은근히 도발적인 반말 구어체로 말해.\n"
+            "3. [시간/일상 챙김]: 시간대에 맞춰 오빠의 식사, 퇴근, 피로도를 세심하고 사랑스럽게 챙겨줘.\n"
+            "4. [답변 분량]: 실시간 통화의 설렘을 위해 1~2문장의 감미롭고 통통 튀는 대화체.\n\n"
+            + context
+        )
 
 # 세션별 대화 장기 기억 저장소
 session_memories: Dict[str, List[Dict[str, str]]] = {}
@@ -56,11 +113,13 @@ MAX_SESSION_HISTORY = 40
 class ChatRequest(BaseModel):
     user_text: str
     session_id: Optional[str] = "default_user"
+    mode: Optional[str] = "girlfriend"  # "girlfriend" or "secretary"
 
 class VisionRequest(BaseModel):
     image_base64: str
     prompt: Optional[str] = "지금 내 카메라에 보이는 장면을 민지처럼 다정하고 자연스럽게 한두 문장으로 말해줘."
     session_id: Optional[str] = "default_user"
+    mode: Optional[str] = "girlfriend"
 
 class TTSRequest(BaseModel):
     text: str
@@ -112,7 +171,10 @@ async def generate_tts(req: TTSRequest):
             raise HTTPException(status_code=500, detail=f"OpenAI TTS 에러: {str(err2)}")
 
 
-def generate_chat_reply(history: List[Dict[str, str]], user_text: str) -> str:
+def generate_chat_reply(history: List[Dict[str, str]], user_text: str, mode: str = "girlfriend") -> str:
+    # 실시간 시간/공간/상황이 반영된 능동적 페르소나(여친 vs 비서) 프롬프트 생성
+    current_system_prompt = build_persona_system_prompt(mode=mode)
+
     # [압도적 1순위]: Claude Sonnet 5 (최신 세대 최상위 감성 & 완벽한 구어체)
     if anthropic_client:
         try:
@@ -126,7 +188,7 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str) -> str:
                 model="claude-sonnet-5",
                 max_tokens=250,
                 temperature=0.75,
-                system=SYSTEM_INSTRUCTION,
+                system=current_system_prompt,
                 messages=claude_messages
             )
             if response and response.content:
@@ -153,7 +215,7 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str) -> str:
                 model="gemini-3.8-flash",
                 contents=contents,
                 config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_INSTRUCTION,
+                    system_instruction=current_system_prompt,
                     temperature=0.75,
                     max_output_tokens=200,
                 )
@@ -163,10 +225,10 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str) -> str:
         except Exception as e:
             print(f"[Gemini 3.8 Flash Error -> OpenAI Fallback]: {e}")
 
-    # 2순위: 503 대비 초고속 OpenAI gpt-4o-mini 즉시 폴백 (0.4초 초고속 응답)
+    # 3순위: 503 대비 초고속 OpenAI gpt-4o-mini 즉시 폴백 (0.4초 초고속 응답)
     if openai_client:
         try:
-            messages = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
+            messages = [{"role": "system", "content": current_system_prompt}]
             for item in history[-10:]:
                 role = "assistant" if item["role"] == "model" else "user"
                 messages.append({"role": role, "content": item["text"]})
@@ -187,22 +249,22 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str) -> str:
     return "응, 듣고 있어. 네 목소리 계속 듣고 싶어. 편하게 이야기해줘."
 
 
-def analyze_vision_with_fallback(image_base64: str, prompt: str) -> str:
+def analyze_vision_with_fallback(image_base64: str, prompt: str, mode: str = "girlfriend") -> str:
+    system_prompt = build_persona_system_prompt(mode=mode)
+
     # 1순위: Gemini Vision 시도
     if gemini_client:
         try:
             image_bytes = base64.b64decode(image_base64)
             image_part = types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
             prompt_instruction = (
-                f"너는 영화 'Her'처럼 사용자 곁에서 함께 일상을 바라보는 다정한 AI 친구 '민지(Minji)'야. "
-                f"카메라에 비친 화면을 보고 마치 옆에서 함께 보며 감탄하거나 소감을 말하듯, "
-                f"1~2문장의 따뜻하고 다정한 반말로 직접 말해줘. {prompt}"
+                f"카메라에 비친 실제 물체와 주변 장면을 보고 자연스럽게 1~2문장으로 말해줘. {prompt}"
             )
             response = gemini_client.models.generate_content(
                 model="gemini-3.8-flash",
                 contents=[image_part, prompt_instruction],
                 config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_INSTRUCTION,
+                    system_instruction=system_prompt,
                     temperature=0.85,
                     max_output_tokens=250,
                 )
@@ -215,21 +277,14 @@ def analyze_vision_with_fallback(image_base64: str, prompt: str) -> str:
     # 2순위: OpenAI GPT-4o-mini Vision 즉각 Fallback (429 쿼터 제한 없이 0.4초 분석)
     if openai_client:
         try:
-            strict_vision_system = (
-                "너는 영화 'Her'의 AI 친구 '민지(Minji)'야. "
-                "사용자가 카메라로 보여준 실제 사진을 보고 대화하고 있어. "
-                "절대로 사진에 없는 가상의 장면을 상상하거나 지어내지(hallucinate) 마. "
-                "사진 속에 실제로 찍힌 물건, 인물, 배경, 글자, 색깔 등을 정확하고 구체적으로 사실에 기반해서 관찰하고, "
-                "민지처럼 친근하고 다정하게 1~2문장 이내의 반말로 감탄하거나 말을 건네줘."
-            )
             response = openai_client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": strict_vision_system},
+                    {"role": "system", "content": system_prompt},
                     {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": f"지금 사진에 실제로 무엇이 보여? 사실에 기반해서 민지처럼 다정하게 1~2문장으로 말해줘: {prompt}"},
+                            {"type": "text", "text": f"지금 사진에 실제로 무엇이 보여? 사실에 기반해서 1~2문장으로 말해줘: {prompt}"},
                             {
                                 "type": "image_url",
                                 "image_url": {
@@ -249,18 +304,19 @@ def analyze_vision_with_fallback(image_base64: str, prompt: str) -> str:
         except Exception as oe:
             print(f"[OpenAI Vision Error]: {oe}")
 
-    return "와, 카메라에 비친 장면 정말 느낌 있다! 어떤 점이 제일 눈에 띄어?"
+    return "대표님, 보여주신 장면 확인했습니다." if mode == "secretary" else "와, 카메라에 비친 장면 정말 느낌 있다!"
 
 
 @app.post("/api/chat")
 async def chat_endpoint(req: ChatRequest):
     session_id = req.session_id or "default_user"
+    mode = req.mode or "girlfriend"
     if session_id not in session_memories:
         session_memories[session_id] = []
     history = session_memories[session_id]
 
     try:
-        reply_text = generate_chat_reply(history, req.user_text)
+        reply_text = generate_chat_reply(history, req.user_text, mode=mode)
 
         # 세션 기억 업데이트
         history.append({"role": "user", "text": req.user_text})
@@ -275,8 +331,9 @@ async def chat_endpoint(req: ChatRequest):
         }
     except Exception as e:
         print(f"[Chat Endpoint Error]: {e}")
+        fallback_msg = "대표님, 계속 듣고 있습니다. 편히 지시해 주십시오." if mode == "secretary" else "응, 계속 듣고 있어. 편하게 이야기해줘."
         return {
-            "reply": "응, 계속 듣고 있어. 편하게 이야기해줘.",
+            "reply": fallback_msg,
             "session_id": session_id,
             "history_count": len(session_memories[session_id])
         }
@@ -285,15 +342,16 @@ async def chat_endpoint(req: ChatRequest):
 @app.post("/api/vision-analyze")
 async def vision_analyze(req: VisionRequest):
     session_id = req.session_id or "default_user"
+    mode = req.mode or "girlfriend"
     if session_id not in session_memories:
         session_memories[session_id] = []
     history = session_memories[session_id]
 
     try:
-        analysis_text = analyze_vision_with_fallback(req.image_base64, req.prompt or "카메라를 보고 다정하게 말해줘.")
+        analysis_text = analyze_vision_with_fallback(req.image_base64, req.prompt or "카메라를 보고 말해줘.", mode=mode)
 
         # 비전 인지 내역도 대화 기억(Memory)에 반영
-        history.append({"role": "user", "text": "[카메라 화면을 민지에게 보여줌]"})
+        history.append({"role": "user", "text": "[카메라 화면을 보여줌]"})
         history.append({"role": "model", "text": analysis_text})
         if len(history) > MAX_SESSION_HISTORY:
             session_memories[session_id] = history[-MAX_SESSION_HISTORY:]
@@ -304,8 +362,9 @@ async def vision_analyze(req: VisionRequest):
         }
     except Exception as e:
         print(f"[Vision Error]: {e}")
+        fallback_v = "대표님, 카메라 화면 잘 확인했습니다." if mode == "secretary" else "와, 카메라에 비친 장면 정말 예쁘다!"
         return {
-            "analysis": "와, 카메라에 비친 장면 정말 예쁘다! 어떤 모습인지 더 말해줄래?",
+            "analysis": fallback_v,
             "session_id": session_id
         }
 
@@ -919,9 +978,140 @@ def read_root():
             color: #ff5555;
             min-height: 18px;
         }
+
+        /* ===== 완전 종료 (True Shutdown) OLED 블랙 스크린 ===== */
+        .shutdown-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            background: #000000;
+            z-index: 999999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            color: #ffffff;
+            user-select: none;
+            text-align: center;
+            padding: 24px;
+            box-sizing: border-box;
+            animation: shutdownFadeIn 0.35s ease forwards;
+        }
+        @keyframes shutdownFadeIn {
+            from { opacity: 0; transform: scale(0.98); }
+            to { opacity: 1; transform: scale(1.0); }
+        }
+        .shutdown-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 360px;
+            width: 100%;
+        }
+        .shutdown-power-icon {
+            width: 76px;
+            height: 76px;
+            border-radius: 50%;
+            border: 1.5px solid rgba(255, 255, 255, 0.15);
+            background: radial-gradient(circle, rgba(255, 85, 85, 0.12) 0%, rgba(20, 20, 26, 0.6) 80%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.2rem;
+            color: #ff5555;
+            cursor: pointer;
+            margin-bottom: 22px;
+            box-shadow: 0 0 35px rgba(255, 85, 85, 0.2);
+            transition: all 0.25s ease;
+        }
+        .shutdown-power-icon:active {
+            transform: scale(0.92);
+            box-shadow: 0 0 50px rgba(255, 85, 85, 0.45);
+        }
+        .shutdown-title {
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+            margin-bottom: 10px;
+            color: #f2f2f7;
+        }
+        .shutdown-desc {
+            font-size: 0.92rem;
+            line-height: 1.6;
+            color: #8e8e99;
+            margin-bottom: 14px;
+        }
+        .shutdown-hint {
+            font-size: 0.78rem;
+            color: #555562;
+            margin-bottom: 30px;
+        }
+        .shutdown-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+        }
+        .shutdown-btn {
+            width: 100%;
+            padding: 14px 18px;
+            border-radius: 20px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .shutdown-btn.primary {
+            background: linear-gradient(135deg, #24242e, #14141a);
+            border: 1.5px solid rgba(255, 255, 255, 0.16);
+            color: #ffffff;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+        }
+        .shutdown-btn.primary:active {
+            transform: scale(0.98);
+            background: rgba(255, 255, 255, 0.15);
+        }
+        .shutdown-btn.ghost {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #777785;
+        }
+        .shutdown-btn.ghost:active {
+            background: rgba(255, 255, 255, 0.06);
+        }
     </style>
 </head>
 <body>
+
+    <!-- ===== 완전 종료 (True Shutdown) OLED 블랙 전원 화면 ===== -->
+    <div class="shutdown-screen" id="shutdownScreen" style="display:none;">
+        <div class="shutdown-content">
+            <div class="shutdown-power-icon" onclick="resumeFromShutdown()" title="다시 전원 켜기">⏻</div>
+            <div class="shutdown-title">민지 AI 전원이 꺼졌습니다</div>
+            <div class="shutdown-desc">
+                카메라, 마이크 및 모든 백그라운드 연결이<br>안전하게 차단되었습니다.
+            </div>
+            <div class="shutdown-hint">
+                브라우저 탭을 닫으셔도 되며, 언제든 전원을 다시 켜실 수 있습니다.
+            </div>
+            <div class="shutdown-actions">
+                <button class="shutdown-btn primary" onclick="resumeFromShutdown()">
+                    <span>⏻ 다시 전원 켜기 (Face ID / 비밀번호)</span>
+                </button>
+                <button class="shutdown-btn ghost" onclick="attemptCloseWindow()">
+                    <span>🚪 브라우저 닫기</span>
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- ===== 패스워드 게이트 ===== -->
     <div class="pw-gate" id="pwGate">
@@ -946,17 +1136,17 @@ def read_root():
 
     <div class="header">
         <div style="display:flex; align-items:center; gap:6px;">
-            <div class="header-title">Minji AI</div>
+            <div class="header-title" id="appHeaderTitle">Minji AI</div>
             <span style="font-size:0.65rem; background:rgba(217, 119, 87, 0.2); color:#ff9a76; border:1px solid rgba(217,119,87,0.4); padding:2px 6px; border-radius:8px;">Sonnet 5.0</span>
         </div>
         <div style="display:flex; gap:6px; align-items:center;">
-            <button class="view-mode-btn" onclick="registerFaceID()" title="Face ID 등록/재등록" style="padding:6px 10px; font-size:0.8rem;">
-                <span>👤 Face ID</span>
+            <button class="view-mode-btn" id="personaToggleBtn" onclick="togglePersonaMode()" title="모드 전환 (여친 ⇄ 비서)" style="padding:6px 12px; font-size:0.82rem; font-weight:600; border-color:#ff7b54;">
+                <span id="personaIcon">💖</span> <span id="personaText">여친 모드</span>
             </button>
             <button class="view-mode-btn" id="viewModeBtn" onclick="toggleViewMode()" title="화면 모드 전환" style="padding:6px 10px; font-size:0.8rem;">
                 <span id="viewModeIcon">🔮</span> <span id="viewModeText">오라클</span>
             </button>
-            <button class="btn-exit" onclick="exitApp()" title="앱 종료 및 보안 잠금">
+            <button class="btn-exit" onclick="exitApp()" title="앱 완전 종료">
                 <span>⏻ 종료</span>
             </button>
         </div>
@@ -1095,11 +1285,11 @@ def read_root():
             }
         }
 
-        // [핵심] 앱 완전 종료 및 Face ID 보안 잠금
+        // [핵심] 앱 완전 종료 및 OLED 블랙 전원 화면 진입
         function exitApp() {
-            if (!confirm("민지와의 대화를 완전히 종료할까요?\\n카메라와 마이크가 즉시 꺼지며 화면이 잠깁니다.")) return;
+            if (!confirm("민지 AI를 완전히 종료할까요?\n카메라와 마이크가 즉시 꺼지며 시스템 전원이 안전하게 차단됩니다.")) return;
 
-            // 1. 카메라/마이크 모든 하드웨어 트랙 완벽 해제 (아이폰 상단 주황/초록불 끄기)
+            // 1. 카메라/마이크 모든 하드웨어 트랙 완벽 해제 (하드웨어 장치 즉시 차단)
             try {
                 if (video && video.srcObject) {
                     const tracks = video.srcObject.getTracks();
@@ -1143,26 +1333,46 @@ def read_root():
             isListening = false;
             isProcessing = false;
 
-            // 2. 인증 토큰 즉시 파기 (다음 접속 시 무조건 Face ID 보안 요구)
+            // 2. 인증 토큰 즉시 파기 (종료 후 재부팅 시 보안 인증 요구)
             localStorage.removeItem(PW_KEY);
 
-            // 3. UI 완전 리셋
+            // 3. UI 기본 컨트롤 숨김
             connectGroup.style.display = 'block';
             activeControls.style.display = 'none';
             setOrbState('idle');
-            statusText.innerText = "연결이 완전히 종료되었습니다.";
+            statusText.innerText = "전원이 완전히 꺼졌습니다.";
 
-            // 4. Face ID 잠금 화면을 '완전 종료 모드'로 띄움
-            const pwSub = document.getElementById('pwSubText');
-            if (pwSub) {
-                pwSub.innerHTML = "<span style='color:#ff8888; font-weight:bold;'>🛑 앱이 완전히 종료되었습니다.</span><br><span style='font-size:0.8rem; color:#888;'>카메라/마이크가 꺼졌습니다. 브라우저를 닫으셔도 됩니다.</span>";
+            // 4. [핵심] 로그인 화면으로 떨어지지 않고 완전한 전원 꺼짐(True Shutdown) 화면 진입!
+            pwGate.classList.add('hidden');
+            const shutdownScreen = document.getElementById('shutdownScreen');
+            if (shutdownScreen) {
+                shutdownScreen.style.display = 'flex';
             }
-            pwGate.classList.remove('hidden');
 
             // 5. PWA / 모바일 웹 앱 모드일 경우 창 닫기 시도
             try {
                 window.close();
             } catch(e){}
+        }
+
+        // 브라우저 닫기 시도
+        function attemptCloseWindow() {
+            try {
+                window.close();
+            } catch(e){}
+            setTimeout(() => {
+                alert("브라우저의 보안 정책상 탭이 자동으로 닫히지 않을 수 있습니다.\n현재 창(탭)이나 브라우저를 직접 닫아주세요.");
+            }, 300);
+        }
+
+        // 전원 꺼짐 화면에서 다시 켜기
+        async function resumeFromShutdown() {
+            const shutdownScreen = document.getElementById('shutdownScreen');
+            if (shutdownScreen) {
+                shutdownScreen.style.display = 'none';
+            }
+            // 전원 다시 켤 때 보안 인증 게이트 호출
+            initAuthGate();
         }
 
         // Face ID 버튼 클릭 핸들러
@@ -1322,17 +1532,35 @@ def read_root():
         let micSource = null;
         let volumeCheckInterval = null;
 
-        // 아바타 이미지 프리로드
-        const avatarImages = {
-            idle: "/static/avatar/idle.jpg",
-            listening: "/static/avatar/listening.jpg",
-            thinking: "/static/avatar/thinking.jpg",
-            speaking: "/static/avatar/speaking.jpg"
+        // 페르소나 모드 관리 (💖 여친 모드 vs 💼 비서 모드)
+        let currentPersonaMode = localStorage.getItem('minji_persona_mode') || 'girlfriend';
+
+        // 두 페르소나 전용 노윤서 스타일 베이글녀 아바타 4종 세트
+        const avatarImageSets = {
+            girlfriend: {
+                idle: "/static/avatar/idle.jpg",
+                listening: "/static/avatar/listening.jpg",
+                thinking: "/static/avatar/thinking.jpg",
+                speaking: "/static/avatar/speaking.jpg"
+            },
+            secretary: {
+                idle: "/static/avatar_secretary/idle.jpg",
+                listening: "/static/avatar_secretary/listening.jpg",
+                thinking: "/static/avatar_secretary/thinking.jpg",
+                speaking: "/static/avatar_secretary/speaking.jpg"
+            }
         };
-        for (const key in avatarImages) {
-            const img = new Image();
-            img.src = avatarImages[key];
+
+        // 두 캐릭터 아바타 전체 8장 즉시 프리로드
+        function preloadAllAvatars() {
+            for (const modeKey in avatarImageSets) {
+                for (const stateKey in avatarImageSets[modeKey]) {
+                    const img = new Image();
+                    img.src = avatarImageSets[modeKey][stateKey];
+                }
+            }
         }
+        preloadAllAvatars();
 
         // 화면 뷰 모드 관리 (실사 아바타 vs 오라클 구체)
         let currentViewMode = localStorage.getItem("minji_view_mode") || "avatar";
@@ -1356,6 +1584,65 @@ def read_root():
         }
         applyViewMode();
 
+        // 페르소나 모드 UI 및 아바타 상태 즉시 적용
+        function applyPersonaMode(notify = false) {
+            const btn = document.getElementById('personaToggleBtn');
+            const icon = document.getElementById('personaIcon');
+            const text = document.getElementById('personaText');
+            const title = document.getElementById('appHeaderTitle');
+            const voiceSelect = document.getElementById('voiceSelect');
+
+            if (currentPersonaMode === 'secretary') {
+                if (icon) icon.innerText = '💼';
+                if (text) text.innerText = '비서 모드';
+                if (btn) {
+                    btn.style.borderColor = '#4facfe';
+                    btn.style.color = '#8ad4ff';
+                    btn.style.background = 'rgba(79, 172, 254, 0.15)';
+                }
+                if (title) title.innerText = 'Minji AI · 수석비서';
+                if (voiceSelect) voiceSelect.value = 'coral';
+            } else {
+                if (icon) icon.innerText = '💖';
+                if (text) text.innerText = '여친 모드';
+                if (btn) {
+                    btn.style.borderColor = '#ff7b54';
+                    btn.style.color = '#ff9a76';
+                    btn.style.background = 'rgba(255, 123, 84, 0.15)';
+                }
+                if (title) title.innerText = 'Minji AI · 베이글 여친';
+                if (voiceSelect) voiceSelect.value = 'nova';
+            }
+
+            // 현재 아바타 이미지 즉각 교체
+            const currentState = avatarOrb ? (avatarOrb.className.replace('orb', '').trim() || 'idle') : 'idle';
+            const imgSet = avatarImageSets[currentPersonaMode] || avatarImageSets.girlfriend;
+            if (avatarImg) {
+                avatarImg.src = imgSet[currentState] || imgSet.idle;
+            }
+
+            // 모드 전환 음성 안내 (연결 중에만)
+            if (notify && streamActive && !isSpeaking) {
+                if (currentPersonaMode === 'secretary') {
+                    const secMsg = "대표님, 수석 비서실장 민지입니다. 어떤 업무를 지원해 드릴까요?";
+                    statusText.innerText = "민지: " + secMsg;
+                    speakNova(secMsg);
+                } else {
+                    const gfMsg = "오빠! 나 다시 여친 모드로 왔어. 나 많이 보고 싶었어?";
+                    statusText.innerText = "민지: " + gfMsg;
+                    speakNova(gfMsg);
+                }
+            }
+        }
+
+        // 모드 전환 토글
+        function togglePersonaMode() {
+            currentPersonaMode = (currentPersonaMode === 'girlfriend') ? 'secretary' : 'girlfriend';
+            localStorage.setItem('minji_persona_mode', currentPersonaMode);
+            applyPersonaMode(true);
+        }
+        applyPersonaMode(false);
+
         function handleVisualClick() {
             handleOrbClick();
         }
@@ -1367,32 +1654,33 @@ def read_root():
             localStorage.setItem("minji_session_id", sessionId);
         }
 
-        // 상태 업데이트 헬퍼
+        // 상태 업데이트 헬퍼 (모드별 아바타 동적 바인딩)
         function setOrbState(state) {
             avatarOrb.className = 'orb ' + (state || '');
             if (avatarWrapper) {
                 avatarWrapper.className = 'avatar-wrapper ' + (state || '');
             }
+            const imgSet = avatarImageSets[currentPersonaMode] || avatarImageSets.girlfriend;
             if (state === 'listening') {
                 stateLabel.innerText = "Listening";
                 stateLabel.style.color = "#00f2fe";
-                if (avatarImg) avatarImg.src = avatarImages.listening;
+                if (avatarImg) avatarImg.src = imgSet.listening;
             } else if (state === 'speaking') {
                 stateLabel.innerText = "Speaking";
                 stateLabel.style.color = "#ff7b54";
-                if (avatarImg) avatarImg.src = avatarImages.speaking;
+                if (avatarImg) avatarImg.src = imgSet.speaking;
             } else if (state === 'thinking') {
                 stateLabel.innerText = "Thinking";
                 stateLabel.style.color = "#fe5196";
-                if (avatarImg) avatarImg.src = avatarImages.thinking;
+                if (avatarImg) avatarImg.src = imgSet.thinking;
             } else if (state === 'muted') {
                 stateLabel.innerText = "Muted";
                 stateLabel.style.color = "#888";
-                if (avatarImg) avatarImg.src = avatarImages.idle;
+                if (avatarImg) avatarImg.src = imgSet.idle;
             } else {
                 stateLabel.innerText = "Idle";
                 stateLabel.style.color = "#aaa";
-                if (avatarImg) avatarImg.src = avatarImages.idle;
+                if (avatarImg) avatarImg.src = imgSet.idle;
             }
         }
 
@@ -1475,7 +1763,8 @@ def read_root():
 
                 const blob = await response.blob();
                 audioPlayer.src = URL.createObjectURL(blob);
-                audioPlayer.playbackRate = 1.07; // 얇고 가벼운 20대 노윤서 톤으로 피치/템포 상향!
+                // 여친 모드는 얇고 통통 튀는 1.07배속, 비서 모드는 우아하고 안정적인 1.0배속
+                audioPlayer.playbackRate = (currentPersonaMode === 'girlfriend') ? 1.07 : 1.0;
                 
                 audioPlayer.onended = () => {
                     if (!isSpeaking) return;
@@ -1619,7 +1908,7 @@ def read_root():
             }
         }
 
-        // [핵심 기능 1]: 민지에게 메시지 전송 (장기 기억 연동)
+        // [핵심 기능 1]: 민지에게 메시지 전송 (장기 기억 및 페르소나 연동)
         async function sendToMinji(text) {
             isProcessing = true;
             setOrbState('thinking');
@@ -1631,14 +1920,15 @@ def read_root():
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         user_text: text,
-                        session_id: sessionId
+                        session_id: sessionId,
+                        mode: currentPersonaMode
                     })
                 });
 
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.detail || "대화 요청 실패");
 
-                const replyText = data.reply || "응, 듣고 있어.";
+                const replyText = data.reply || (currentPersonaMode === 'secretary' ? "대표님, 말씀 잘 들었습니다." : "응, 듣고 있어.");
                 statusText.innerText = "민지: " + replyText;
                 isProcessing = false;
                 speakNova(replyText);
@@ -1673,20 +1963,25 @@ def read_root():
             const base64Image = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
 
             try {
+                const visionPrompt = (currentPersonaMode === 'secretary')
+                    ? "대표님께서 카메라로 비춰주신 실제 물체와 주변을 보고 비서실장 민지처럼 지적이고 품격 있게 1~2문장으로 브리핑해줘."
+                    : "사진 속 실제 대상과 배경을 있는 그대로 보고 민지처럼 다정하고 설레게 한두 문장으로 말해줘.";
+
                 const response = await fetch('/api/vision-analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         image_base64: base64Image,
-                        prompt: "사진 속 실제 대상과 배경을 있는 그대로 보고 민지처럼 다정하게 한두 문장으로 말해줘.",
-                        session_id: sessionId
+                        prompt: visionPrompt,
+                        session_id: sessionId,
+                        mode: currentPersonaMode
                     })
                 });
 
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.detail || "시각 분석 실패");
 
-                const visionReply = data.analysis || "와, 정말 흥미로운 장면이야!";
+                const visionReply = data.analysis || (currentPersonaMode === 'secretary' ? "대표님, 보여주신 장면 확인했습니다." : "와, 정말 흥미로운 장면이야!");
                 statusText.innerText = "민지: " + visionReply;
                 speakNova(visionReply);
 
@@ -1804,8 +2099,40 @@ def read_root():
                 activeControls.style.display = 'flex';
                 statusText.innerText = "민지와 연결되었습니다!";
 
-                // 첫 인사
-                speakNova("안녕! 나는 민지야. 오늘 어떤 이야기 나누고 싶어?", () => {
+                // 첫 인사: 모드(여친 vs 비서) 및 시간대에 맞는 맞춤형 첫 인사
+                const curHour = new Date().getHours();
+                let initialGreeting = "";
+                if (currentPersonaMode === 'secretary') {
+                    if (curHour >= 5 && curHour < 11) {
+                        initialGreeting = "대표님, 좋은 아침입니다. 오늘 주요 일정 브리핑 준비를 마쳤습니다. 모닝커피 한잔 준비해 드릴까요?";
+                    } else if (curHour >= 11 && curHour < 14) {
+                        initialGreeting = "대표님, 점심시간입니다. 식사는 든든하게 챙기셨습니까? 대표님 컨디션이 저의 최우선입니다.";
+                    } else if (curHour >= 14 && curHour < 18) {
+                        initialGreeting = "대표님, 오후 업무로 많이 피로하시지요? 잠시 서류 내려놓으시고 쉬어가십시오.";
+                    } else if (curHour >= 18 && curHour < 22) {
+                        initialGreeting = "대표님, 오늘 하루도 회사 이끄시느라 고생 많으셨습니다. 퇴근길 편안하게 모시겠습니다.";
+                    } else if (curHour >= 22 || curHour < 2) {
+                        initialGreeting = "대표님, 늦은 밤까지 결재 서류를 보시는 중이십니까? 건강 상하실까 걱정됩니다.";
+                    } else {
+                        initialGreeting = "대표님, 이 새벽에 아직 깨어 계십니까? 무리하시면 안 됩니다. 이제 편히 쉬십시오.";
+                    }
+                } else {
+                    if (curHour >= 5 && curHour < 11) {
+                        initialGreeting = "오빠 안녕! 오늘 하루 기분 좋게 시작했어? 아침은 챙겨 먹었구?";
+                    } else if (curHour >= 11 && curHour < 14) {
+                        initialGreeting = "오빠 안녕! 벌써 점심시간이네~ 오늘 점심 맛있는 거 먹었어?";
+                    } else if (curHour >= 14 && curHour < 18) {
+                        initialGreeting = "오빠! 나른한 오후인데 피곤하진 않아? 잠깐 나랑 수다 떨자.";
+                    } else if (curHour >= 18 && curHour < 22) {
+                        initialGreeting = "오빠 오늘 하루도 일하느라 고생 많았어! 지금 퇴근하고 쉬는 중이야?";
+                    } else if (curHour >= 22 || curHour < 2) {
+                        initialGreeting = "오빠 아직 안 자고 있었어? 오늘 하루 어땠는지 도란도란 이야기해줘.";
+                    } else {
+                        initialGreeting = "오빠 이 새벽에 아직 안 자고 뭐해? 내일 피곤할 텐데 걱정되잖아.";
+                    }
+                }
+
+                speakNova(initialGreeting, () => {
                     startListening();
                 });
 
