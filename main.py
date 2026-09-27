@@ -300,11 +300,13 @@ def read_root():
             align-items: center;
             justify-content: space-between;
             min-height: 100vh;
+            min-height: 100dvh;
             margin: 0;
-            padding: 30px 20px 40px;
+            padding: 20px 20px 30px;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             text-align: center;
             overflow-x: hidden;
+            position: relative;
         }
 
         .header {
@@ -313,7 +315,14 @@ def read_root():
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0 10px;
+            padding: 8px 16px;
+            z-index: 20;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            background: rgba(14, 14, 20, 0.45);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
         }
         .header-title {
             font-size: 1.1rem;
@@ -336,11 +345,13 @@ def read_root():
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
+            justify-content: flex-end;
             flex: 1;
             width: 100%;
             max-width: 440px;
-            margin: 20px 0;
+            margin: 10px 0;
+            z-index: 10;
+            pointer-events: none;
         }
 
         /* 오라클 구체 비주얼라이저 */
@@ -428,104 +439,131 @@ def read_root():
             50% { transform: scale(1.16); }
         }
 
-        /* 노윤서 스타일 실사 아바타 비주얼라이저 */
+        /* 노윤서 스타일 실사 아바타 몰입형 캔버스 (화면 전체 융합) */
         .avatar-wrapper {
-            position: relative;
-            width: 220px;
-            height: 220px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 35px;
+            z-index: 1;
+            overflow: hidden;
             cursor: pointer;
             user-select: none;
+            background: #09090d;
         }
 
-        .avatar-glow {
+        .avatar-ambient-glow {
             position: absolute;
-            width: 220px;
-            height: 220px;
+            top: 36%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: min(85vw, 550px);
+            height: min(85vw, 550px);
             border-radius: 50%;
-            background: radial-gradient(circle, rgba(255, 123, 84, 0.4) 0%, rgba(255, 154, 118, 0) 70%);
-            filter: blur(25px);
-            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            background: radial-gradient(circle, rgba(255, 123, 84, 0.25) 0%, rgba(255, 154, 118, 0) 70%);
+            filter: blur(60px);
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
             pointer-events: none;
+            z-index: 1;
         }
 
-        .avatar-frame {
+        .avatar-img-container {
             position: relative;
-            width: 175px;
-            height: 175px;
-            border-radius: 50%;
-            overflow: hidden;
-            border: 3px solid rgba(255, 123, 84, 0.7);
-            box-shadow: 0 0 45px rgba(255, 123, 84, 0.5);
-            animation: avatarBreathe 4s infinite ease-in-out;
-            transition: all 0.45s cubic-bezier(0.4, 0, 0.2, 1);
-            background: #111;
+            width: 100%;
+            height: 100%;
+            max-width: 650px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2;
         }
 
         .avatar-img {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            display: block;
-            transition: opacity 0.25s ease;
+            object-position: center 10%;
+            transition: opacity 0.35s ease, transform 0.8s ease, filter 0.5s ease;
+            animation: humanBreathe 5.5s infinite ease-in-out;
+            /* 주변부와 하단을 어두운 배경으로 자연스럽게 블렌딩 (원형 프레임 제거, 진짜 눈앞에 있는 듯한 시네마틱 융합) */
+            mask-image: radial-gradient(ellipse 90% 80% at 50% 30%, black 45%, rgba(0,0,0,0.85) 65%, transparent 95%),
+                        linear-gradient(to bottom, black 65%, rgba(0,0,0,0.5) 85%, transparent 100%);
+            -webkit-mask-image: radial-gradient(ellipse 90% 80% at 50% 30%, black 45%, rgba(0,0,0,0.85) 65%, transparent 95%),
+                                linear-gradient(to bottom, black 65%, rgba(0,0,0,0.5) 85%, transparent 100%);
+            mask-composite: intersect;
+            -webkit-mask-composite: source-in;
         }
 
-        /* 아바타 상태 1: 경청 중 (Listening) */
-        .avatar-wrapper.listening .avatar-frame {
-            border-color: #00f2fe;
-            box-shadow: 0 0 60px rgba(0, 242, 254, 0.85);
-            animation: avatarListenPulse 1.4s infinite ease-in-out;
-        }
-        .avatar-wrapper.listening .avatar-glow {
-            background: radial-gradient(circle, rgba(0, 242, 254, 0.5) 0%, rgba(79, 172, 254, 0) 70%);
-        }
-
-        /* 아바타 상태 2: 생각 중 (Thinking) */
-        .avatar-wrapper.thinking .avatar-frame {
-            border-color: #fe5196;
-            box-shadow: 0 0 60px rgba(254, 81, 150, 0.85);
-            animation: avatarThinkPulse 2s infinite ease-in-out;
-        }
-        .avatar-wrapper.thinking .avatar-glow {
-            background: radial-gradient(circle, rgba(254, 81, 150, 0.5) 0%, rgba(144, 85, 255, 0) 70%);
+        /* 시네마틱 비네팅 오버레이 */
+        .avatar-vignette {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 50% 30%, transparent 35%, rgba(9, 9, 13, 0.35) 65%, #09090d 95%),
+                        linear-gradient(to bottom, rgba(9, 9, 13, 0.25) 0%, transparent 25%, transparent 50%, #09090d 88%);
+            pointer-events: none;
+            z-index: 3;
         }
 
-        /* 아바타 상태 3: 말하는 중 (Speaking) */
-        .avatar-wrapper.speaking .avatar-frame {
-            border-color: #ff7b54;
-            box-shadow: 0 0 70px rgba(255, 120, 80, 0.95);
-            animation: avatarSpeakWave 0.75s infinite ease-in-out;
+        /* 상태 1: 경청 중 (Listening) */
+        .avatar-wrapper.listening .avatar-ambient-glow {
+            background: radial-gradient(circle, rgba(0, 242, 254, 0.38) 0%, rgba(79, 172, 254, 0) 70%);
+            filter: blur(70px);
         }
-        .avatar-wrapper.speaking .avatar-glow {
-            background: radial-gradient(circle, rgba(255, 120, 80, 0.6) 0%, rgba(255, 60, 60, 0) 70%);
+        .avatar-wrapper.listening .avatar-img {
+            transform: scale(1.025);
+            animation: humanListenPulse 2s infinite ease-in-out;
         }
 
-        /* 아바타 상태 4: 음소거 (Muted) */
-        .avatar-wrapper.muted .avatar-frame {
-            border-color: #555;
-            box-shadow: 0 0 20px rgba(255, 255, 255, 0.08);
-            filter: grayscale(0.85);
+        /* 상태 2: 생각 중 (Thinking) */
+        .avatar-wrapper.thinking .avatar-ambient-glow {
+            background: radial-gradient(circle, rgba(254, 81, 150, 0.38) 0%, rgba(144, 85, 255, 0) 70%);
+            filter: blur(70px);
+        }
+        .avatar-wrapper.thinking .avatar-img {
+            animation: humanThinkPulse 3s infinite ease-in-out;
+        }
+
+        /* 상태 3: 말하는 중 (Speaking) */
+        .avatar-wrapper.speaking .avatar-ambient-glow {
+            background: radial-gradient(circle, rgba(255, 123, 84, 0.45) 0%, rgba(255, 70, 70, 0) 70%);
+            filter: blur(75px);
+        }
+        .avatar-wrapper.speaking .avatar-img {
+            animation: humanSpeakWave 1.2s infinite ease-in-out;
+        }
+
+        /* 상태 4: 음소거 (Muted) */
+        .avatar-wrapper.muted .avatar-ambient-glow {
+            background: transparent;
+        }
+        .avatar-wrapper.muted .avatar-img {
+            filter: grayscale(0.65) brightness(0.85);
             animation: none;
         }
 
-        @keyframes avatarBreathe {
-            0%, 100% { transform: scale(0.97); }
-            50% { transform: scale(1.03); }
+        @keyframes humanBreathe {
+            0%, 100% { transform: scale(1.0) translateY(0); }
+            50% { transform: scale(1.02) translateY(-4px); }
         }
-        @keyframes avatarListenPulse {
-            0%, 100% { transform: scale(0.98); }
-            50% { transform: scale(1.08); }
+        @keyframes humanListenPulse {
+            0%, 100% { transform: scale(1.02) translateY(-2px); }
+            50% { transform: scale(1.035) translateY(-5px); }
         }
-        @keyframes avatarThinkPulse {
-            0%, 100% { transform: scale(1.0); }
-            50% { transform: scale(1.04); }
+        @keyframes humanThinkPulse {
+            0%, 100% { transform: scale(1.01) translateY(-2px); }
+            50% { transform: scale(1.025) translateY(-4px); }
         }
-        @keyframes avatarSpeakWave {
-            0%, 100% { transform: scale(1.0); }
-            50% { transform: scale(1.12); }
+        @keyframes humanSpeakWave {
+            0%, 100% { transform: scale(1.01) translateY(-2px); }
+            50% { transform: scale(1.04) translateY(-6px); }
         }
 
         .view-mode-btn {
@@ -552,8 +590,18 @@ def read_root():
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 0 15px;
-            max-width: 380px;
+            padding: 14px 20px;
+            max-width: 420px;
+            width: 100%;
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            background: rgba(12, 12, 18, 0.65);
+            border: 1px solid rgba(255, 123, 84, 0.28);
+            border-radius: 22px;
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+            margin-bottom: 16px;
+            pointer-events: auto;
+            transition: all 0.3s ease;
         }
         .status-badge {
             font-size: 0.8rem;
@@ -576,13 +624,15 @@ def read_root():
             opacity: 0.85;
         }
 
-        /* 컨트롤 영역 */
+        /* 컨트롤 영역 — 아바타 위에 떠 있는 반투명 레이어 */
         .controls {
             width: 100%;
             max-width: 440px;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 10px;
+            z-index: 20;
+            position: relative;
         }
         .btn-row {
             display: flex;
@@ -591,16 +641,18 @@ def read_root():
             width: 100%;
         }
         .btn {
-            background: #18181f;
+            background: rgba(18, 18, 28, 0.72);
             color: #fff;
-            border: 1px solid #333342;
-            padding: 15px 22px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 13px 20px;
             border-radius: 26px;
-            font-size: 0.95rem;
+            font-size: 0.92rem;
             font-weight: 600;
             flex: 1;
             cursor: pointer;
-            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             display: inline-flex;
             align-items: center;
@@ -688,15 +740,16 @@ def read_root():
         </div>
     </div>
 
-    <div class="main-stage">
-        <!-- 1. 노윤서 스타일 실사 아바타 모드 (기본) -->
-        <div class="avatar-wrapper" id="avatarWrapper" onclick="handleVisualClick()" title="민지에게 말 걸기">
-            <div class="avatar-glow" id="avatarGlow"></div>
-            <div class="avatar-frame">
-                <img id="avatarImg" src="/static/avatar/idle.jpg" alt="Minji AI Avatar" class="avatar-img">
-            </div>
+    <!-- 1. 노윤서 스타일 실사 아바타 몰입형 캔버스 (화면 전체 융합) -->
+    <div class="avatar-wrapper" id="avatarWrapper" onclick="handleVisualClick()" title="민지에게 말 걸기">
+        <div class="avatar-ambient-glow" id="avatarGlow"></div>
+        <div class="avatar-img-container">
+            <img id="avatarImg" src="/static/avatar/idle.jpg" alt="Minji AI Avatar" class="avatar-img">
         </div>
+        <div class="avatar-vignette"></div>
+    </div>
 
+    <div class="main-stage">
         <!-- 2. Her 오라클 구체 모드 -->
         <div class="orb-wrapper" id="orbWrapper" onclick="handleVisualClick()" style="display:none;" title="민지에게 말 걸기">
             <div class="orb-glow" id="orbGlow"></div>
