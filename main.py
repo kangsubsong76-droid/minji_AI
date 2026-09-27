@@ -27,11 +27,15 @@ app.add_middleware(
 os.makedirs("static/avatar", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+import anthropic
+
 gemini_key = os.getenv("GEMINI_API_KEY", "")
 openai_key = os.getenv("OPENAI_API_KEY", "")
+anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
 
 gemini_client = genai.Client(api_key=gemini_key) if gemini_key else None
 openai_client = OpenAI(api_key=openai_key) if openai_key else None
+anthropic_client = anthropic.Anthropic(api_key=anthropic_key) if anthropic_key else None
 
 import re
 
@@ -109,7 +113,30 @@ async def generate_tts(req: TTSRequest):
 
 
 def generate_chat_reply(history: List[Dict[str, str]], user_text: str) -> str:
-    # 1순위: 최신 Gemini 2.5 Flash 시도 (가장 자연스러운 대화형 LLM)
+    # [압도적 1순위]: Claude 3.5 Sonnet (현존 최고 인간다운 한국어 감성 & 구어체 티키타카)
+    if anthropic_client:
+        try:
+            claude_messages = []
+            for item in history[-10:]:
+                role = "assistant" if item["role"] == "model" else "user"
+                claude_messages.append({"role": role, "content": item["text"]})
+            claude_messages.append({"role": "user", "content": user_text})
+
+            response = anthropic_client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=250,
+                temperature=0.75,
+                system=SYSTEM_INSTRUCTION,
+                messages=claude_messages
+            )
+            if response and response.content:
+                reply = response.content[0].text.strip()
+                if reply:
+                    return reply
+        except Exception as e:
+            print(f"[Claude 3.5 Sonnet Error -> Gemini Fallback]: {e}")
+
+    # 2순위: 최신 Gemini 2.5 Flash 시도 (초고속 플래그십 폴백)
     if gemini_client:
         try:
             contents = []
@@ -918,7 +945,10 @@ def read_root():
     </div>
 
     <div class="header">
-        <div class="header-title">Minji AI</div>
+        <div style="display:flex; align-items:center; gap:6px;">
+            <div class="header-title">Minji AI</div>
+            <span style="font-size:0.65rem; background:rgba(217, 119, 87, 0.2); color:#ff9a76; border:1px solid rgba(217,119,87,0.4); padding:2px 6px; border-radius:8px;">Claude 3.5</span>
+        </div>
         <div style="display:flex; gap:6px; align-items:center;">
             <button class="view-mode-btn" onclick="registerFaceID()" title="Face ID 등록/재등록" style="padding:6px 10px; font-size:0.8rem;">
                 <span>👤 Face ID</span>
