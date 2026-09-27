@@ -834,7 +834,7 @@ def read_root():
                 <button class="btn" id="micToggleBtn" onclick="toggleMic()">
                     <span id="micIcon">🎙️</span> <span id="micText">마이크 끄기</span>
                 </button>
-                <button class="btn" onclick="lookAtThis()">
+                <button class="btn" onclick="openCamOverlay()">
                     <span>📷 이거 봐봐</span>
                 </button>
             </div>
@@ -1380,8 +1380,6 @@ def read_root():
 
                 connectGroup.style.display = 'none';
                 activeControls.style.display = 'flex';
-                const previewBox = document.getElementById('camPreviewBox');
-                if (previewBox) previewBox.style.display = 'block';
                 statusText.innerText = "민지와 연결되었습니다!";
 
                 // 첫 인사
@@ -1393,6 +1391,30 @@ def read_root():
                 console.error("[Init Error]:", err);
                 statusText.innerText = "권한 승인이 필요합니다: " + err.message;
             }
+        }
+
+        // 카메라 오버레이 열기 (📷 이거 봐봐 버튼)
+        function openCamOverlay() {
+            if (!streamActive) return;
+            if (camOverlay) camOverlay.classList.add('active');
+        }
+
+        // 카메라 오버레이 닫기
+        function closeCamOverlay(e) {
+            if (e) e.stopPropagation();
+            if (camOverlay) camOverlay.classList.remove('active');
+        }
+
+        // 오버레이 배경 탭 → 닫기
+        function handleOverlayBackdropClick(e) {
+            if (e.target === camOverlay) closeCamOverlay();
+        }
+
+        // 캡처 후 민지 분석 요청
+        function captureAndAnalyze(e) {
+            if (e) e.stopPropagation();
+            closeCamOverlay();
+            lookAtThis();
         }
     </script>
 </body>
