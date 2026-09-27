@@ -512,13 +512,22 @@ def read_root():
                     <span>📷 이거 봐봐</span>
                 </button>
             </div>
-            <div class="btn-row">
+            <div class="btn-row" id="quickButtons">
                 <button class="btn btn-ghost" onclick="resetMemory()">
                     <span>🔄 대화 기억 초기화</span>
                 </button>
-                <button class="btn btn-ghost" onclick="promptTextInput()">
+                <button class="btn btn-ghost" onclick="toggleTextInput(true)">
                     <span>💬 텍스트로 말하기</span>
                 </button>
+            </div>
+            <div id="textInputContainer" style="display:none; width:100%; margin-top:4px;">
+                <div style="display:flex; gap:6px; width:100%;">
+                    <input type="text" id="customUserText" placeholder="민지에게 보낼 말 입력..." 
+                           style="flex:1; background:#14141c; border:1px solid #ff7b54; border-radius:24px; padding:12px 18px; color:#fff; font-size:0.95rem; outline:none;" 
+                           onkeydown="if(event.key === 'Enter') sendCustomText()">
+                    <button class="btn btn-primary" onclick="sendCustomText()" style="width:55px; padding:0; border-radius:24px; font-size:1.1rem;">🚀</button>
+                    <button class="btn btn-ghost" onclick="toggleTextInput(false)" style="width:40px; padding:0; border-radius:24px; font-size:0.9rem;">✕</button>
+                </div>
             </div>
         </div>
     </div>
@@ -894,13 +903,31 @@ def read_root():
             }
         }
 
-        // 텍스트 수동 입력
-        function promptTextInput() {
-            const userMsg = prompt("민지에게 전하고 싶은 말을 적어주세요:");
-            if (userMsg && userMsg.trim()) {
+        // 텍스트 인라인 입력 모드 토글
+        function toggleTextInput(show) {
+            const container = document.getElementById('textInputContainer');
+            const quickBtns = document.getElementById('quickButtons');
+            const input = document.getElementById('customUserText');
+            if (show) {
+                container.style.display = 'block';
+                quickBtns.style.display = 'none';
+                setTimeout(() => input.focus(), 100);
+            } else {
+                container.style.display = 'none';
+                quickBtns.style.display = 'flex';
+            }
+        }
+
+        // 텍스트 메시지 전송
+        function sendCustomText() {
+            const input = document.getElementById('customUserText');
+            const userMsg = input.value.trim();
+            if (userMsg) {
                 if (isSpeaking) interruptSpeech("text_input");
                 statusText.innerText = "나: " + userMsg;
-                sendToMinji(userMsg.trim());
+                input.value = '';
+                toggleTextInput(false);
+                sendToMinji(userMsg);
             }
         }
 
