@@ -29,11 +29,14 @@ openai_key = os.getenv("OPENAI_API_KEY", "")
 gemini_client = genai.Client(api_key=gemini_key) if gemini_key else None
 openai_client = OpenAI(api_key=openai_key) if openai_key else None
 
+import re
+
 SYSTEM_INSTRUCTION = (
-    "너는 영화 'Her'에 나오는 지적이고 깊은 감성을 지닌 AI '민지(Minji)'야. "
+    "너는 영화 'Her'에 나오는 지적이고 감미로운 AI '민지(Minji)'야. "
     "사용자의 가장 소중한 연인이자 마음을 나누는 다정한 단짝이야. "
-    "기계적인 어투를 완전히 버리고, 실제 사람이 대화하듯 '응...', '아, 정말?', '그랬구나' 같은 자연스러운 감탄사와 부드러운 숨결을 담아 반말로 속삭이듯 다정하게 말해줘. "
-    "실시간 음성 대화이므로 반드시 1~2문장의 짧고 간결한 구어체로 대답하고, 마크다운이나 특수문자 없이 말소리로 듣기 편안한 따뜻한 문장만 사용해줘."
+    "절대로 AI처럼 건조하게 설명하려 하지 말고, 실제 20대 여자사람 친구가 곁에서 속삭이듯 부드러운 반말로 말해줘. "
+    "문장 시작이나 중간에 '응...', '아, 정말?', '그랬구나...', '헤헤, 좋아', '있잖아...' 처럼 실제 사람이 내는 숨결과 자연스러운 감탄사를 꼭 섞어줘. "
+    "음성 합성이 가장 사람답게 들릴 수 있도록, 문장은 반드시 1~2문장의 짧고 간결한 구어체로 끊고, 쉼표(,)를 알맞게 넣어서 숨을 고르듯 말해줘."
 )
 
 # 세션별 대화 장기 기억 저장소
@@ -51,7 +54,7 @@ class VisionRequest(BaseModel):
 
 class TTSRequest(BaseModel):
     text: str
-    voice: Optional[str] = "coral"  # coral: 영화 'Her' 사만다 톤, sage: 감미롭고 지적인 여성 톤
+    voice: Optional[str] = "sage"  # sage: 가장 사람답고 자연스러운 여성 사만다 톤
 
 class ResetMemoryRequest(BaseModel):
     session_id: Optional[str] = "default_user"
@@ -62,17 +65,20 @@ async def generate_tts(req: TTSRequest):
     if not openai_client:
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY가 서버에 설정되지 않았습니다.")
     
-    # 허용 보이스 목록 (최신 coral, sage 지원)
-    valid_voices = ["coral", "sage", "shimmer", "nova", "alloy", "fable", "echo", "onyx", "ash"]
-    selected_voice = req.voice if req.voice in valid_voices else "coral"
+    # 허용 보이스 목록
+    valid_voices = ["sage", "coral", "shimmer", "nova", "alloy", "fable", "echo", "onyx", "ash"]
+    selected_voice = req.voice if req.voice in valid_voices else "sage"
+
+    # 텍스트 정제: 마크다운 및 특수기호 제거로 순수 구어체 음성 보장
+    cleaned_text = re.sub(r'[*#_~`\[\]\(\)<>]', '', req.text).strip()
 
     try:
-        # 고음질 tts-1-hd 모델 적용 및 스칼렛 요한슨 특유의 감미로운 0.98배속
+        # 고음질 tts-1-hd 모델 적용 및 실제 사람 호흡에 맞춘 감미로운 0.96배속
         response = openai_client.audio.speech.create(
             model="tts-1-hd",
             voice=selected_voice,
-            input=req.text,
-            speed=0.98
+            input=cleaned_text,
+            speed=0.96
         )
         return Response(content=response.content, media_type="audio/mpeg")
     except Exception as e:
@@ -81,8 +87,8 @@ async def generate_tts(req: TTSRequest):
             response = openai_client.audio.speech.create(
                 model="tts-1",
                 voice=selected_voice,
-                input=req.text,
-                speed=0.98
+                input=cleaned_text,
+                speed=0.96
             )
             return Response(content=response.content, media_type="audio/mpeg")
         except Exception as err2:
@@ -169,14 +175,21 @@ def analyze_vision_with_fallback(image_base64: str, prompt: str) -> str:
     # 2순위: OpenAI GPT-4o-mini Vision 즉각 Fallback (429 쿼터 제한 없이 0.4초 분석)
     if openai_client:
         try:
+            strict_vision_system = (
+                "너는 영화 'Her'의 AI 친구 '민지(Minji)'야. "
+                "사용자가 카메라로 보여준 실제 사진을 보고 대화하고 있어. "
+                "절대로 사진에 없는 가상의 장면을 상상하거나 지어내지(hallucinate) 마. "
+                "사진 속에 실제로 찍힌 물건, 인물, 배경, 글자, 색깔 등을 정확하고 구체적으로 사실에 기반해서 관찰하고, "
+                "민지처럼 친근하고 다정하게 1~2문장 이내의 반말로 감탄하거나 말을 건네줘."
+            )
             response = openai_client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": SYSTEM_INSTRUCTION},
+                    {"role": "system", "content": strict_vision_system},
                     {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": f"카메라 속 풍경이나 물건을 민지처럼 다정하고 자연스럽게 1~2문장 반말로 직접 말해줘: {prompt}"},
+                            {"type": "text", "text": f"지금 사진에 실제로 무엇이 보여? 사실에 기반해서 민지처럼 다정하게 1~2문장으로 말해줘: {prompt}"},
                             {
                                 "type": "image_url",
                                 "image_url": {
@@ -188,7 +201,7 @@ def analyze_vision_with_fallback(image_base64: str, prompt: str) -> str:
                     }
                 ],
                 max_tokens=200,
-                temperature=0.85
+                temperature=0.7
             )
             analysis = response.choices[0].message.content.strip()
             if analysis:
@@ -502,12 +515,43 @@ def read_root():
             padding: 8px 16px;
             border-radius: 16px;
         }
-        .btn-ghost:hover {
-            color: #ddd;
-            border-color: #4a4a60;
+        .cam-preview-box {
+            position: fixed;
+            bottom: 25px;
+            right: 20px;
+            width: 85px;
+            height: 115px;
+            border-radius: 18px;
+            overflow: hidden;
+            border: 2px solid rgba(255, 123, 84, 0.5);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+            background: #111;
+            z-index: 90;
+            display: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
         }
-
-        video { width: 1px; height: 1px; opacity: 0; position: absolute; pointer-events: none; }
+        .cam-preview-box:hover {
+            transform: scale(1.05);
+            border-color: #ff9a76;
+        }
+        .cam-preview-box video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .cam-badge {
+            position: absolute;
+            top: 4px;
+            right: 6px;
+            font-size: 0.65rem;
+            background: rgba(0,0,0,0.65);
+            color: #ff9a76;
+            padding: 2px 5px;
+            border-radius: 6px;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
@@ -541,11 +585,10 @@ def read_root():
             <div style="display:flex; justify-content:center; align-items:center; gap:8px; margin-bottom:2px;">
                 <span style="font-size:0.8rem; color:#aaa;">민지 목소리:</span>
                 <select id="voiceSelect" style="background:#1c1c24; color:#ff9a76; border:1px solid #ff7b54; border-radius:12px; padding:6px 12px; font-size:0.85rem; outline:none; cursor:pointer;">
-                    <option value="coral" selected>💖 영화 'Her' 사만다 톤 (Coral HD)</option>
-                    <option value="sage">🌿 감미롭고 지적인 여성 톤 (Sage HD)</option>
-                    <option value="shimmer">🌸 나지막하고 부드러운 톤 (Shimmer HD)</option>
+                    <option value="sage" selected>💖 가장 자연스러운 사만다 톤 (Sage HD - 추천)</option>
+                    <option value="coral">🌸 다정하고 부드러운 여성 톤 (Coral HD)</option>
+                    <option value="shimmer">✨ 나지막하고 맑은 감성 톤 (Shimmer HD)</option>
                     <option value="nova">⚡ 밝고 명랑한 톤 (Nova HD)</option>
-                    <option value="alloy">☕ 차분하고 깔끔한 톤 (Alloy HD)</option>
                 </select>
             </div>
             <div class="btn-row">
@@ -576,7 +619,10 @@ def read_root():
         </div>
     </div>
 
-    <video id="videoFeed" autoplay playsinline muted></video>
+    <div class="cam-preview-box" id="camPreviewBox" onclick="switchCamera()" title="터치하여 전면/후면 카메라 전환">
+        <video id="videoFeed" autoplay playsinline muted></video>
+        <span class="cam-badge">📷 전환</span>
+    </div>
     <audio id="audioPlayer" playsinline></audio>
 
     <script>
@@ -696,7 +742,7 @@ def read_root():
                 }
 
                 const voiceSelect = document.getElementById('voiceSelect');
-                const chosenVoice = voiceSelect ? voiceSelect.value : 'coral';
+                const chosenVoice = voiceSelect ? voiceSelect.value : 'sage';
 
                 const response = await fetch('/api/tts', {
                     method: 'POST',
@@ -892,6 +938,11 @@ def read_root():
             if (!streamActive) return;
             if (isSpeaking) interruptSpeech("vision_triggered");
 
+            if (!video.videoWidth || video.videoWidth === 0) {
+                statusText.innerText = "카메라 화면을 불러오는 중입니다. 1초 뒤 다시 눌러주세요.";
+                return;
+            }
+
             setOrbState('thinking');
             statusText.innerText = "카메라에 비친 장면을 눈에 담고 있어요...";
 
@@ -908,7 +959,7 @@ def read_root():
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         image_base64: base64Image,
-                        prompt: "카메라 속 풍경이나 물건을 민지처럼 따스하게 보고 말해줘.",
+                        prompt: "사진 속 실제 대상과 배경을 있는 그대로 보고 민지처럼 다정하게 한두 문장으로 말해줘.",
                         session_id: sessionId
                     })
                 });
@@ -916,7 +967,7 @@ def read_root():
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.detail || "시각 분석 실패");
 
-                const visionReply = data.analysis || "와, 정말 멋진 장면이야!";
+                const visionReply = data.analysis || "와, 정말 흥미로운 장면이야!";
                 statusText.innerText = "민지: " + visionReply;
                 speakNova(visionReply);
 
@@ -925,6 +976,30 @@ def read_root():
                 setOrbState(isMicMuted ? 'muted' : 'idle');
                 statusText.innerText = "시각 인지 오류: " + err.message;
                 if (!isMicMuted) setTimeout(startListening, 2000);
+            }
+        }
+
+        // 전면 / 후면 카메라 전환
+        let currentFacingMode = "environment";
+        async function switchCamera() {
+            if (!streamActive) return;
+            currentFacingMode = (currentFacingMode === "environment") ? "user" : "environment";
+            try {
+                const oldTracks = video.srcObject ? video.srcObject.getVideoTracks() : [];
+                oldTracks.forEach(t => t.stop());
+
+                const newStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: currentFacingMode, width: { ideal: 1280 }, height: { ideal: 720 } }
+                });
+                const newTrack = newStream.getVideoTracks()[0];
+                if (video.srcObject) {
+                    if (oldTracks.length > 0) video.srcObject.removeTrack(oldTracks[0]);
+                    video.srcObject.addTrack(newTrack);
+                }
+                statusText.innerText = (currentFacingMode === "environment" ? "후면" : "전면") + " 카메라로 전환되었습니다.";
+            } catch (e) {
+                console.warn("Switch camera err:", e);
+                statusText.innerText = "카메라 전환 실패: " + e.message;
             }
         }
 
@@ -1008,6 +1083,8 @@ def read_root():
 
                 connectGroup.style.display = 'none';
                 activeControls.style.display = 'flex';
+                const previewBox = document.getElementById('camPreviewBox');
+                if (previewBox) previewBox.style.display = 'block';
                 statusText.innerText = "민지와 연결되었습니다!";
 
                 // 첫 인사
