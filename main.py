@@ -260,24 +260,36 @@ async def setup_elevenlabs(req: ElevenLabsSetupRequest):
 async def generate_tts(req: TTSRequest):
     # 텍스트 정제: 마크다운 및 특수기호 제거로 순수 구어체 음성 보장
     cleaned_text = re.sub(r'[*#_~`\[\]\(\)<>]', '', req.text).strip()
-    selected_voice = (req.voice or "coral").lower()
+    selected_voice = (req.voice or "eleven_girlfriend").lower()
 
-    # 1. 만약 노윤서 클론 보이스(roh_yoon_seo 또는 elevenlabs)를 선택한 경우:
-    # 한국어 최적화 모델(eleven_multilingual_v2) + 남성적 저음 방지(use_speaker_boost: False)로 앳된 여성 피치 보장
-    if selected_voice in ["roh_yoon_seo", "elevenlabs"] and elevenlabs_key:
+    # 1. ElevenLabs 기반: 여친 보이스(달콤·애교) vs 비서 보이스(지적·차분)
+    if selected_voice in ["eleven_girlfriend", "roh_girlfriend", "roh_yoon_seo", "elevenlabs", "eleven_secretary", "roh_secretary"] and elevenlabs_key:
         voice_id = ensure_roh_voice_clone()
         if voice_id:
             try:
+                is_secretary = "secretary" in selected_voice
+                if is_secretary:
+                    # 비서 보이스: 지적이고 차분하며 신뢰감 있는 20대 비서 톤
+                    settings = {
+                        "stability": 0.55,
+                        "similarity_boost": 0.75,
+                        "style": 0.15,
+                        "use_speaker_boost": False
+                    }
+                else:
+                    # 여친 보이스: 애교 가득하고 앳되며 숨소리가 살아있는 생생한 달콤 톤
+                    settings = {
+                        "stability": 0.35,
+                        "similarity_boost": 0.65,
+                        "style": 0.35,
+                        "use_speaker_boost": False
+                    }
+
                 tts_url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
                 tts_payload = json.dumps({
                     "text": cleaned_text,
-                    "model_id": "eleven_multilingual_v2",  # 다국어 고품질 감성 모델 (한국어 음색 보존)
-                    "voice_settings": {
-                        "stability": 0.50,
-                        "similarity_boost": 0.70,
-                        "style": 0.25,
-                        "use_speaker_boost": False  # 굵은 톤 방지: 저음 부스트 차단
-                    }
+                    "model_id": "eleven_multilingual_v2",  # 한국어 고품질 감성 모델
+                    "voice_settings": settings
                 }).encode("utf-8")
                 tts_req = urllib.request.Request(
                     tts_url,
@@ -295,7 +307,7 @@ async def generate_tts(req: TTSRequest):
             except Exception as el_err:
                 print(f"[ElevenLabs TTS Error -> Fallback OpenAI]: {el_err}")
 
-    # 2. OpenAI 초고속 고음질 여성 보이스 (Coral, Nova, Shimmer, Sage 등)
+    # 2. OpenAI 기반: Coral & Nova를 굵지 않고 좀 더 빠르며 일상대화처럼 앳된 톤으로 튜닝
     if not openai_client:
         raise HTTPException(status_code=500, detail="음성 엔진 API KEY가 서버에 설정되지 않았습니다.")
 
@@ -303,18 +315,18 @@ async def generate_tts(req: TTSRequest):
     oai_voice = selected_voice if selected_voice in valid_voices else "coral"
 
     try:
-        # 20대 초반 여대생/배우 노윤서 톤: 맑고 높으며 상큼한 애교 가득 여성 구어체
+        # 어린 20대 초반 여대생/노윤서 톤: 굵지 않고 상큼하며 빠르고 자연스러운 일상 통화 톤
         VOICE_INSTRUCTIONS = (
-            "You are Minji, a sweet, bright, high-spirited 20-year-old Korean college girl. "
-            "Speak Korean in a distinctly high-pitched, light, clear, and feminine young voice. "
-            "Your pitch is naturally airy, playful, and cheerful, like a real 20-year-old Korean girl chatting sweetly with her boyfriend. "
-            "Never sound low, heavy, husky, or masculine."
+            "You are Minji, a sweet, lively, high-spirited 20-year-old Korean girl chatting playfully with her boyfriend. "
+            "Your pitch is light, clear, and high-pitched with an airy, youthful feminine vibe. "
+            "Speak briskly, quickly, and naturally with a relaxed Seoul conversational rhythm, like a real 20-year-old in everyday talk. "
+            "Never sound slow, thick, deep, husky, or masculine."
         )
         response = openai_client.audio.speech.create(
             model="gpt-4o-mini-tts",
             voice=oai_voice,
             input=cleaned_text,
-            speed=1.06,  # 앳되고 발랄한 템포
+            speed=1.12,  # 일상 대화처럼 빠르고 통통 튀는 1.12배속
             extra_body={"instructions": VOICE_INSTRUCTIONS}
         )
         return Response(content=response.content, media_type="audio/mpeg")
@@ -325,7 +337,7 @@ async def generate_tts(req: TTSRequest):
                 model="tts-1-hd",
                 voice=oai_voice,
                 input=cleaned_text,
-                speed=1.05
+                speed=1.10
             )
             return Response(content=response.content, media_type="audio/mpeg")
         except Exception as err2:
@@ -1414,11 +1426,11 @@ def read_root():
         <!-- 2행: 음성 선택 + 볼륨 슬라이더 -->
         <div style="display:flex; align-items:center; justify-content:space-between; width:100%; gap:8px; box-sizing:border-box;">
             <select id="voiceSelect" style="flex:1; max-width:145px; background:#1c1c24; color:#ff9a76; border:1px solid #ff7b54; border-radius:12px; padding:4px 6px; font-size:0.72rem; outline:none; cursor:pointer; box-sizing:border-box;">
-                <option value="coral" selected>🌸 20대 청순 여친 (Coral)</option>
-                <option value="roh_yoon_seo">✨ 노윤서 클론 (ElevenLabs v2)</option>
-                <option value="nova">💖 러블리 애교 (Nova)</option>
+                <option value="eleven_girlfriend" selected>✨ 노윤서 여친 (ElevenLabs)</option>
+                <option value="eleven_secretary">💼 노윤서 비서 (ElevenLabs)</option>
+                <option value="coral">🌸 20대 청순 여친 (Coral - 빠름)</option>
+                <option value="nova">💖 20대 일상 애교 (Nova - 빠름)</option>
                 <option value="shimmer">🍃 감성 힐링 (Shimmer)</option>
-                <option value="sage">💼 매혹 비서 (Sage)</option>
             </select>
             <div style="flex:1.4; display:flex; align-items:center; gap:6px; background:rgba(20,20,30,0.6); padding:4px 8px; border-radius:12px; border:1px solid rgba(255,255,255,0.08); box-sizing:border-box;">
                 <span style="font-size:0.8rem; flex-shrink:0;">🔊</span>
@@ -1908,28 +1920,93 @@ def read_root():
         // 페르소나 모드 관리 (💖 여친 모드 vs 💼 비서 모드)
         let currentPersonaMode = localStorage.getItem('minji_persona_mode') || 'girlfriend';
 
-        // 두 페르소나 전용 노윤서 스타일 베이글녀 아바타 4종 세트
-        const avatarImageSets = {
+        // 두 페르소나 전용 다채로운 베이글녀 아바타 풀 (총 30여 장 이상의 고화질 풀)
+        const avatarImagePools = {
             girlfriend: {
-                idle: "/static/avatar/idle.jpg",
-                listening: "/static/avatar/listening.jpg",
-                thinking: "/static/avatar/thinking.jpg",
-                speaking: "/static/avatar/speaking.jpg"
+                idle: [
+                    "/static/avatar/idle_1.jpg",
+                    "/static/avatar/idle_2.jpg",
+                    "/static/avatar/idle_3.jpg",
+                    "/static/avatar/idle_4.jpg",
+                    "/static/avatar/idle_5.jpg"
+                ],
+                listening: [
+                    "/static/avatar/listening_1.jpg",
+                    "/static/avatar/listening_2.jpg",
+                    "/static/avatar/listening_3.jpg",
+                    "/static/avatar/listening_4.jpg"
+                ],
+                thinking: [
+                    "/static/avatar/thinking_1.jpg",
+                    "/static/avatar/thinking_2.jpg",
+                    "/static/avatar/thinking_3.jpg",
+                    "/static/avatar/thinking_4.jpg"
+                ],
+                speaking: [
+                    "/static/avatar/speaking_1.jpg",
+                    "/static/avatar/speaking_2.jpg",
+                    "/static/avatar/speaking_3.jpg",
+                    "/static/avatar/speaking_4.jpg"
+                ]
             },
             secretary: {
-                idle: "/static/avatar_secretary/idle.jpg",
-                listening: "/static/avatar_secretary/listening.jpg",
-                thinking: "/static/avatar_secretary/thinking.jpg",
-                speaking: "/static/avatar_secretary/speaking.jpg"
+                idle: [
+                    "/static/avatar_secretary/idle_1.jpg",
+                    "/static/avatar_secretary/idle_2.jpg",
+                    "/static/avatar_secretary/idle_3.jpg",
+                    "/static/avatar_secretary/idle_4.jpg",
+                    "/static/avatar_secretary/idle_5.jpg"
+                ],
+                listening: [
+                    "/static/avatar_secretary/listening_1.jpg",
+                    "/static/avatar_secretary/listening_2.jpg",
+                    "/static/avatar_secretary/listening_3.jpg",
+                    "/static/avatar_secretary/listening_4.jpg",
+                    "/static/avatar_secretary/listening_5.jpg"
+                ],
+                thinking: [
+                    "/static/avatar_secretary/thinking_1.jpg",
+                    "/static/avatar_secretary/thinking_2.jpg",
+                    "/static/avatar_secretary/thinking_3.jpg"
+                ],
+                speaking: [
+                    "/static/avatar_secretary/speaking_1.jpg",
+                    "/static/avatar_secretary/speaking_2.jpg"
+                ]
             }
         };
 
-        // 두 캐릭터 아바타 전체 8장 즉시 프리로드
+        // 최근 선택된 이미지 인덱스 추적 (중복 방지)
+        const lastPoolIndex = {};
+
+        // 풀에서 중복 없이 다양한 이미지를 가져오는 헬퍼
+        function getAvatarImage(mode, state) {
+            const personaPool = avatarImagePools[mode] || avatarImagePools.girlfriend;
+            const statePool = personaPool[state] || personaPool.idle || [];
+            if (!statePool || statePool.length === 0) return "/static/avatar/idle_1.jpg";
+            if (statePool.length === 1) return statePool[0];
+
+            const poolKey = `${mode}_${state}`;
+            const lastIdx = lastPoolIndex[poolKey] !== undefined ? lastPoolIndex[poolKey] : -1;
+            
+            let nextIdx;
+            do {
+                nextIdx = Math.floor(Math.random() * statePool.length);
+            } while (nextIdx === lastIdx && statePool.length > 1);
+
+            lastPoolIndex[poolKey] = nextIdx;
+            return statePool[nextIdx];
+        }
+
+        // 전체 아바타 이미지 즉시 백그라운드 프리로드 (전환 시 깜빡임 완전 제거)
         function preloadAllAvatars() {
-            for (const modeKey in avatarImageSets) {
-                for (const stateKey in avatarImageSets[modeKey]) {
-                    const img = new Image();
-                    img.src = avatarImageSets[modeKey][stateKey];
+            for (const modeKey in avatarImagePools) {
+                for (const stateKey in avatarImagePools[modeKey]) {
+                    const pool = avatarImagePools[modeKey][stateKey];
+                    pool.forEach(url => {
+                        const img = new Image();
+                        img.src = url;
+                    });
                 }
             }
         }
@@ -1956,6 +2033,33 @@ def read_root():
             applyViewMode();
         }
         applyViewMode();
+
+        // Idle 상태 시 주기적 이미지 순환 타이머 (12초마다 자연스럽게 다음 사진으로 전환)
+        let idleRotationTimer = null;
+        function startIdleRotation() {
+            stopIdleRotation();
+            idleRotationTimer = setInterval(() => {
+                const currentState = avatarOrb ? (avatarOrb.className.replace('orb', '').trim() || 'idle') : 'idle';
+                if (currentState === 'idle' || currentState === '') {
+                    if (avatarImg) {
+                        const nextSrc = getAvatarImage(currentPersonaMode, 'idle');
+                        // 부드러운 페이드 전환 효과
+                        avatarImg.style.transition = 'opacity 0.4s ease';
+                        avatarImg.style.opacity = '0.7';
+                        setTimeout(() => {
+                            avatarImg.src = nextSrc;
+                            avatarImg.style.opacity = '1';
+                        }, 200);
+                    }
+                }
+            }, 12000);
+        }
+        function stopIdleRotation() {
+            if (idleRotationTimer) {
+                clearInterval(idleRotationTimer);
+                idleRotationTimer = null;
+            }
+        }
 
         // 페르소나 모드 UI 및 아바타 상태 즉시 적용
         function applyPersonaMode(notify = false) {
@@ -1984,7 +2088,7 @@ def read_root():
                     btn.style.background = 'rgba(79, 172, 254, 0.15)';
                 }
                 if (title) title.innerText = 'Minji AI · 서민지 비서';
-                if (voiceSelect) voiceSelect.value = 'roh_yoon_seo';
+                if (voiceSelect) voiceSelect.value = 'eleven_secretary';
             } else {
                 if (icon) icon.innerText = '💖';
                 if (text) text.innerText = '여친 모드';
@@ -2001,15 +2105,17 @@ def read_root():
                     btn.style.background = 'rgba(255, 123, 84, 0.15)';
                 }
                 if (title) title.innerText = 'Minji AI · 베이글 여친';
-                if (voiceSelect) voiceSelect.value = 'coral';
+                if (voiceSelect) voiceSelect.value = 'eleven_girlfriend';
             }
 
             // 현재 아바타 이미지 즉각 교체
             const currentState = avatarOrb ? (avatarOrb.className.replace('orb', '').trim() || 'idle') : 'idle';
-            const imgSet = avatarImageSets[currentPersonaMode] || avatarImageSets.girlfriend;
             if (avatarImg) {
-                avatarImg.src = imgSet[currentState] || imgSet.idle;
+                avatarImg.src = getAvatarImage(currentPersonaMode, currentState);
             }
+
+            // 대기 순환 타이머 재시작
+            startIdleRotation();
 
             // 모드 전환 음성 안내 (연결 중에만)
             if (notify && streamActive && !isSpeaking) {
@@ -2102,27 +2208,26 @@ def read_root():
             if (avatarWrapper) {
                 avatarWrapper.className = 'avatar-wrapper ' + (state || '');
             }
-            const imgSet = avatarImageSets[currentPersonaMode] || avatarImageSets.girlfriend;
             if (state === 'listening') {
                 stateLabel.innerText = "Listening";
                 stateLabel.style.color = "#00f2fe";
-                if (avatarImg) avatarImg.src = imgSet.listening;
+                if (avatarImg) avatarImg.src = getAvatarImage(currentPersonaMode, 'listening');
             } else if (state === 'speaking') {
                 stateLabel.innerText = "Speaking";
                 stateLabel.style.color = "#ff7b54";
-                if (avatarImg) avatarImg.src = imgSet.speaking;
+                if (avatarImg) avatarImg.src = getAvatarImage(currentPersonaMode, 'speaking');
             } else if (state === 'thinking') {
                 stateLabel.innerText = "Thinking";
                 stateLabel.style.color = "#fe5196";
-                if (avatarImg) avatarImg.src = imgSet.thinking;
+                if (avatarImg) avatarImg.src = getAvatarImage(currentPersonaMode, 'thinking');
             } else if (state === 'muted') {
                 stateLabel.innerText = "Muted";
                 stateLabel.style.color = "#888";
-                if (avatarImg) avatarImg.src = imgSet.idle;
+                if (avatarImg) avatarImg.src = getAvatarImage(currentPersonaMode, 'idle');
             } else {
                 stateLabel.innerText = "Idle";
                 stateLabel.style.color = "#aaa";
-                if (avatarImg) avatarImg.src = imgSet.idle;
+                if (avatarImg) avatarImg.src = getAvatarImage(currentPersonaMode, 'idle');
             }
         }
 
