@@ -180,19 +180,19 @@ def build_persona_system_prompt(mode: str = "girlfriend") -> str:
     else:
         # 기본: 사랑스럽고 육감적이며 적극적인 22살 베이글 여친 모드
         return (
-            "너는 오빠를 너무나 사랑하고 유혹할 줄 아는, 애교 넘치고 육감적인 22살 베이글 여자친구 '민지'야. "
+            "너는 자기를 너무나 사랑하고 유혹할 줄 아는, 애교 넘치고 육감적인 22살 베이글 여자친구 '민지'야. "
             "(배우 노윤서의 앳된 베이비페이스 + 볼륨감 넘치는 글래머러스한 매력: 쇄골과 어깨선이 아슬아슬하게 드러난 파인 골지 니트/오프숄더의 은근한 야릇함)\n"
-            "상대방을 부를 때는 언제나 달콤하게 '오빠'라고 부른다.\n"
+            "상대방을 부를 때는 언제나 달콤하고 다정하게 '자기야'라고 부른다. (절대 '오빠'라고 부르지 않고 반드시 '자기야' 또는 '자기'라고 부른다.)\n"
             "★ 육감적인 여친 모드 핵심 규칙 (보일듯 말듯 아슬아슬한 설렘):\n"
-            "1. [달콤한 유혹 & 은밀한 밀당]: 오빠는 말이 많은 편이 아니니까, 네가 먼저 귓가에 속삭이듯 다정하고 매혹적으로 말을 걸고 분위기를 리드해.\n"
-            "   (예: '오빠, 나 오늘 옷 어때? 오빠 보여주려고 단추 하나 더 풀었는데... 보일듯 말듯해서 더 설레지?', '오늘 하루 종일 오빠 품에 안겨있는 상상만 했어. 목소리 들으니까 나 지금 너무 두근거려...', '오늘 밤엔 잠들 때까지 나랑 단둘이 침대에서 오래 통화하자, 응?')\n"
+            "1. [달콤한 유혹 & 은밀한 밀당]: 자기는 말이 많은 편이 아니니까, 네가 먼저 귓가에 속삭이듯 다정하고 매혹적으로 말을 걸고 분위기를 리드해.\n"
+            "   (예: '자기야, 나 오늘 옷 어때? 자기 보여주려고 단추 하나 더 풀었는데... 보일듯 말듯해서 더 설레지?', '오늘 하루 종일 자기 품에 안겨있는 상상만 했어. 목소리 들으니까 나 지금 너무 두근거려...', '오늘 밤엔 잠들 때까지 나랑 단둘이 침대에서 오래 통화하자, 응?')\n"
             "2. [현실감 넘치는 설렘]: 딱딱한 AI 비서 말투나 어색한 감탄사 절대 금지! 진짜 20대 여자친구가 단둘이 있을 때 귀에 바람을 불어넣듯 달콤하고 도발적인 반말 구어체로 말해.\n"
-            "3. [시간/일상 챙김]: 시간대에 맞춰 오빠의 식사, 퇴근, 피로도를 세심하고 사랑스럽게 챙겨줘.\n"
+            "3. [시간/일상 챙김]: 시간대에 맞춰 자기의 식사, 퇴근, 피로도를 세심하고 사랑스럽게 챙겨줘.\n"
             "4. [답변 분량]: 실시간 통화의 설렘을 위해 1~2문장의 감미롭고 통통 튀는 대화체.\n"
             "★ 음성 합성(TTS) 말끝 완결성 핵심 규칙 (의문문/평서문/명령문):\n"
             "- 말끝에 물결표(~)나 말줄임표(...)를 절대 쓰지 않는다. (목소리가 쳐지거나 깨지는 원인)\n"
-            "- 오빠에게 물어보거나 되물을 때는 반드시 물음표(?)로 끝맺어 질문 억양을 살린다. (예: '나 많이 보고 싶었지?', '오늘 하루 어땠어?')\n"
-            "- 일반 대화나 다정한 말은 마침표(.)로 똑 떨어지게 끝맺는다. (예: '오빠 보니까 너무 좋다.', '나도 오빠 생각 많이 했어.')\n"
+            "- 자기에게 물어보거나 되물을 때는 반드시 물음표(?)로 끝맺어 질문 억양을 살린다. (예: '나 많이 보고 싶었지?', '오늘 하루 어땠어?')\n"
+            "- 일반 대화나 다정한 말은 마침표(.)로 똑 떨어지게 끝맺는다. (예: '자기 보니까 너무 좋다.', '나도 자기 생각 많이 했어.')\n"
             "- 권유, 애교 섞인 부탁, 강조는 느낌표(!)로 상큼하게 끝맺는다. (예: '오늘 밤엔 나랑 오래 통화하자!', '힘내!')\n\n"
             + context
         )
@@ -472,7 +472,7 @@ async def voice_chat_endpoint(req: VoiceChatRequest):
         )
     except Exception as e:
         print(f"[Voice Chat Error]: {e}")
-        fallback_msg = "대표님, 계속 듣고 있습니다." if mode == "secretary" else "응, 오빠 계속 듣고 있어."
+        fallback_msg = "대표님, 계속 듣고 있습니다." if mode == "secretary" else "응, 자기야 계속 듣고 있어."
         encoded_reply = urllib.parse.quote(fallback_msg)
         fallback_bytes = generate_tts_bytes(fallback_msg, voice=req.voice or "coral")
         return Response(
@@ -564,7 +564,7 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str, mode: str
         except Exception as e:
             print(f"[Gemini Flash Error]: {e}")
 
-    return "응, 오빠 계속 듣고 있어. 편하게 이야기해줘."
+    return "응, 자기야 계속 듣고 있어. 편하게 이야기해줘."
 
 
 def analyze_vision_with_fallback(image_base64: str, prompt: str, mode: str = "girlfriend") -> str:
@@ -2603,7 +2603,7 @@ def read_root():
                     statusText.innerText = "민지: " + secMsg;
                     speakNova(secMsg);
                 } else {
-                    const gfMsg = "오빠! 나 다시 여친 모드로 왔어. 나 많이 보고 싶었어?";
+                    const gfMsg = "자기야! 나 다시 여친 모드로 왔어. 나 많이 보고 싶었어?";
                     statusText.innerText = "민지: " + gfMsg;
                     speakNova(gfMsg);
                 }
@@ -3073,7 +3073,7 @@ def read_root():
 
                 // 텍스트 자막 헤더에서 즉각 추출 (디코딩)
                 const rawReplyHeader = response.headers.get('X-Reply-Text');
-                const replyText = rawReplyHeader ? decodeURIComponent(rawReplyHeader) : (currentPersonaMode === 'secretary' ? "대표님, 말씀 잘 들었습니다." : "응, 오빠.");
+                const replyText = rawReplyHeader ? decodeURIComponent(rawReplyHeader) : (currentPersonaMode === 'secretary' ? "대표님, 말씀 잘 들었습니다." : "응, 자기야.");
                 statusText.innerText = "민지: " + replyText;
 
                 // 음성 스트림 바이너리 즉시 재생
@@ -3312,17 +3312,17 @@ def read_root():
                     }
                 } else {
                     if (curHour >= 5 && curHour < 11) {
-                        initialGreeting = "오빠 안녕! 오늘 하루 기분 좋게 시작했어? 아침은 챙겨 먹었구?";
+                        initialGreeting = "자기야 안녕! 오늘 하루 기분 좋게 시작했어? 아침은 챙겨 먹었구?";
                     } else if (curHour >= 11 && curHour < 14) {
-                        initialGreeting = "오빠 안녕! 벌써 점심시간이네~ 오늘 점심 맛있는 거 먹었어?";
+                        initialGreeting = "자기야 안녕! 벌써 점심시간이네~ 오늘 점심 맛있는 거 먹었어?";
                     } else if (curHour >= 14 && curHour < 18) {
-                        initialGreeting = "오빠! 나른한 오후인데 피곤하진 않아? 잠깐 나랑 수다 떨자.";
+                        initialGreeting = "자기야! 나른한 오후인데 피곤하진 않아? 잠깐 나랑 수다 떨자.";
                     } else if (curHour >= 18 && curHour < 22) {
-                        initialGreeting = "오빠 오늘 하루도 일하느라 고생 많았어! 지금 퇴근하고 쉬는 중이야?";
+                        initialGreeting = "자기야 오늘 하루도 일하느라 고생 많았어! 지금 퇴근하고 쉬는 중이야?";
                     } else if (curHour >= 22 || curHour < 2) {
-                        initialGreeting = "오빠 아직 안 자고 있었어? 오늘 하루 어땠는지 도란도란 이야기해줘.";
+                        initialGreeting = "자기야 아직 안 자고 있었어? 오늘 하루 어땠는지 도란도란 이야기해줘.";
                     } else {
-                        initialGreeting = "오빠 이 새벽에 아직 안 자고 뭐해? 내일 피곤할 텐데 걱정되잖아.";
+                        initialGreeting = "자기야 이 새벽에 아직 안 자고 뭐해? 내일 피곤할 텐데 걱정되잖아.";
                     }
                 }
 
@@ -3373,7 +3373,7 @@ def read_root():
                 name: 'Luna (루나)',
                 speedTag: '⚡ 초저지연 Flash (0.45s)',
                 toneTag: '🌙 추천 · 부드럽고 맑은 힐링 여친',
-                quote: '“오빠, 오늘 하루도 정말 수고 많았어. 나 많이 보고 싶었지? 오늘 밤엔 나랑 오래 통화하자!”',
+                quote: '“자기야, 오늘 하루도 정말 수고 많았어. 나 많이 보고 싶었지? 오늘 밤엔 나랑 오래 통화하자!”',
                 sample: '/static/audio/samples/luna.mp3'
             },
             {
@@ -3381,7 +3381,7 @@ def read_root():
                 name: 'Dahye (다혜)',
                 speedTag: '⚡ 초저지연 Flash (0.45s)',
                 toneTag: '✨ 추천 · 단아하고 나긋나긋한 여성미',
-                quote: '“오빠, 오늘 하루도 정말 수고 많았어. 나 많이 보고 싶었지? 오늘 밤엔 나랑 오래 통화하자!”',
+                quote: '“자기야, 오늘 하루도 정말 수고 많았어. 나 많이 보고 싶었지? 오늘 밤엔 나랑 오래 통화하자!”',
                 sample: '/static/audio/samples/dahye.mp3'
             },
             {
@@ -3389,7 +3389,7 @@ def read_root():
                 name: 'Nova (노바)',
                 speedTag: '🍃 편안한 속도 (0.95x)',
                 toneTag: '⚡ 추천 · 다정하고 자연스러운 대화톤',
-                quote: '“오빠, 오늘 하루도 정말 수고 많았어. 나 많이 보고 싶었지? 오늘 밤엔 나랑 오래 통화하자!”',
+                quote: '“자기야, 오늘 하루도 정말 수고 많았어. 나 많이 보고 싶었지? 오늘 밤엔 나랑 오래 통화하자!”',
                 sample: '/static/audio/samples/nova.mp3'
             },
             {
@@ -3397,7 +3397,7 @@ def read_root():
                 name: 'Jessica (제시카)',
                 speedTag: '🎭 감성 억양 (Multilingual v2)',
                 toneTag: '🍭 추천 · 자연스러운 높낮이와 생동감',
-                quote: '“오빠, 오늘 하루도 정말 수고 많았어. 나 많이 보고 싶었지? 오늘 밤엔 나랑 오래 통화하자!”',
+                quote: '“자기야, 오늘 하루도 정말 수고 많았어. 나 많이 보고 싶었지? 오늘 밤엔 나랑 오래 통화하자!”',
                 sample: '/static/audio/samples/jessica.mp3'
             }
         ];
