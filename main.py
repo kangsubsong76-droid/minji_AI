@@ -256,43 +256,42 @@ async def setup_elevenlabs(req: ElevenLabsSetupRequest):
     }
 
 
-@app.post("/api/tts")
-def generate_tts_bytes(text: str, voice: str = "eleven_girlfriend") -> bytes:
-    """초저지연(0.4초) ElevenLabs Flash v2.5 기반 가늘고 앳된 20대 여성 보이스 생성기"""
+
+ELEVEN_VOICE_MAP = {
+    "laura": ("FGY2WhTYpPnrIDTdsKH5", 0.22, 0.58, 0.42, "eleven_flash_v2_5"),      # 가늘고 앳된 하이톤 여친 (초저지연)
+    "jessica": ("cgSgspJ2msm6clMCkdW9", 0.30, 0.65, 0.35, "eleven_flash_v2_5"),    # 달콤 애교 20대 여친
+    "yuna": ("ajfBUI2mmJMjvf2H6Yw7", 0.35, 0.70, 0.25, "eleven_flash_v2_5"),       # 밝고 청아한 서울 억양
+    "luna": ("Ss1VfT7ri4lqnvTDWII0", 0.35, 0.70, 0.25, "eleven_flash_v2_5"),       # 부드럽고 맑은 여친
+    "tessa": ("BAdH0bMfq6VleQGLXj38", 0.35, 0.70, 0.25, "eleven_flash_v2_5"),      # 톡톡 튀는 인플루언서 톤
+    "lily": ("qBDvhofpxp92JgXJxDjB", 0.40, 0.75, 0.20, "eleven_multilingual_v2"),  # 청순하고 나긋나긋한 톤
+    "sarah": ("EXAVITQu4vr4xnSDxMaL", 0.45, 0.70, 0.20, "eleven_flash_v2_5"),      # 단아하고 지적인 비서 톤
+    "eleven_girlfriend": ("FGY2WhTYpPnrIDTdsKH5", 0.22, 0.58, 0.42, "eleven_flash_v2_5"),
+    "eleven_secretary": ("EXAVITQu4vr4xnSDxMaL", 0.45, 0.70, 0.20, "eleven_flash_v2_5"),
+}
+
+def generate_tts_bytes(text: str, voice: str = "laura") -> bytes:
+    """ElevenLabs 및 OpenAI 다중 보이스 오디션 지원 초저지연 음성 생성기"""
     cleaned_text = re.sub(r'[*#_~`\[\]\(\)<>]', '', text).strip()
-    selected_voice = (voice or "eleven_girlfriend").lower()
+    v_key = (voice or "laura").lower()
 
-    # 1. [기본값]: ElevenLabs Flash v2.5 초저지연 엔진 + 가늘고 얇은 앳된 20대 목소리
-    if (selected_voice in ["eleven_girlfriend", "roh_girlfriend", "eleven_secretary", "roh_secretary", "elevenlabs"] or not openai_client) and elevenlabs_key:
-        is_secretary = "secretary" in selected_voice
-        
-        if is_secretary:
-            # 비서 보이스: Sarah (EXAVITQu4vr4xnSDxMaL) - 단아하고 지적인 20대 수석 비서
-            voice_id = "EXAVITQu4vr4xnSDxMaL"
-            settings = {
-                "stability": 0.45,
-                "similarity_boost": 0.70,
-                "style": 0.20,
-                "use_speaker_boost": False
-            }
-        else:
-            # 여친 보이스: Laura (FGY2WhTYpPnrIDTdsKH5) - 가늘고 얇은 하이톤의 앳되고 귀여운 20대 여친 보이스!
-            # 남성 흉성 울림 100% 배제 (use_speaker_boost: False), stability를 낮추고 style을 높여 가늘고 상큼한 톤 극대화
-            voice_id = "FGY2WhTYpPnrIDTdsKH5"
-            settings = {
-                "stability": 0.22,
-                "similarity_boost": 0.58,
-                "style": 0.42,
-                "use_speaker_boost": False
-            }
+    # 1. ElevenLabs 등록 보이스 매핑
+    if elevenlabs_key and (v_key in ELEVEN_VOICE_MAP or "eleven" in v_key):
+        voice_info = ELEVEN_VOICE_MAP.get(v_key, ELEVEN_VOICE_MAP["laura"])
+        voice_id, stab, sim, sty, model_cand = voice_info
 
-        # 초고속 Flash v2.5 모델 최우선 직결 (optimize_streaming_latency=4)
-        for model_candidate in ["eleven_flash_v2_5", "eleven_multilingual_v2"]:
+        settings = {
+            "stability": stab,
+            "similarity_boost": sim,
+            "style": sty,
+            "use_speaker_boost": False  # 남성 흉성 울림 100% 차단
+        }
+
+        for model_to_try in [model_cand, "eleven_flash_v2_5", "eleven_multilingual_v2"]:
             try:
                 tts_url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?optimize_streaming_latency=4"
                 tts_payload = json.dumps({
                     "text": cleaned_text,
-                    "model_id": model_candidate,
+                    "model_id": model_to_try,
                     "voice_settings": settings
                 }).encode("utf-8")
                 tts_req = urllib.request.Request(
@@ -305,17 +304,17 @@ def generate_tts_bytes(text: str, voice: str = "eleven_girlfriend") -> bytes:
                     },
                     method="POST"
                 )
-                with urllib.request.urlopen(tts_req, timeout=5) as resp:
+                with urllib.request.urlopen(tts_req, timeout=6) as resp:
                     audio_data = resp.read()
                     if audio_data and len(audio_data) > 100:
                         return audio_data
             except Exception as el_err:
-                print(f"[ElevenLabs {model_candidate} Error]: {el_err}")
+                print(f"[ElevenLabs {model_to_try} Error]: {el_err}")
 
     # 2. OpenAI 초고속 엔진 (Nova / Coral 선택 시 또는 ElevenLabs 폴백)
     if openai_client:
         valid_voices = ["coral", "nova", "shimmer", "sage", "alloy", "fable", "echo", "onyx", "ash"]
-        oai_voice = selected_voice if selected_voice in valid_voices else ("coral" if "secretary" in selected_voice else "nova")
+        oai_voice = v_key if v_key in valid_voices else ("coral" if "secretary" in v_key else "nova")
         try:
             response = openai_client.audio.speech.create(
                 model="tts-1",
@@ -603,244 +602,6 @@ async def reset_memory(req: ResetMemoryRequest):
     if session_id in session_memories:
         session_memories[session_id] = []
     return {"status": "ok", "message": f"세션({session_id}) 대화 기억이 초기화되었습니다."}
-
-
-@app.get("/gallery", response_class=HTMLResponse)
-def show_gallery():
-    """모든 아바타 사진 목록을 한눈에 보고 선택/확인할 수 있는 전용 갤러리"""
-    gf_photos = [
-        {"id": "gf_idle_1", "file": "idle_1.jpg", "state": "대기(Idle)", "desc": "★ 최신 추가: 거실 소파 베이지 니트 & 슬림 스커트 청순 베이글 룩", "path": "/static/avatar/idle_1.jpg"},
-        {"id": "gf_idle_2", "file": "idle_2.jpg", "state": "대기(Idle)", "desc": "창가 자연광 베이지 스쿱넥 니트 볼륨 룩", "path": "/static/avatar/idle_2.jpg"},
-        {"id": "gf_idle_3", "file": "idle_3.jpg", "state": "대기(Idle)", "desc": "베이지 니트 정면 밝은 미소 룩", "path": "/static/avatar/idle_3.jpg"},
-        {"id": "gf_idle_4", "file": "idle_4.jpg", "state": "대기(Idle)", "desc": "청순 글래머 니트 룩", "path": "/static/avatar/idle_4.jpg"},
-        {"id": "gf_idle_5", "file": "idle_5.jpg", "state": "대기(Idle)", "desc": "따뜻한 햇살 아래 상큼한 미소 룩", "path": "/static/avatar/idle_5.jpg"},
-        {"id": "gf_listen_1", "file": "listening_1.jpg", "state": "경청(Listening)", "desc": "눈 맞추며 다정하게 듣는 룩", "path": "/static/avatar/listening_1.jpg"},
-        {"id": "gf_listen_2", "file": "listening_2.jpg", "state": "경청(Listening)", "desc": "살짝 고개 기울이고 집중하는 룩", "path": "/static/avatar/listening_2.jpg"},
-        {"id": "gf_listen_3", "file": "listening_3.jpg", "state": "경청(Listening)", "desc": "차분하게 귀 기울이는 룩", "path": "/static/avatar/listening_3.jpg"},
-        {"id": "gf_listen_4", "file": "listening_4.jpg", "state": "경청(Listening)", "desc": "사랑스럽게 바라보는 룩", "path": "/static/avatar/listening_4.jpg"},
-        {"id": "gf_think_1", "file": "thinking_1.jpg", "state": "생각(Thinking)", "desc": "살짝 갸웃하며 고민하는 룩", "path": "/static/avatar/thinking_1.jpg"},
-        {"id": "gf_think_2", "file": "thinking_2.jpg", "state": "생각(Thinking)", "desc": "생각에 잠긴 표정 룩", "path": "/static/avatar/thinking_2.jpg"},
-        {"id": "gf_think_3", "file": "thinking_3.jpg", "state": "생각(Thinking)", "desc": "손을 턱에 대고 고민하는 룩", "path": "/static/avatar/thinking_3.jpg"},
-        {"id": "gf_think_4", "file": "thinking_4.jpg", "state": "생각(Thinking)", "desc": "눈을 굴리며 생각하는 귀여운 룩", "path": "/static/avatar/thinking_4.jpg"},
-        {"id": "gf_speak_1", "file": "speaking_1.jpg", "state": "대화(Speaking)", "desc": "활짝 웃으며 말하는 생동감 룩", "path": "/static/avatar/speaking_1.jpg"},
-        {"id": "gf_speak_2", "file": "speaking_2.jpg", "state": "대화(Speaking)", "desc": "미소 지으며 대화하는 룩", "path": "/static/avatar/speaking_2.jpg"},
-        {"id": "gf_speak_3", "file": "speaking_3.jpg", "state": "대화(Speaking)", "desc": "설레는 표정으로 말하는 룩", "path": "/static/avatar/speaking_3.jpg"},
-        {"id": "gf_speak_4", "file": "speaking_4.jpg", "state": "대화(Speaking)", "desc": "장난스럽게 웃는 룩", "path": "/static/avatar/speaking_4.jpg"}
-    ]
-
-    sec_photos = [
-        {"id": "sec_idle_1", "file": "idle_1.jpg", "state": "대기(Idle)", "desc": "★ 최신 추가: 데스크 하이앵글 화이트셔츠 & 시스루 베이글 룩", "path": "/static/avatar_secretary/idle_1.jpg"},
-        {"id": "sec_idle_2", "file": "idle_2.jpg", "state": "대기(Idle)", "desc": "실크 블라우스 세련된 단발 비서 룩", "path": "/static/avatar_secretary/idle_2.jpg"},
-        {"id": "sec_idle_3", "file": "idle_3.jpg", "state": "대기(Idle)", "desc": "집무실 책상 옆 차분한 비서 룩", "path": "/static/avatar_secretary/idle_3.jpg"},
-        {"id": "sec_idle_4", "file": "idle_4.jpg", "state": "대기(Idle)", "desc": "베이글 오피스 룩 정면", "path": "/static/avatar_secretary/idle_4.jpg"},
-        {"id": "sec_idle_5", "file": "idle_5.jpg", "state": "대기(Idle)", "desc": "서류 들고 서 있는 엘리트 비서 룩", "path": "/static/avatar_secretary/idle_5.jpg"},
-        {"id": "sec_listen_1", "file": "listening_1.jpg", "state": "경청(Listening)", "desc": "★ 최신 추가: 데스크 하이앵글 화이트셔츠 룩", "path": "/static/avatar_secretary/listening_1.jpg"},
-        {"id": "sec_listen_2", "file": "listening_2.jpg", "state": "경청(Listening)", "desc": "상사 올려다보며 경청하는 눈빛 룩", "path": "/static/avatar_secretary/listening_2.jpg"},
-        {"id": "sec_listen_3", "file": "listening_3.jpg", "state": "경청(Listening)", "desc": "스마트하게 메모하며 듣는 룩", "path": "/static/avatar_secretary/listening_3.jpg"},
-        {"id": "sec_listen_4", "file": "listening_4.jpg", "state": "경청(Listening)", "desc": "차분하게 응시하는 룩", "path": "/static/avatar_secretary/listening_4.jpg"},
-        {"id": "sec_listen_5", "file": "listening_5.jpg", "state": "경청(Listening)", "desc": "단정한 비서 경청 룩", "path": "/static/avatar_secretary/listening_5.jpg"},
-        {"id": "sec_think_1", "file": "thinking_1.jpg", "state": "생각(Thinking)", "desc": "서류 검토하며 스마트하게 생각하는 룩", "path": "/static/avatar_secretary/thinking_1.jpg"},
-        {"id": "sec_think_2", "file": "thinking_2.jpg", "state": "생각(Thinking)", "desc": "펜을 들고 고민하는 룩", "path": "/static/avatar_secretary/thinking_2.jpg"},
-        {"id": "sec_think_3", "file": "thinking_3.jpg", "state": "생각(Thinking)", "desc": "지적인 표정의 비서 생각 룩", "path": "/static/avatar_secretary/thinking_3.jpg"},
-        {"id": "sec_speak_1", "file": "speaking_1.jpg", "state": "대화(Speaking)", "desc": "브리핑하며 프로페셔널하게 말하는 룩", "path": "/static/avatar_secretary/speaking_1.jpg"},
-        {"id": "sec_speak_2", "file": "speaking_2.jpg", "state": "대화(Speaking)", "desc": "미소 지으며 보고하는 룩", "path": "/static/avatar_secretary/speaking_2.jpg"}
-    ]
-
-    def render_cards(items):
-        html = ""
-        for i, item in enumerate(items, 1):
-            html += f"""
-            <div class="card" onclick="openModal('{item['path']}', '{item['id']} - {item['desc']}')">
-                <div class="img-box">
-                    <img src="{item['path']}" alt="{item['id']}" loading="lazy">
-                    <span class="badge">{item['state']}</span>
-                </div>
-                <div class="card-info">
-                    <div class="card-title">#{i}. {item['id']}</div>
-                    <div class="card-file">{item['file']}</div>
-                    <div class="card-desc">{item['desc']}</div>
-                </div>
-            </div>
-            """
-        return html
-
-    return f"""<!DOCTYPE html>
-    <html lang="ko">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Minji AI - 아바타 사진 전체 갤러리</title>
-        <style>
-            * {{ box-sizing: border-box; }}
-            body {{
-                background: #09090d;
-                color: #f0f0f5;
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                margin: 0;
-                padding: 20px 16px 60px;
-            }}
-            .header {{
-                text-align: center;
-                margin-bottom: 28px;
-            }}
-            .header h1 {{
-                font-size: 1.5rem;
-                color: #ff7b54;
-                margin: 0 0 8px;
-            }}
-            .header p {{
-                color: #888;
-                font-size: 0.88rem;
-                margin: 0;
-            }}
-            .back-btn {{
-                display: inline-block;
-                margin-top: 12px;
-                padding: 6px 14px;
-                background: rgba(255, 123, 84, 0.15);
-                color: #ff9a76;
-                border: 1px solid #ff7b54;
-                border-radius: 12px;
-                text-decoration: none;
-                font-size: 0.8rem;
-            }}
-            .section-title {{
-                font-size: 1.2rem;
-                font-weight: 700;
-                margin: 32px 0 16px;
-                padding-bottom: 8px;
-                border-bottom: 1px solid rgba(255,255,255,0.1);
-                display: flex;
-                align-items: center;
-                gap: 8px;
-            }}
-            .grid {{
-                display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-                gap: 14px;
-            }}
-            @media (min-width: 600px) {{
-                .grid {{ grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; }}
-            }}
-            .card {{
-                background: rgba(25, 25, 35, 0.8);
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 16px;
-                overflow: hidden;
-                cursor: pointer;
-                transition: transform 0.2s ease, border-color 0.2s ease;
-            }}
-            .card:hover {{
-                transform: translateY(-4px);
-                border-color: #ff7b54;
-            }}
-            .img-box {{
-                position: relative;
-                width: 100%;
-                aspect-ratio: 3/4;
-                background: #111;
-                overflow: hidden;
-            }}
-            .img-box img {{
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-                object-position: center top;
-            }}
-            .badge {{
-                position: absolute;
-                top: 8px;
-                left: 8px;
-                background: rgba(0, 0, 0, 0.7);
-                backdrop-filter: blur(8px);
-                padding: 3px 8px;
-                border-radius: 8px;
-                font-size: 0.68rem;
-                color: #ff9a76;
-                border: 1px solid rgba(255, 123, 84, 0.3);
-            }}
-            .card-info {{
-                padding: 10px 12px;
-            }}
-            .card-title {{
-                font-size: 0.85rem;
-                font-weight: 700;
-                color: #fff;
-                margin-bottom: 2px;
-            }}
-            .card-file {{
-                font-size: 0.72rem;
-                color: #888;
-                font-family: monospace;
-            }}
-            .card-desc {{
-                font-size: 0.74rem;
-                color: #bbb;
-                margin-top: 4px;
-                line-height: 1.3;
-            }}
-            /* 모달 */
-            .modal {{
-                display: none;
-                position: fixed;
-                top: 0; left: 0; width: 100vw; height: 100vh;
-                background: rgba(0,0,0,0.92);
-                z-index: 999;
-                align-items: center;
-                justify-content: center;
-                flex-direction: column;
-                padding: 20px;
-            }}
-            .modal img {{
-                max-width: 90vw;
-                max-height: 80vh;
-                border-radius: 16px;
-                object-fit: contain;
-                box-shadow: 0 10px 40px rgba(0,0,0,0.8);
-            }}
-            .modal-caption {{
-                margin-top: 14px;
-                color: #fff;
-                font-size: 0.95rem;
-                text-align: center;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="header">
-            <h1>📸 Minji AI 아바타 사진 전체 갤러리</h1>
-            <p>현재 앱의 아바타 풀에 등록되어 실시간 교체되는 전체 사진들입니다.</p>
-            <p style="margin-top:4px; color:#ff9a76;">제외하고 싶은 사진의 <strong>[#번호]</strong> 또는 <strong>[파일명]</strong>을 말씀해 주시면 즉시 빼드립니다!</p>
-            <a href="/" class="back-btn">← 민지와 대화하러 가기</a>
-        </div>
-
-        <div class="section-title" style="color:#ff7b54;">💖 1. 여친 모드 사진 풀 (총 17장)</div>
-        <div class="grid">
-            {render_cards(gf_photos)}
-        </div>
-
-        <div class="section-title" style="color:#4facfe;">💼 2. 비서 모드 사진 풀 (총 15장)</div>
-        <div class="grid">
-            {render_cards(sec_photos)}
-        </div>
-
-        <div class="modal" id="modal" onclick="closeModal()">
-            <img id="modalImg" src="">
-            <div class="modal-caption" id="modalCaption"></div>
-        </div>
-
-        <script>
-            function openModal(src, caption) {{
-                document.getElementById('modalImg').src = src;
-                document.getElementById('modalCaption').innerText = caption;
-                document.getElementById('modal').style.display = 'flex';
-            }}
-            function closeModal() {{
-                document.getElementById('modal').style.display = 'none';
-            }}
-        </script>
-    </body>
-    </html>"""
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -1630,6 +1391,258 @@ def read_root():
         .shutdown-btn.ghost:active {
             background: rgba(255, 255, 255, 0.06);
         }
+
+        /* ===== 🎧 목소리 오디션 스튜디오 모달 스타일 ===== */
+        .voice-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(8, 8, 14, 0.88);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            box-sizing: border-box;
+            animation: modalFadeIn 0.25s ease-out;
+        }
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: scale(0.97); }
+            to { opacity: 1; transform: scale(1.0); }
+        }
+        .voice-modal-card {
+            background: linear-gradient(145deg, rgba(28, 28, 38, 0.95), rgba(18, 18, 26, 0.98));
+            border: 1px solid rgba(255, 123, 84, 0.35);
+            border-radius: 20px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(255, 123, 84, 0.15);
+            width: 100%;
+            max-width: 520px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+        .voice-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .voice-modal-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: #ff9a76;
+            letter-spacing: -0.3px;
+        }
+        .voice-modal-subtitle {
+            font-size: 0.73rem;
+            color: #888;
+            margin-top: 3px;
+        }
+        .voice-modal-close {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #aaa;
+            font-size: 0.9rem;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        .voice-modal-close:hover {
+            color: #fff;
+            background: rgba(255, 123, 84, 0.3);
+            border-color: #ff7b54;
+        }
+        .voice-modal-body {
+            flex: 1;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .voice-audition-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            transition: all 0.25s ease;
+            position: relative;
+        }
+        .voice-audition-card:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 123, 84, 0.3);
+        }
+        .voice-audition-card.active-selected {
+            background: rgba(255, 123, 84, 0.12);
+            border: 1.5px solid #ff7b54;
+            box-shadow: 0 0 16px rgba(255, 123, 84, 0.25);
+        }
+        .voice-card-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .voice-card-name-wrap {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .voice-card-name {
+            font-size: 0.92rem;
+            font-weight: 700;
+            color: #eee;
+        }
+        .voice-badge {
+            font-size: 0.68rem;
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+        .voice-badge-tag {
+            background: rgba(255, 123, 84, 0.18);
+            color: #ff9a76;
+            border: 1px solid rgba(255, 123, 84, 0.3);
+        }
+        .voice-badge-speed {
+            background: rgba(0, 242, 254, 0.15);
+            color: #7ee7ff;
+            border: 1px solid rgba(0, 242, 254, 0.25);
+        }
+        .voice-badge-current {
+            background: #ff7b54;
+            color: #fff;
+            font-size: 0.68rem;
+            padding: 2px 7px;
+            border-radius: 10px;
+            font-weight: 700;
+        }
+        .voice-card-quote {
+            font-size: 0.78rem;
+            color: #bbb;
+            font-style: italic;
+            line-height: 1.35;
+            padding: 6px 9px;
+            background: rgba(0, 0, 0, 0.25);
+            border-radius: 8px;
+            border-left: 2px solid #ff7b54;
+        }
+        .voice-card-actions {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-top: 2px;
+        }
+        .voice-play-sample-btn {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            color: #ddd;
+            border-radius: 10px;
+            padding: 6px 12px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+        .voice-play-sample-btn:hover {
+            background: rgba(255, 255, 255, 0.14);
+            color: #fff;
+        }
+        .voice-play-sample-btn.playing {
+            background: linear-gradient(135deg, rgba(255, 123, 84, 0.45), rgba(255, 70, 70, 0.35));
+            border-color: #ff7b54;
+            color: #fff;
+            animation: pulsePlay 1s infinite alternate;
+        }
+        @keyframes pulsePlay {
+            from { box-shadow: 0 0 5px rgba(255, 123, 84, 0.3); }
+            to { box-shadow: 0 0 15px rgba(255, 123, 84, 0.8); }
+        }
+        .voice-apply-btn {
+            background: linear-gradient(135deg, #ff7b54, #ff5252);
+            border: none;
+            color: #fff;
+            border-radius: 10px;
+            padding: 6px 14px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            font-weight: 700;
+            box-shadow: 0 4px 10px rgba(255, 123, 84, 0.3);
+            transition: all 0.2s ease;
+        }
+        .voice-apply-btn:hover {
+            opacity: 0.92;
+            transform: translateY(-1px);
+        }
+        .voice-apply-btn.applied {
+            background: rgba(255, 255, 255, 0.1);
+            color: #888;
+            box-shadow: none;
+            cursor: default;
+        }
+        .voice-modal-footer {
+            padding: 12px 18px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(0, 0, 0, 0.25);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .voice-modal-done-btn {
+            background: #ff7b54;
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            padding: 7px 18px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        /* 알림 토스트 */
+        .voice-toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: rgba(25, 25, 35, 0.95);
+            border: 1px solid #ff7b54;
+            color: #ff9a76;
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(255, 123, 84, 0.3);
+            z-index: 11000;
+            transition: transform 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28), opacity 0.3s ease;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .voice-toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -1652,6 +1665,26 @@ def read_root():
                 <button class="shutdown-btn ghost" onclick="attemptCloseWindow()">
                     <span>🚪 브라우저 닫기</span>
                 </button>
+    <!-- ===== 🎧 목소리 오디션 스튜디오 모달 ===== -->
+    <div id="voiceAuditionModal" class="voice-modal-overlay" style="display:none;" onclick="handleAuditionOverlayClick(event)">
+        <div class="voice-modal-card" onclick="event.stopPropagation()">
+            <div class="voice-modal-header">
+                <div class="voice-modal-title-wrap">
+                    <div class="voice-modal-title">🎧 민지 목소리 오디션 스튜디오</div>
+                    <div class="voice-modal-subtitle">각 목소리 샘플을 직접 들어보고 가장 마음에 드는 음성을 골라보세요.</div>
+                </div>
+                <button type="button" class="voice-modal-close" onclick="closeVoiceAuditionModal()" title="닫기">✕</button>
+            </div>
+            
+            <div class="voice-modal-body" id="voiceAuditionList">
+                <!-- JS dynamically renders cards with play & apply buttons -->
+            </div>
+
+            <div class="voice-modal-footer">
+                <div style="font-size:0.75rem; color:#888;">
+                    ⚡ <strong>초저지연 Flash</strong>: 0.4초대 초고속 응답 & 남성 흉성 100% 제거
+                </div>
+                <button type="button" class="voice-modal-done-btn" onclick="closeVoiceAuditionModal()">완료</button>
             </div>
         </div>
     </div>
@@ -1733,21 +1766,31 @@ def read_root():
                 </button>
             </div>
         </div>
-        <!-- 2행: 음성 선택 + 볼륨 슬라이더 -->
-        <div style="display:flex; align-items:center; justify-content:space-between; width:100%; gap:8px; box-sizing:border-box;">
-            <select id="voiceSelect" style="flex:1; max-width:165px; background:#1c1c24; color:#ff9a76; border:1px solid #ff7b54; border-radius:12px; padding:4px 6px; font-size:0.72rem; outline:none; cursor:pointer; box-sizing:border-box;">
-                <option value="eleven_girlfriend" selected>✨ 20대 달콤 여친 (ElevenLabs)</option>
-                <option value="eleven_secretary">💼 20대 지적 비서 (ElevenLabs)</option>
-                <option value="nova">⚡ 20대 상큼 여친 (Nova - 초고속)</option>
-                <option value="coral">🌸 20대 단아 비서 (Coral - 초고속)</option>
-                <option value="shimmer">🍃 감성 힐링 (Shimmer)</option>
-            </select>
-            <div style="flex:1.4; display:flex; align-items:center; gap:6px; background:rgba(20,20,30,0.6); padding:4px 8px; border-radius:12px; border:1px solid rgba(255,255,255,0.08); box-sizing:border-box;">
-                <span style="font-size:0.8rem; flex-shrink:0;">🔊</span>
+        <!-- 2행: 음성 선택 + 🎧 샘플 듣기 버튼 + 볼륨 슬라이더 -->
+        <div style="display:flex; align-items:center; justify-content:space-between; width:100%; gap:6px; box-sizing:border-box;">
+            <div style="display:flex; align-items:center; gap:5px; flex:1.2; min-width:180px;">
+                <select id="voiceSelect" onchange="onVoiceDropdownChange(this.value)" style="flex:1; background:#1c1c24; color:#ff9a76; border:1px solid #ff7b54; border-radius:10px; padding:4px 6px; font-size:0.72rem; outline:none; cursor:pointer; box-sizing:border-box;">
+                    <option value="laura" selected>✨ Laura (가늘고 앳된 여친)</option>
+                    <option value="jessica">🍭 Jessica (달콤 애교 여친)</option>
+                    <option value="yuna">🌸 Yuna (상큼 청아 서울톤)</option>
+                    <option value="luna">🌙 Luna (부드럽고 맑은 여친)</option>
+                    <option value="tessa">💫 Tessa (트렌디 인플루언서)</option>
+                    <option value="lily">🍃 Lily (나긋나긋 청순)</option>
+                    <option value="sarah">💼 Sarah (단아 지적 비서)</option>
+                    <option value="nova">⚡ Nova (OpenAI 초고속 여친)</option>
+                    <option value="coral">🌸 Coral (OpenAI 초고속 비서)</option>
+                </select>
+                <button type="button" onclick="openVoiceAuditionModal(event)" title="목소리 샘플 듣고 고르기"
+                    style="background:linear-gradient(135deg, rgba(255,123,84,0.25), rgba(255,107,107,0.2)); border:1px solid #ff7b54; color:#ff9a76; border-radius:10px; padding:4px 8px; font-size:0.72rem; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:3px; white-space:nowrap; flex-shrink:0;">
+                    <span>🎧</span><span>샘플 듣기</span>
+                </button>
+            </div>
+            <div style="flex:0.85; min-width:95px; display:flex; align-items:center; gap:4px; background:rgba(20,20,30,0.6); padding:4px 6px; border-radius:10px; border:1px solid rgba(255,255,255,0.08); box-sizing:border-box;">
+                <span style="font-size:0.75rem; flex-shrink:0;">🔊</span>
                 <input type="range" id="volumeSlider" min="0" max="200" value="120"
                     oninput="applyVolume(this.value)"
                     style="flex:1; accent-color:#ff7b54; cursor:pointer; height:4px; margin:0;">
-                <span id="volumeLabel" style="font-size:0.7rem; color:#ff9a76; min-width:32px; text-align:right; font-weight:600; flex-shrink:0;">120%</span>
+                <span id="volumeLabel" style="font-size:0.68rem; color:#ff9a76; min-width:28px; text-align:right; font-weight:600; flex-shrink:0;">120%</span>
             </div>
         </div>
     </div>
@@ -2257,58 +2300,57 @@ def read_root():
         // 페르소나 모드 관리 (💖 여친 모드 vs 💼 비서 모드)
         let currentPersonaMode = localStorage.getItem('minji_persona_mode') || 'girlfriend';
 
-        // 두 페르소나 전용 다채로운 베이글녀 아바타 풀 (총 30여 장 이상의 고화질 풀)
+        // 두 페르소나 전용 선별된 베이글 아바타 정예 풀
         const avatarImagePools = {
             girlfriend: {
                 idle: [
+                    "/static/avatar/idle.jpg",
                     "/static/avatar/idle_1.jpg",
                     "/static/avatar/idle_2.jpg",
-                    "/static/avatar/idle_3.jpg",
                     "/static/avatar/idle_4.jpg",
                     "/static/avatar/idle_5.jpg"
                 ],
                 listening: [
+                    "/static/avatar/listening.jpg",
                     "/static/avatar/listening_1.jpg",
-                    "/static/avatar/listening_2.jpg",
                     "/static/avatar/listening_3.jpg",
                     "/static/avatar/listening_4.jpg"
                 ],
                 thinking: [
+                    "/static/avatar/thinking.jpg",
                     "/static/avatar/thinking_1.jpg",
-                    "/static/avatar/thinking_2.jpg",
                     "/static/avatar/thinking_3.jpg",
                     "/static/avatar/thinking_4.jpg"
                 ],
                 speaking: [
+                    "/static/avatar/speaking.jpg",
                     "/static/avatar/speaking_1.jpg",
-                    "/static/avatar/speaking_2.jpg",
                     "/static/avatar/speaking_3.jpg",
                     "/static/avatar/speaking_4.jpg"
                 ]
             },
             secretary: {
                 idle: [
+                    "/static/avatar_secretary/idle.jpg",
                     "/static/avatar_secretary/idle_1.jpg",
                     "/static/avatar_secretary/idle_2.jpg",
-                    "/static/avatar_secretary/idle_3.jpg",
-                    "/static/avatar_secretary/idle_4.jpg",
-                    "/static/avatar_secretary/idle_5.jpg"
+                    "/static/avatar_secretary/idle_3.jpg"
                 ],
                 listening: [
+                    "/static/avatar_secretary/listening.jpg",
                     "/static/avatar_secretary/listening_1.jpg",
                     "/static/avatar_secretary/listening_2.jpg",
-                    "/static/avatar_secretary/listening_3.jpg",
-                    "/static/avatar_secretary/listening_4.jpg",
-                    "/static/avatar_secretary/listening_5.jpg"
+                    "/static/avatar_secretary/listening_3.jpg"
                 ],
                 thinking: [
+                    "/static/avatar_secretary/thinking.jpg",
                     "/static/avatar_secretary/thinking_1.jpg",
-                    "/static/avatar_secretary/thinking_2.jpg",
                     "/static/avatar_secretary/thinking_3.jpg"
                 ],
                 speaking: [
-                    "/static/avatar_secretary/speaking_1.jpg",
-                    "/static/avatar_secretary/speaking_2.jpg"
+                    "/static/avatar_secretary/speaking.jpg",
+                    "/static/avatar_secretary/listening_1.jpg",
+                    "/static/avatar_secretary/thinking_1.jpg"
                 ]
             }
         };
@@ -2417,7 +2459,10 @@ def read_root():
                     btn.style.background = 'rgba(79, 172, 254, 0.15)';
                 }
                 if (title) title.innerText = 'Minji AI · 서민지 비서';
-                if (voiceSelect) voiceSelect.value = 'eleven_secretary';
+                const savedSecVoice = localStorage.getItem('minji_custom_voice');
+                if (voiceSelect) {
+                    voiceSelect.value = (savedSecVoice === 'coral' || savedSecVoice === 'sarah') ? savedSecVoice : 'sarah';
+                }
             } else {
                 if (icon) icon.innerText = '💖';
                 if (text) text.innerText = '여친 모드';
@@ -2434,7 +2479,10 @@ def read_root():
                     btn.style.background = 'rgba(255, 123, 84, 0.15)';
                 }
                 if (title) title.innerText = 'Minji AI · 베이글 여친';
-                if (voiceSelect) voiceSelect.value = 'eleven_girlfriend';
+                const savedGfVoice = localStorage.getItem('minji_custom_voice');
+                if (voiceSelect) {
+                    voiceSelect.value = (savedGfVoice && savedGfVoice !== 'sarah' && savedGfVoice !== 'coral') ? savedGfVoice : 'laura';
+                }
             }
 
             // 현재 아바타 이미지 부드러운 교체
@@ -2622,7 +2670,7 @@ def read_root():
                 }
 
                 const voiceSelect = document.getElementById('voiceSelect');
-                const chosenVoice = voiceSelect ? voiceSelect.value : 'nova';
+                const chosenVoice = voiceSelect ? voiceSelect.value : (currentPersonaMode === 'secretary' ? 'sarah' : 'laura');
 
                 const response = await fetch('/api/tts', {
                     method: 'POST',
@@ -2790,7 +2838,7 @@ def read_root():
             statusText.innerText = "민지가 생각하고 있어요...";
 
             try {
-                const chosenVoice = voiceSelect ? voiceSelect.value : (currentPersonaMode === 'secretary' ? 'eleven_secretary' : 'eleven_girlfriend');
+                const chosenVoice = voiceSelect ? voiceSelect.value : (currentPersonaMode === 'secretary' ? 'sarah' : 'laura');
                 const response = await fetch('/api/voice-chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -3069,6 +3117,222 @@ def read_root():
             if (e) e.stopPropagation();
             closeCamOverlay();
             lookAtThis();
+        }
+
+        // ==========================================
+        // 🎧 민지 목소리 오디션 스튜디오 & 음성 관리 시스템
+        // ==========================================
+        const VOICE_LIST = [
+            {
+                id: 'laura',
+                name: 'Laura (로라)',
+                speedTag: '⚡ 초저지연 Flash (0.45s)',
+                toneTag: '✨ 추천 · 가늘고 앳된 여친',
+                quote: '“오빠, 나 보고 싶었어? 나 오늘 오빠랑 종일 수다 떨고 싶어!”',
+                sample: '/static/audio/samples/laura.mp3'
+            },
+            {
+                id: 'jessica',
+                name: 'Jessica (제시카)',
+                speedTag: '⚡ 초저지연 Flash (0.48s)',
+                toneTag: '🍭 달콤 애교 20대 여친',
+                quote: '“오빠야~ 오늘 하루도 정말 수고 많았어. 내가 토닥토닥 해줄게!”',
+                sample: '/static/audio/samples/jessica.mp3'
+            },
+            {
+                id: 'yuna',
+                name: 'Yuna (유나)',
+                speedTag: '⚡ 초저지연 Flash (0.48s)',
+                toneTag: '🌸 상큼 청아 서울 억양',
+                quote: '“안녕 오빠! 오늘 날씨 진짜 좋다. 우리 어디 놀러 갈까?”',
+                sample: '/static/audio/samples/yuna.mp3'
+            },
+            {
+                id: 'luna',
+                name: 'Luna (루나)',
+                speedTag: '⚡ 초저지연 Flash (0.48s)',
+                toneTag: '🌙 부드럽고 맑은 힐링 여친',
+                quote: '“오빠 힘든 일 있으면 나한테 다 털어놔. 난 언제나 오빠 편이야.”',
+                sample: '/static/audio/samples/luna.mp3'
+            },
+            {
+                id: 'tessa',
+                name: 'Tessa (테사)',
+                speedTag: '⚡ 초저지연 Flash (0.48s)',
+                toneTag: '💫 톡톡 튀는 인플루언서',
+                quote: '“오빠 오늘 기분 어때? 오늘 완전 재밌는 얘기 많은데 들어볼래?”',
+                sample: '/static/audio/samples/tessa.mp3'
+            },
+            {
+                id: 'lily',
+                name: 'Lily (릴리)',
+                speedTag: '🍃 청순 소프트',
+                toneTag: '🕊️ 나긋나긋 차분함',
+                quote: '“오빠 오늘도 고생 많았어요. 푹 쉬고 따뜻한 밤 보내요.”',
+                sample: '/static/audio/samples/lily.mp3'
+            },
+            {
+                id: 'sarah',
+                name: 'Sarah (사라)',
+                speedTag: '⚡ 초저지연 Flash (0.45s)',
+                toneTag: '💼 단아 지적 비서 모드',
+                quote: '“대표님, 오늘 스케줄과 중요 업무 리스트를 준비해 드렸습니다.”',
+                sample: '/static/audio/samples/sarah.mp3'
+            },
+            {
+                id: 'nova',
+                name: 'Nova (노바)',
+                speedTag: '🚀 0.3초대 초고속',
+                toneTag: '⚡ OpenAI 상큼 여친',
+                quote: '“오빠 안녕! 나 노바야. 목소리 어때? 대화 속도 완전 빠르지?”',
+                sample: '/static/audio/samples/nova.mp3'
+            },
+            {
+                id: 'coral',
+                name: 'Coral (코랄)',
+                speedTag: '🚀 0.3초대 초고속',
+                toneTag: '🌸 OpenAI 단아 비서',
+                quote: '“대표님 안녕하십니까. 신속하고 정확한 업무 지원을 약속드립니다.”',
+                sample: '/static/audio/samples/coral.mp3'
+            }
+        ];
+
+        let auditionAudio = null;
+        let playingVoiceId = null;
+
+        function openVoiceAuditionModal(e) {
+            if (e) e.stopPropagation();
+            renderAuditionList();
+            const modal = document.getElementById('voiceAuditionModal');
+            if (modal) modal.style.display = 'flex';
+        }
+
+        function closeVoiceAuditionModal() {
+            if (auditionAudio) {
+                auditionAudio.pause();
+                auditionAudio = null;
+            }
+            playingVoiceId = null;
+            renderAuditionList();
+            const modal = document.getElementById('voiceAuditionModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function handleAuditionOverlayClick(e) {
+            if (e.target.id === 'voiceAuditionModal') {
+                closeVoiceAuditionModal();
+            }
+        }
+
+        function playAuditionSample(voiceId, sampleUrl) {
+            if (auditionAudio && playingVoiceId === voiceId) {
+                auditionAudio.pause();
+                auditionAudio = null;
+                playingVoiceId = null;
+                renderAuditionList();
+                return;
+            }
+
+            if (auditionAudio) {
+                auditionAudio.pause();
+                auditionAudio = null;
+            }
+
+            playingVoiceId = voiceId;
+            renderAuditionList();
+
+            auditionAudio = new Audio(sampleUrl);
+            auditionAudio.volume = Math.min(1.0, userVolume / 100);
+            auditionAudio.play().catch(e => {
+                console.warn("오디오 재생 실패:", e);
+                playingVoiceId = null;
+                renderAuditionList();
+            });
+
+            auditionAudio.onended = () => {
+                playingVoiceId = null;
+                renderAuditionList();
+            };
+        }
+
+        function selectVoiceDirectly(voiceId) {
+            const vSelect = document.getElementById('voiceSelect');
+            if (vSelect) vSelect.value = voiceId;
+            localStorage.setItem('minji_custom_voice', voiceId);
+            renderAuditionList();
+            showVoiceToast(`✨ [${voiceId.toUpperCase()}] 목소리가 적용되었습니다!`);
+        }
+
+        function onVoiceDropdownChange(val) {
+            localStorage.setItem('minji_custom_voice', val);
+            renderAuditionList();
+            showVoiceToast(`✨ [${val.toUpperCase()}] 목소리가 선택되었습니다.`);
+        }
+
+        function renderAuditionList() {
+            const listEl = document.getElementById('voiceAuditionList');
+            if (!listEl) return;
+            const vSelect = document.getElementById('voiceSelect');
+            const currentVoice = (vSelect ? vSelect.value : (localStorage.getItem('minji_custom_voice') || 'laura')).toLowerCase();
+
+            listEl.innerHTML = VOICE_LIST.map(v => {
+                const isSelected = (v.id === currentVoice);
+                const isPlaying = (v.id === playingVoiceId);
+                return `
+                    <div class="voice-audition-card ${isSelected ? 'active-selected' : ''}">
+                        <div class="voice-card-top">
+                            <div class="voice-card-name-wrap">
+                                <span class="voice-card-name">${v.name}</span>
+                                <span class="voice-badge voice-badge-tag">${v.toneTag}</span>
+                                <span class="voice-badge voice-badge-speed">${v.speedTag}</span>
+                            </div>
+                            ${isSelected ? '<span class="voice-badge-current">✔ 현재 적용 중</span>' : ''}
+                        </div>
+                        <div class="voice-card-quote">${v.quote}</div>
+                        <div class="voice-card-actions">
+                            <button type="button" class="voice-play-sample-btn ${isPlaying ? 'playing' : ''}"
+                                onclick="playAuditionSample('${v.id}', '${v.sample}')">
+                                <span>${isPlaying ? '⏸ 일시정지' : '▶ 샘플 듣기'}</span>
+                            </button>
+                            <button type="button" class="voice-apply-btn ${isSelected ? 'applied' : ''}"
+                                onclick="selectVoiceDirectly('${v.id}')">
+                                ${isSelected ? '적용 완료' : '이 목소리로 선택'}
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function showVoiceToast(msg) {
+            let toast = document.getElementById('voiceToast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'voiceToast';
+                toast.className = 'voice-toast';
+                document.body.appendChild(toast);
+            }
+            toast.innerText = msg;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2300);
+        }
+
+        // 전역 함수 노출
+        window.openVoiceAuditionModal = openVoiceAuditionModal;
+        window.closeVoiceAuditionModal = closeVoiceAuditionModal;
+        window.handleAuditionOverlayClick = handleAuditionOverlayClick;
+        window.playAuditionSample = playAuditionSample;
+        window.selectVoiceDirectly = selectVoiceDirectly;
+        window.onVoiceDropdownChange = onVoiceDropdownChange;
+        window.renderAuditionList = renderAuditionList;
+        window.showVoiceToast = showVoiceToast;
+
+        // 초기 목소리 설정 복원
+        const initSavedVoice = localStorage.getItem('minji_custom_voice');
+        if (initSavedVoice && voiceSelect) {
+            voiceSelect.value = initSavedVoice;
         }
     </script>
 </body>
