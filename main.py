@@ -850,14 +850,30 @@ def read_root():
         }
 
         .avatar-img {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
             object-fit: cover;
             object-position: center 25%;
-            transition: opacity 0.35s ease, transform 0.8s ease, filter 0.5s ease;
+            transition: opacity 0.75s cubic-bezier(0.4, 0, 0.2, 1), transform 0.8s ease, filter 0.5s ease;
             animation: humanBreathe 5.5s infinite ease-in-out;
             mask-image: none !important;
             -webkit-mask-image: none !important;
+            will-change: opacity, transform;
+        }
+
+        .avatar-img-active {
+            opacity: 1 !important;
+            z-index: 2;
+            pointer-events: auto;
+        }
+
+        .avatar-img-inactive {
+            opacity: 0 !important;
+            z-index: 1;
+            pointer-events: none;
         }
 
         /* 시네마틱 비네팅 오버레이 (몸매가 완벽히 드러나도록 투명화) */
@@ -1502,7 +1518,8 @@ def read_root():
     <div class="avatar-wrapper" id="avatarWrapper" onclick="handleVisualClick(event)" title="화면 탭: 대화 / 메뉴 토글">
         <div class="avatar-ambient-glow" id="avatarGlow"></div>
         <div class="avatar-img-container">
-            <img id="avatarImg" src="/static/avatar/idle.jpg" alt="Minji AI Avatar" class="avatar-img">
+            <img id="avatarImgA" src="/static/avatar/idle.jpg" alt="Minji AI Avatar A" class="avatar-img avatar-img-active">
+            <img id="avatarImgB" src="/static/avatar/idle.jpg" alt="Minji AI Avatar B" class="avatar-img avatar-img-inactive">
         </div>
         <div class="avatar-vignette"></div>
     </div>
@@ -1600,7 +1617,32 @@ def read_root():
         const viewModeIcon = document.getElementById('viewModeIcon');
         const viewModeText = document.getElementById('viewModeText');
         const avatarWrapper = document.getElementById('avatarWrapper');
-        const avatarImg = document.getElementById('avatarImg');
+        const avatarImgA = document.getElementById('avatarImgA');
+        const avatarImgB = document.getElementById('avatarImgB');
+        let activeAvatarSlot = 'A';
+
+        // 듀얼 버퍼 0.75초 부드러운 디졸브(크로스페이드) 이미지 전환기
+        function setAvatarImageSmooth(newSrc) {
+            if (!newSrc) return;
+            const currentImg = (activeAvatarSlot === 'A') ? avatarImgA : avatarImgB;
+            const nextImg = (activeAvatarSlot === 'A') ? avatarImgB : avatarImgA;
+
+            if (!currentImg || !nextImg) {
+                if (avatarImgA) avatarImgA.src = newSrc;
+                return;
+            }
+
+            if (currentImg.src && currentImg.src.includes(newSrc)) return;
+
+            const loader = new Image();
+            loader.onload = () => {
+                nextImg.src = newSrc;
+                nextImg.className = 'avatar-img avatar-img-active';
+                currentImg.className = 'avatar-img avatar-img-inactive';
+                activeAvatarSlot = (activeAvatarSlot === 'A') ? 'B' : 'A';
+            };
+            loader.src = newSrc;
+        }
         const orbWrapper = document.getElementById('orbWrapper');
         const avatarOrb = document.getElementById('avatarOrb');
         const stateLabel = document.getElementById('stateLabel');
@@ -1656,14 +1698,6 @@ def read_root():
                     if (pwGate) {
                         pwGate.classList.remove('hidden');
                         pwGate.style.display = 'flex';
-                    }
-                    // 이미 등록된 상태라면 진입 0.4초 뒤 Face ID 자동 트리거! (화면만 보면 바로 열림)
-                    if (isFaceIdRegistered && isPlatformAuthAvailable) {
-                        setTimeout(() => {
-                            if (localStorage.getItem(PW_KEY) !== '1') {
-                                loginWithFaceID();
-                            }
-                        }, 400);
                     }
                 }
             } catch(e) {
@@ -2099,23 +2133,15 @@ def read_root():
         }
         applyViewMode();
 
-        // Idle 상태 시 주기적 이미지 순환 타이머 (12초마다 자연스럽게 다음 사진으로 전환)
+        // Idle 상태 시 주기적 이미지 순환 타이머 (12초마다 자연스럽게 다음 사진으로 부드러운 디졸브 전환)
         let idleRotationTimer = null;
         function startIdleRotation() {
             stopIdleRotation();
             idleRotationTimer = setInterval(() => {
                 const currentState = avatarOrb ? (avatarOrb.className.replace('orb', '').trim() || 'idle') : 'idle';
                 if (currentState === 'idle' || currentState === '') {
-                    if (avatarImg) {
-                        const nextSrc = getAvatarImage(currentPersonaMode, 'idle');
-                        // 부드러운 페이드 전환 효과
-                        avatarImg.style.transition = 'opacity 0.4s ease';
-                        avatarImg.style.opacity = '0.7';
-                        setTimeout(() => {
-                            avatarImg.src = nextSrc;
-                            avatarImg.style.opacity = '1';
-                        }, 200);
-                    }
+                    const nextSrc = getAvatarImage(currentPersonaMode, 'idle');
+                    setAvatarImageSmooth(nextSrc);
                 }
             }, 12000);
         }
@@ -2173,11 +2199,9 @@ def read_root():
                 if (voiceSelect) voiceSelect.value = 'eleven_girlfriend';
             }
 
-            // 현재 아바타 이미지 즉각 교체
+            // 현재 아바타 이미지 부드러운 교체
             const currentState = avatarOrb ? (avatarOrb.className.replace('orb', '').trim() || 'idle') : 'idle';
-            if (avatarImg) {
-                avatarImg.src = getAvatarImage(currentPersonaMode, currentState);
-            }
+            setAvatarImageSmooth(getAvatarImage(currentPersonaMode, currentState));
 
             // 대기 순환 타이머 재시작
             startIdleRotation();
@@ -2276,23 +2300,23 @@ def read_root():
             if (state === 'listening') {
                 stateLabel.innerText = "Listening";
                 stateLabel.style.color = "#00f2fe";
-                if (avatarImg) avatarImg.src = getAvatarImage(currentPersonaMode, 'listening');
+                setAvatarImageSmooth(getAvatarImage(currentPersonaMode, 'listening'));
             } else if (state === 'speaking') {
                 stateLabel.innerText = "Speaking";
                 stateLabel.style.color = "#ff7b54";
-                if (avatarImg) avatarImg.src = getAvatarImage(currentPersonaMode, 'speaking');
+                setAvatarImageSmooth(getAvatarImage(currentPersonaMode, 'speaking'));
             } else if (state === 'thinking') {
                 stateLabel.innerText = "Thinking";
                 stateLabel.style.color = "#fe5196";
-                if (avatarImg) avatarImg.src = getAvatarImage(currentPersonaMode, 'thinking');
+                setAvatarImageSmooth(getAvatarImage(currentPersonaMode, 'thinking'));
             } else if (state === 'muted') {
                 stateLabel.innerText = "Muted";
                 stateLabel.style.color = "#888";
-                if (avatarImg) avatarImg.src = getAvatarImage(currentPersonaMode, 'idle');
+                setAvatarImageSmooth(getAvatarImage(currentPersonaMode, 'idle'));
             } else {
                 stateLabel.innerText = "Idle";
                 stateLabel.style.color = "#aaa";
-                if (avatarImg) avatarImg.src = getAvatarImage(currentPersonaMode, 'idle');
+                setAvatarImageSmooth(getAvatarImage(currentPersonaMode, 'idle'));
             }
         }
 
