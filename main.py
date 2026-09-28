@@ -1665,6 +1665,10 @@ def read_root():
                 <button class="shutdown-btn ghost" onclick="attemptCloseWindow()">
                     <span>🚪 브라우저 닫기</span>
                 </button>
+            </div>
+        </div>
+    </div>
+
     <!-- ===== 🎧 목소리 오디션 스튜디오 모달 ===== -->
     <div id="voiceAuditionModal" class="voice-modal-overlay" style="display:none;" onclick="handleAuditionOverlayClick(event)">
         <div class="voice-modal-card" onclick="event.stopPropagation()">
