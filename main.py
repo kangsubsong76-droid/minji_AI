@@ -605,6 +605,244 @@ async def reset_memory(req: ResetMemoryRequest):
     return {"status": "ok", "message": f"세션({session_id}) 대화 기억이 초기화되었습니다."}
 
 
+@app.get("/gallery", response_class=HTMLResponse)
+def show_gallery():
+    """모든 아바타 사진 목록을 한눈에 보고 선택/확인할 수 있는 전용 갤러리"""
+    gf_photos = [
+        {"id": "gf_idle_1", "file": "idle_1.jpg", "state": "대기(Idle)", "desc": "★ 최신 추가: 거실 소파 베이지 니트 & 슬림 스커트 청순 베이글 룩", "path": "/static/avatar/idle_1.jpg"},
+        {"id": "gf_idle_2", "file": "idle_2.jpg", "state": "대기(Idle)", "desc": "창가 자연광 베이지 스쿱넥 니트 볼륨 룩", "path": "/static/avatar/idle_2.jpg"},
+        {"id": "gf_idle_3", "file": "idle_3.jpg", "state": "대기(Idle)", "desc": "베이지 니트 정면 밝은 미소 룩", "path": "/static/avatar/idle_3.jpg"},
+        {"id": "gf_idle_4", "file": "idle_4.jpg", "state": "대기(Idle)", "desc": "청순 글래머 니트 룩", "path": "/static/avatar/idle_4.jpg"},
+        {"id": "gf_idle_5", "file": "idle_5.jpg", "state": "대기(Idle)", "desc": "따뜻한 햇살 아래 상큼한 미소 룩", "path": "/static/avatar/idle_5.jpg"},
+        {"id": "gf_listen_1", "file": "listening_1.jpg", "state": "경청(Listening)", "desc": "눈 맞추며 다정하게 듣는 룩", "path": "/static/avatar/listening_1.jpg"},
+        {"id": "gf_listen_2", "file": "listening_2.jpg", "state": "경청(Listening)", "desc": "살짝 고개 기울이고 집중하는 룩", "path": "/static/avatar/listening_2.jpg"},
+        {"id": "gf_listen_3", "file": "listening_3.jpg", "state": "경청(Listening)", "desc": "차분하게 귀 기울이는 룩", "path": "/static/avatar/listening_3.jpg"},
+        {"id": "gf_listen_4", "file": "listening_4.jpg", "state": "경청(Listening)", "desc": "사랑스럽게 바라보는 룩", "path": "/static/avatar/listening_4.jpg"},
+        {"id": "gf_think_1", "file": "thinking_1.jpg", "state": "생각(Thinking)", "desc": "살짝 갸웃하며 고민하는 룩", "path": "/static/avatar/thinking_1.jpg"},
+        {"id": "gf_think_2", "file": "thinking_2.jpg", "state": "생각(Thinking)", "desc": "생각에 잠긴 표정 룩", "path": "/static/avatar/thinking_2.jpg"},
+        {"id": "gf_think_3", "file": "thinking_3.jpg", "state": "생각(Thinking)", "desc": "손을 턱에 대고 고민하는 룩", "path": "/static/avatar/thinking_3.jpg"},
+        {"id": "gf_think_4", "file": "thinking_4.jpg", "state": "생각(Thinking)", "desc": "눈을 굴리며 생각하는 귀여운 룩", "path": "/static/avatar/thinking_4.jpg"},
+        {"id": "gf_speak_1", "file": "speaking_1.jpg", "state": "대화(Speaking)", "desc": "활짝 웃으며 말하는 생동감 룩", "path": "/static/avatar/speaking_1.jpg"},
+        {"id": "gf_speak_2", "file": "speaking_2.jpg", "state": "대화(Speaking)", "desc": "미소 지으며 대화하는 룩", "path": "/static/avatar/speaking_2.jpg"},
+        {"id": "gf_speak_3", "file": "speaking_3.jpg", "state": "대화(Speaking)", "desc": "설레는 표정으로 말하는 룩", "path": "/static/avatar/speaking_3.jpg"},
+        {"id": "gf_speak_4", "file": "speaking_4.jpg", "state": "대화(Speaking)", "desc": "장난스럽게 웃는 룩", "path": "/static/avatar/speaking_4.jpg"}
+    ]
+
+    sec_photos = [
+        {"id": "sec_idle_1", "file": "idle_1.jpg", "state": "대기(Idle)", "desc": "★ 최신 추가: 데스크 하이앵글 화이트셔츠 & 시스루 베이글 룩", "path": "/static/avatar_secretary/idle_1.jpg"},
+        {"id": "sec_idle_2", "file": "idle_2.jpg", "state": "대기(Idle)", "desc": "실크 블라우스 세련된 단발 비서 룩", "path": "/static/avatar_secretary/idle_2.jpg"},
+        {"id": "sec_idle_3", "file": "idle_3.jpg", "state": "대기(Idle)", "desc": "집무실 책상 옆 차분한 비서 룩", "path": "/static/avatar_secretary/idle_3.jpg"},
+        {"id": "sec_idle_4", "file": "idle_4.jpg", "state": "대기(Idle)", "desc": "베이글 오피스 룩 정면", "path": "/static/avatar_secretary/idle_4.jpg"},
+        {"id": "sec_idle_5", "file": "idle_5.jpg", "state": "대기(Idle)", "desc": "서류 들고 서 있는 엘리트 비서 룩", "path": "/static/avatar_secretary/idle_5.jpg"},
+        {"id": "sec_listen_1", "file": "listening_1.jpg", "state": "경청(Listening)", "desc": "★ 최신 추가: 데스크 하이앵글 화이트셔츠 룩", "path": "/static/avatar_secretary/listening_1.jpg"},
+        {"id": "sec_listen_2", "file": "listening_2.jpg", "state": "경청(Listening)", "desc": "상사 올려다보며 경청하는 눈빛 룩", "path": "/static/avatar_secretary/listening_2.jpg"},
+        {"id": "sec_listen_3", "file": "listening_3.jpg", "state": "경청(Listening)", "desc": "스마트하게 메모하며 듣는 룩", "path": "/static/avatar_secretary/listening_3.jpg"},
+        {"id": "sec_listen_4", "file": "listening_4.jpg", "state": "경청(Listening)", "desc": "차분하게 응시하는 룩", "path": "/static/avatar_secretary/listening_4.jpg"},
+        {"id": "sec_listen_5", "file": "listening_5.jpg", "state": "경청(Listening)", "desc": "단정한 비서 경청 룩", "path": "/static/avatar_secretary/listening_5.jpg"},
+        {"id": "sec_think_1", "file": "thinking_1.jpg", "state": "생각(Thinking)", "desc": "서류 검토하며 스마트하게 생각하는 룩", "path": "/static/avatar_secretary/thinking_1.jpg"},
+        {"id": "sec_think_2", "file": "thinking_2.jpg", "state": "생각(Thinking)", "desc": "펜을 들고 고민하는 룩", "path": "/static/avatar_secretary/thinking_2.jpg"},
+        {"id": "sec_think_3", "file": "thinking_3.jpg", "state": "생각(Thinking)", "desc": "지적인 표정의 비서 생각 룩", "path": "/static/avatar_secretary/thinking_3.jpg"},
+        {"id": "sec_speak_1", "file": "speaking_1.jpg", "state": "대화(Speaking)", "desc": "브리핑하며 프로페셔널하게 말하는 룩", "path": "/static/avatar_secretary/speaking_1.jpg"},
+        {"id": "sec_speak_2", "file": "speaking_2.jpg", "state": "대화(Speaking)", "desc": "미소 지으며 보고하는 룩", "path": "/static/avatar_secretary/speaking_2.jpg"}
+    ]
+
+    def render_cards(items):
+        html = ""
+        for i, item in enumerate(items, 1):
+            html += f"""
+            <div class="card" onclick="openModal('{item['path']}', '{item['id']} - {item['desc']}')">
+                <div class="img-box">
+                    <img src="{item['path']}" alt="{item['id']}" loading="lazy">
+                    <span class="badge">{item['state']}</span>
+                </div>
+                <div class="card-info">
+                    <div class="card-title">#{i}. {item['id']}</div>
+                    <div class="card-file">{item['file']}</div>
+                    <div class="card-desc">{item['desc']}</div>
+                </div>
+            </div>
+            """
+        return html
+
+    return f"""<!DOCTYPE html>
+    <html lang="ko">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Minji AI - 아바타 사진 전체 갤러리</title>
+        <style>
+            * {{ box-sizing: border-box; }}
+            body {{
+                background: #09090d;
+                color: #f0f0f5;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                margin: 0;
+                padding: 20px 16px 60px;
+            }}
+            .header {{
+                text-align: center;
+                margin-bottom: 28px;
+            }}
+            .header h1 {{
+                font-size: 1.5rem;
+                color: #ff7b54;
+                margin: 0 0 8px;
+            }}
+            .header p {{
+                color: #888;
+                font-size: 0.88rem;
+                margin: 0;
+            }}
+            .back-btn {{
+                display: inline-block;
+                margin-top: 12px;
+                padding: 6px 14px;
+                background: rgba(255, 123, 84, 0.15);
+                color: #ff9a76;
+                border: 1px solid #ff7b54;
+                border-radius: 12px;
+                text-decoration: none;
+                font-size: 0.8rem;
+            }}
+            .section-title {{
+                font-size: 1.2rem;
+                font-weight: 700;
+                margin: 32px 0 16px;
+                padding-bottom: 8px;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }}
+            .grid {{
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+                gap: 14px;
+            }}
+            @media (min-width: 600px) {{
+                .grid {{ grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; }}
+            }}
+            .card {{
+                background: rgba(25, 25, 35, 0.8);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 16px;
+                overflow: hidden;
+                cursor: pointer;
+                transition: transform 0.2s ease, border-color 0.2s ease;
+            }}
+            .card:hover {{
+                transform: translateY(-4px);
+                border-color: #ff7b54;
+            }}
+            .img-box {{
+                position: relative;
+                width: 100%;
+                aspect-ratio: 3/4;
+                background: #111;
+                overflow: hidden;
+            }}
+            .img-box img {{
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                object-position: center top;
+            }}
+            .badge {{
+                position: absolute;
+                top: 8px;
+                left: 8px;
+                background: rgba(0, 0, 0, 0.7);
+                backdrop-filter: blur(8px);
+                padding: 3px 8px;
+                border-radius: 8px;
+                font-size: 0.68rem;
+                color: #ff9a76;
+                border: 1px solid rgba(255, 123, 84, 0.3);
+            }}
+            .card-info {{
+                padding: 10px 12px;
+            }}
+            .card-title {{
+                font-size: 0.85rem;
+                font-weight: 700;
+                color: #fff;
+                margin-bottom: 2px;
+            }}
+            .card-file {{
+                font-size: 0.72rem;
+                color: #888;
+                font-family: monospace;
+            }}
+            .card-desc {{
+                font-size: 0.74rem;
+                color: #bbb;
+                margin-top: 4px;
+                line-height: 1.3;
+            }}
+            /* 모달 */
+            .modal {{
+                display: none;
+                position: fixed;
+                top: 0; left: 0; width: 100vw; height: 100vh;
+                background: rgba(0,0,0,0.92);
+                z-index: 999;
+                align-items: center;
+                justify-content: center;
+                flex-direction: column;
+                padding: 20px;
+            }}
+            .modal img {{
+                max-width: 90vw;
+                max-height: 80vh;
+                border-radius: 16px;
+                object-fit: contain;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+            }}
+            .modal-caption {{
+                margin-top: 14px;
+                color: #fff;
+                font-size: 0.95rem;
+                text-align: center;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>📸 Minji AI 아바타 사진 전체 갤러리</h1>
+            <p>현재 앱의 아바타 풀에 등록되어 실시간 교체되는 전체 사진들입니다.</p>
+            <p style="margin-top:4px; color:#ff9a76;">제외하고 싶은 사진의 <strong>[#번호]</strong> 또는 <strong>[파일명]</strong>을 말씀해 주시면 즉시 빼드립니다!</p>
+            <a href="/" class="back-btn">← 민지와 대화하러 가기</a>
+        </div>
+
+        <div class="section-title" style="color:#ff7b54;">💖 1. 여친 모드 사진 풀 (총 17장)</div>
+        <div class="grid">
+            {render_cards(gf_photos)}
+        </div>
+
+        <div class="section-title" style="color:#4facfe;">💼 2. 비서 모드 사진 풀 (총 15장)</div>
+        <div class="grid">
+            {render_cards(sec_photos)}
+        </div>
+
+        <div class="modal" id="modal" onclick="closeModal()">
+            <img id="modalImg" src="">
+            <div class="modal-caption" id="modalCaption"></div>
+        </div>
+
+        <script>
+            function openModal(src, caption) {{
+                document.getElementById('modalImg').src = src;
+                document.getElementById('modalCaption').innerText = caption;
+                document.getElementById('modal').style.display = 'flex';
+            }}
+            function closeModal() {{
+                document.getElementById('modal').style.display = 'none';
+            }}
+        </script>
+    </body>
+    </html>"""
+
+
 @app.get("/", response_class=HTMLResponse)
 def read_root():
     return """<!DOCTYPE html>
