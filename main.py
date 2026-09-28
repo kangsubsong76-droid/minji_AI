@@ -2304,53 +2304,60 @@ def read_root():
         const avatarImagePools = {
             girlfriend: {
                 idle: [
+                    "/static/gallery/gf_01_deep_vneck_cream_glam.jpg",
+                    "/static/gallery/gf_02_wrap_knit_peach_glam.jpg",
+                    "/static/gallery/gf_03_sweetheart_pink_sofa.jpg",
+                    "/static/gallery/gf_04_vneck_ribbed_classic.jpg",
+                    "/static/gallery/gf_05_offshoulder_lavender_cafe.jpg",
                     "/static/avatar/idle.jpg",
-                    "/static/avatar/idle_1.jpg",
-                    "/static/avatar/idle_2.jpg",
-                    "/static/avatar/idle_4.jpg",
-                    "/static/avatar/idle_5.jpg"
+                    "/static/avatar/idle_2.jpg"
                 ],
                 listening: [
-                    "/static/avatar/listening.jpg",
-                    "/static/avatar/listening_1.jpg",
-                    "/static/avatar/listening_3.jpg",
-                    "/static/avatar/listening_4.jpg"
+                    "/static/gallery/gf_02_wrap_knit_peach_glam.jpg",
+                    "/static/gallery/gf_05_offshoulder_lavender_cafe.jpg",
+                    "/static/gallery/gf_01_deep_vneck_cream_glam.jpg",
+                    "/static/avatar/listening.jpg"
                 ],
                 thinking: [
-                    "/static/avatar/thinking.jpg",
-                    "/static/avatar/thinking_1.jpg",
-                    "/static/avatar/thinking_3.jpg",
-                    "/static/avatar/thinking_4.jpg"
+                    "/static/gallery/gf_03_sweetheart_pink_sofa.jpg",
+                    "/static/gallery/gf_01_deep_vneck_cream_glam.jpg",
+                    "/static/gallery/gf_04_vneck_ribbed_classic.jpg",
+                    "/static/avatar/thinking.jpg"
                 ],
                 speaking: [
-                    "/static/avatar/speaking.jpg",
-                    "/static/avatar/speaking_1.jpg",
-                    "/static/avatar/speaking_3.jpg",
-                    "/static/avatar/speaking_4.jpg"
+                    "/static/gallery/gf_01_deep_vneck_cream_glam.jpg",
+                    "/static/gallery/gf_02_wrap_knit_peach_glam.jpg",
+                    "/static/gallery/gf_03_sweetheart_pink_sofa.jpg",
+                    "/static/avatar/speaking.jpg"
                 ]
             },
             secretary: {
                 idle: [
+                    "/static/gallery/sec_01_champagne_silk_open_glam.jpg",
+                    "/static/gallery/sec_02_silk_desk_lean_glam.jpg",
+                    "/static/gallery/sec_03_silk_folder_briefing.jpg",
+                    "/static/gallery/sec_04_charcoal_blazer_lace_tablet.jpg",
+                    "/static/gallery/sec_05_champagne_draped_blouse.jpg",
                     "/static/avatar_secretary/idle.jpg",
-                    "/static/avatar_secretary/idle_1.jpg",
-                    "/static/avatar_secretary/idle_2.jpg",
-                    "/static/avatar_secretary/idle_3.jpg"
+                    "/static/avatar_secretary/idle_2.jpg"
                 ],
                 listening: [
-                    "/static/avatar_secretary/listening.jpg",
-                    "/static/avatar_secretary/listening_1.jpg",
-                    "/static/avatar_secretary/listening_2.jpg",
-                    "/static/avatar_secretary/listening_3.jpg"
+                    "/static/gallery/sec_02_silk_desk_lean_glam.jpg",
+                    "/static/gallery/sec_04_charcoal_blazer_lace_tablet.jpg",
+                    "/static/gallery/sec_01_champagne_silk_open_glam.jpg",
+                    "/static/avatar_secretary/listening.jpg"
                 ],
                 thinking: [
-                    "/static/avatar_secretary/thinking.jpg",
-                    "/static/avatar_secretary/thinking_1.jpg",
-                    "/static/avatar_secretary/thinking_3.jpg"
+                    "/static/gallery/sec_03_silk_folder_briefing.jpg",
+                    "/static/gallery/sec_05_champagne_draped_blouse.jpg",
+                    "/static/gallery/sec_02_silk_desk_lean_glam.jpg",
+                    "/static/avatar_secretary/thinking.jpg"
                 ],
                 speaking: [
-                    "/static/avatar_secretary/speaking.jpg",
-                    "/static/avatar_secretary/listening_1.jpg",
-                    "/static/avatar_secretary/thinking_1.jpg"
+                    "/static/gallery/sec_01_champagne_silk_open_glam.jpg",
+                    "/static/gallery/sec_02_silk_desk_lean_glam.jpg",
+                    "/static/gallery/sec_04_charcoal_blazer_lace_tablet.jpg",
+                    "/static/avatar_secretary/speaking.jpg"
                 ]
             }
         };
@@ -2413,7 +2420,7 @@ def read_root():
         }
         applyViewMode();
 
-        // Idle 상태 시 주기적 이미지 순환 타이머 (12초마다 자연스럽게 다음 사진으로 부드러운 디졸브 전환)
+        // Idle 상태 시 주기적 슬라이드 순환 타이머 (6.5초마다 자연스럽게 다음 사진으로 부드러운 디졸브 전환)
         let idleRotationTimer = null;
         function startIdleRotation() {
             stopIdleRotation();
@@ -2423,7 +2430,7 @@ def read_root():
                     const nextSrc = getAvatarImage(currentPersonaMode, 'idle');
                     setAvatarImageSmooth(nextSrc);
                 }
-            }, 12000);
+            }, 6500);
         }
         function stopIdleRotation() {
             if (idleRotationTimer) {
