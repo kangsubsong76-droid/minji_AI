@@ -2666,24 +2666,42 @@ def read_root():
         let hasSpeechTranscribed = false;
 
         function initMediaRecorder(stream) {
-            activeMediaStream = stream;
             try {
-                const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-                    ? 'audio/webm;codecs=opus'
-                    : (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm');
-                mediaRecorder = new MediaRecorder(stream, { mimeType });
+                // stream에서 순수 오디오 트랙만 추출하여 MediaRecorder 생성 (비디오 트랙 포함 시 Chrome NotSupportedError 원천 방지)
+                const audioTracks = stream.getAudioTracks();
+                if (!audioTracks || audioTracks.length === 0) {
+                    console.warn("[MediaRecorder] No audio track found in stream!");
+                    return;
+                }
+                const audioOnlyStream = new MediaStream(audioTracks);
+                activeMediaStream = audioOnlyStream;
+
+                let options = {};
+                if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+                    options = { mimeType: 'audio/webm;codecs=opus' };
+                } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+                    options = { mimeType: 'audio/webm' };
+                } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                    options = { mimeType: 'audio/mp4' };
+                } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+                    options = { mimeType: 'audio/ogg;codecs=opus' };
+                }
+
+                mediaRecorder = new MediaRecorder(audioOnlyStream, options);
                 mediaRecorder.ondataavailable = (e) => {
                     if (e.data && e.data.size > 0) audioChunks.push(e.data);
                 };
                 mediaRecorder.onstop = async () => {
                     if (audioChunks.length === 0) return;
-                    const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+                    const mime = mediaRecorder.mimeType || 'audio/webm';
+                    const blob = new Blob(audioChunks, { type: mime });
                     audioChunks = [];
                     if (hasSpeechTranscribed) return;
                     await sendAudioToWhisper(blob);
                 };
+                console.log("[MediaRecorder] Initialized successfully with mimeType:", mediaRecorder.mimeType);
             } catch (e) {
-                console.warn("[MediaRecorder Init Error]:", e);
+                console.error("[MediaRecorder Init Error]:", e);
             }
         }
 
@@ -2723,10 +2741,10 @@ def read_root():
                         }
                     }
 
-                    // 2. 대기/청취 중 사용자 음성 볼륨 실시간 시각화 (노트북 팬/생활 소음 차단 26 이상)
+                    // 2. 대기/청취 중 사용자 음성 볼륨 실시간 시각화 (노트북 마이크 22 이상)
                     if (!isSpeaking && !isProcessing) {
                         const micBtn = document.getElementById('micToggleBtn');
-                        if (average > 26) {
+                        if (average > 22) {
                             if (micBtn) {
                                 micBtn.style.boxShadow = "0 0 16px rgba(0, 242, 254, 0.85)";
                                 micBtn.style.borderColor = "#00f2fe";
@@ -2736,17 +2754,21 @@ def read_root():
                                 audioChunks = [];
                                 hasSpeechTranscribed = false;
                                 try {
-                                    mediaRecorder.start(250);
+                                    mediaRecorder.start(200);
                                     isAudioRecording = true;
-                                } catch(e){}
+                                } catch(e){
+                                    console.warn("[MediaRecorder Start Error]:", e);
+                                }
                             }
                             if (silenceTimeout) clearTimeout(silenceTimeout);
                             silenceTimeout = setTimeout(() => {
                                 if (mediaRecorder && mediaRecorder.state === 'recording') {
-                                    try { mediaRecorder.stop(); } catch(e){}
+                                    try {
+                                        mediaRecorder.stop();
+                                    } catch(e){}
                                     isAudioRecording = false;
                                 }
-                            }, 1300);
+                            }, 1100);
                         } else {
                             if (micBtn) {
                                 micBtn.style.boxShadow = "";
@@ -2760,10 +2782,10 @@ def read_root():
             }
         }
 
-        // Whisper STT 백엔드 전송 함수 (브라우저 Web Speech API 실패 시 완벽 폴백)
+        // Whisper STT 백엔드 전송 함수 (브라우저 Web Speech API 실패/지연 시 완벽 폴백)
         async function sendAudioToWhisper(audioBlob) {
             if (hasSpeechTranscribed || isProcessing || isSpeaking) return;
-            if (!audioBlob || audioBlob.size < 1200) return;
+            if (!audioBlob || audioBlob.size < 800) return;
 
             try {
                 statusText.innerText = "음성을 인식하고 있어요 (Whisper)...";
@@ -2773,10 +2795,14 @@ def read_root():
                     method: 'POST',
                     body: formData
                 });
-                if (!res.ok) return;
+                if (!res.ok) {
+                    console.warn("[Whisper Transcribe HTTP Fail]:", res.status);
+                    return;
+                }
                 const data = await res.json();
                 const recognizedText = (data.text || '').trim();
-                if (recognizedText && !hasSpeechTranscribed) {
+                console.log("[Whisper Recognized Text]:", recognizedText);
+                if (recognizedText && !hasSpeechTranscribed && !isSpeaking && !isProcessing) {
                     hasSpeechTranscribed = true;
                     statusText.innerText = "나: " + recognizedText;
                     await sendToMinji(recognizedText);
@@ -2906,6 +2932,7 @@ def read_root():
                     if (isSpeaking) interruptSpeech("speech_start");
                 };
 
+                let interimSpeechTimeout = null;
                 recognition.onresult = async (e) => {
                     let interimText = '';
                     let finalText = '';
@@ -2926,6 +2953,7 @@ def read_root():
                     }
 
                     if (finalText.trim()) {
+                        if (interimSpeechTimeout) clearTimeout(interimSpeechTimeout);
                         hasSpeechTranscribed = true;
                         if (mediaRecorder && mediaRecorder.state === 'recording') {
                             try { mediaRecorder.stop(); } catch(e){}
@@ -2934,6 +2962,21 @@ def read_root():
                         isListening = false;
                         try { recognition.stop(); } catch(e){}
                         await sendToMinji(finalText.trim());
+                    } else if (interimText.trim()) {
+                        // 노트북 크롬에서 isFinal 이벤트가 늦어질 경우 1.2초 후 중간 텍스트 자동 확정 발화
+                        if (interimSpeechTimeout) clearTimeout(interimSpeechTimeout);
+                        interimSpeechTimeout = setTimeout(async () => {
+                            if (interimText.trim() && !hasSpeechTranscribed && !isSpeaking && !isProcessing) {
+                                hasSpeechTranscribed = true;
+                                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                                    try { mediaRecorder.stop(); } catch(e){}
+                                    isAudioRecording = false;
+                                }
+                                isListening = false;
+                                try { recognition.stop(); } catch(e){}
+                                await sendToMinji(interimText.trim());
+                            }
+                        }, 1200);
                     }
                 };
 
@@ -3067,10 +3110,11 @@ def read_root():
                 audioPlayer.onended = () => {
                     isSpeaking = false;
                     setOrbState(isMicMuted ? 'muted' : 'idle');
-                    if (!isMicMuted) setTimeout(startListening, 300);
+                    if (!isMicMuted) setTimeout(startListening, 400);
                 };
 
                 try {
+                    speechStartTime = Date.now();
                     await audioPlayer.play();
                 } catch (playErr) {
                     console.warn("[Autoplay Blocked/Interrupted]:", playErr);
