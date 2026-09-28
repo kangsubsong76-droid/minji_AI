@@ -406,27 +406,65 @@ def read_root():
         }
 
         .header {
-            width: 100%;
+            position: fixed;
+            top: 14px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-150%);
+            width: calc(100% - 28px);
             max-width: 440px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding: 8px 16px;
-            z-index: 20;
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            background: rgba(14, 14, 20, 0.45);
+            z-index: 100;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            background: rgba(14, 14, 22, 0.85);
             border-radius: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7);
+            transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .header.active {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .top-summon-btn {
+            position: fixed;
+            top: 14px;
+            right: 14px;
+            z-index: 90;
+            background: rgba(18, 18, 26, 0.55);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            color: #ff9a76;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.15rem;
+            cursor: pointer;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+            touch-action: manipulation;
+        }
+        .top-summon-btn:active {
+            transform: scale(0.92);
+            background: rgba(30, 30, 45, 0.9);
         }
         .header-title {
-            font-size: 1.1rem;
+            font-size: 1.05rem;
             font-weight: 600;
-            letter-spacing: 2px;
+            letter-spacing: 1.5px;
             text-transform: uppercase;
             color: #ff7b54;
-            opacity: 0.9;
+            opacity: 0.95;
         }
         .badge {
             font-size: 0.75rem;
@@ -442,12 +480,16 @@ def read_root():
             flex-direction: column;
             align-items: center;
             justify-content: flex-end;
-            flex: 1;
             width: 100%;
             max-width: 440px;
-            margin: 10px 0;
             z-index: 10;
             pointer-events: none;
+            position: fixed;
+            bottom: 84px;
+            left: 50%;
+            transform: translateX(-50%);
+            margin: 0;
+            padding: 0 16px;
         }
 
         /* 오라클 구체 비주얼라이저 */
@@ -583,27 +625,21 @@ def read_root():
             width: 100%;
             height: 100%;
             object-fit: cover;
-            object-position: center 10%;
+            object-position: center 25%;
             transition: opacity 0.35s ease, transform 0.8s ease, filter 0.5s ease;
             animation: humanBreathe 5.5s infinite ease-in-out;
-            /* 주변부와 하단을 어두운 배경으로 자연스럽게 블렌딩 (원형 프레임 제거, 진짜 눈앞에 있는 듯한 시네마틱 융합) */
-            mask-image: radial-gradient(ellipse 90% 80% at 50% 30%, black 45%, rgba(0,0,0,0.85) 65%, transparent 95%),
-                        linear-gradient(to bottom, black 65%, rgba(0,0,0,0.5) 85%, transparent 100%);
-            -webkit-mask-image: radial-gradient(ellipse 90% 80% at 50% 30%, black 45%, rgba(0,0,0,0.85) 65%, transparent 95%),
-                                linear-gradient(to bottom, black 65%, rgba(0,0,0,0.5) 85%, transparent 100%);
-            mask-composite: intersect;
-            -webkit-mask-composite: source-in;
+            mask-image: none !important;
+            -webkit-mask-image: none !important;
         }
 
-        /* 시네마틱 비네팅 오버레이 */
+        /* 시네마틱 비네팅 오버레이 (몸매가 완벽히 드러나도록 투명화) */
         .avatar-vignette {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: radial-gradient(circle at 50% 30%, transparent 35%, rgba(9, 9, 13, 0.35) 65%, #09090d 95%),
-                        linear-gradient(to bottom, rgba(9, 9, 13, 0.25) 0%, transparent 25%, transparent 50%, #09090d 88%);
+            background: linear-gradient(to bottom, rgba(9, 9, 13, 0.25) 0%, transparent 18%, transparent 75%, rgba(9, 9, 13, 0.55) 100%);
             pointer-events: none;
             z-index: 3;
         }
@@ -681,96 +717,111 @@ def read_root():
         }
 
         .status-container {
-            min-height: 80px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            padding: 14px 20px;
-            max-width: 420px;
+            gap: 4px;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
             width: 100%;
-            backdrop-filter: blur(18px);
-            -webkit-backdrop-filter: blur(18px);
-            background: rgba(12, 12, 18, 0.65);
-            border: 1px solid rgba(255, 123, 84, 0.28);
-            border-radius: 22px;
-            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
-            margin-bottom: 16px;
-            pointer-events: auto;
+            margin-bottom: 8px;
+        }
+        .status-badge { display: none; }
+        .status-text {
+            font-size: 0.9rem;
+            line-height: 1.45;
+            color: #ffffff;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.9);
+            background: rgba(14, 14, 22, 0.62);
+            padding: 7px 18px;
+            border-radius: 20px;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            max-width: 92vw;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
             transition: all 0.3s ease;
         }
-        .status-badge {
-            font-size: 0.8rem;
-            color: #888;
-            margin-bottom: 6px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .status-text {
-            font-size: 1.15rem;
-            color: #eee;
-            line-height: 1.5;
-            word-break: keep-all;
-            transition: color 0.3s ease;
-        }
         .barge-in-hint {
-            font-size: 0.75rem;
-            color: #ff9a76;
-            margin-top: 8px;
-            opacity: 0.85;
+            display: none !important;
         }
 
-        /* 컨트롤 영역 — 아바타 위에 떠 있는 반투명 레이어 */
+        /* 컨트롤 영역 — 화면 하단 초경량 플로팅 캡슐독 */
         .controls {
-            width: 100%;
+            position: fixed;
+            bottom: 22px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: calc(100% - 24px);
             max-width: 440px;
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            z-index: 20;
-            position: relative;
+            align-items: center;
+            z-index: 50;
+            pointer-events: auto;
         }
-        .btn-row {
+        .capsule-dock {
             display: flex;
-            gap: 10px;
-            justify-content: center;
-            width: 100%;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 16px;
+            background: rgba(16, 16, 24, 0.72);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 36px;
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            box-shadow: 0 10px 35px rgba(0, 0, 0, 0.65);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            touch-action: manipulation;
         }
-        .btn {
-            background: rgba(18, 18, 28, 0.72);
-            color: #fff;
+        .cap-btn {
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
             border: 1px solid rgba(255, 255, 255, 0.12);
-            padding: 13px 20px;
-            border-radius: 26px;
-            font-size: 0.92rem;
-            font-weight: 600;
-            flex: 1;
-            cursor: pointer;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            display: inline-flex;
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+            display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
+            font-size: 1.25rem;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            outline: none;
+            touch-action: manipulation;
         }
-        .btn:hover {
-            background: #252532;
-            border-color: #55556b;
-            transform: translateY(-2px);
+        .cap-btn:active {
+            transform: scale(0.92);
+            background: rgba(255, 255, 255, 0.22);
         }
-        .btn:active {
-            transform: scale(0.98);
+        .cap-btn.primary {
+            background: linear-gradient(135deg, #ff7b54, #ff6b6b);
+            border: none;
+            box-shadow: 0 4px 16px rgba(255, 107, 107, 0.4);
         }
-        .btn-primary {
-            background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
+        .cap-btn.muted {
+            background: rgba(255, 68, 68, 0.25) !important;
+            border-color: #ff5555 !important;
+            color: #ff7777 !important;
+        }
+        .connect-dock-btn {
+            padding: 13px 28px;
+            border-radius: 30px;
+            background: linear-gradient(135deg, #ff7b54, #ff6b6b);
             border: none;
             color: #fff;
-            box-shadow: 0 8px 24px rgba(255, 107, 107, 0.35);
+            font-size: 0.98rem;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 8px 25px rgba(255, 107, 107, 0.45);
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            touch-action: manipulation;
         }
-        .btn-primary:hover {
-            filter: brightness(1.1);
+        .connect-dock-btn:active {
+            transform: scale(0.96);
         }
         .btn-muted {
             background: #502525 !important;
@@ -1166,26 +1217,37 @@ def read_root():
         </div>
     </div>
 
-    <div class="header">
+    <!-- 상단 플로팅 메뉴 호출 버튼 (평상시 숨겨진 헤더를 열거나 닫음) -->
+    <button class="top-summon-btn" id="topSummonBtn" onclick="toggleHeaderMenu(event)" title="설정 & 메뉴 열기">
+        <span>⚙️</span>
+    </button>
+
+    <div class="header" id="appHeader">
         <div style="display:flex; align-items:center; gap:6px;">
             <div class="header-title" id="appHeaderTitle">Minji AI</div>
             <span style="font-size:0.65rem; background:rgba(217, 119, 87, 0.2); color:#ff9a76; border:1px solid rgba(217,119,87,0.4); padding:2px 6px; border-radius:8px;">Sonnet 5.0</span>
         </div>
         <div style="display:flex; gap:6px; align-items:center;">
-            <button class="view-mode-btn" id="personaToggleBtn" onclick="togglePersonaMode()" title="모드 전환 (여친 ⇄ 비서)" style="padding:6px 12px; font-size:0.82rem; font-weight:600; border-color:#ff7b54;">
-                <span id="personaIcon">💖</span> <span id="personaText">여친 모드</span>
+            <select id="voiceSelect" style="background:#1c1c24; color:#ff9a76; border:1px solid #ff7b54; border-radius:12px; padding:4px 8px; font-size:0.75rem; outline:none; cursor:pointer;">
+                <option value="nova" selected>✨ 20대 노윤서 톤 (Nova)</option>
+                <option value="coral">🌸 맑은 톤 (Coral)</option>
+                <option value="shimmer">🍃 감성 톤 (Shimmer)</option>
+                <option value="sage">💖 사만다 톤 (Sage)</option>
+            </select>
+            <button class="view-mode-btn" onclick="resetMemory()" title="기억 초기화" style="padding:4px 8px; font-size:0.75rem;">
+                <span>🔄 리셋</span>
             </button>
-            <button class="view-mode-btn" id="viewModeBtn" onclick="toggleViewMode()" title="화면 모드 전환" style="padding:6px 10px; font-size:0.8rem;">
-                <span id="viewModeIcon">🔮</span> <span id="viewModeText">오라클</span>
+            <button class="view-mode-btn" id="viewModeBtn" onclick="toggleViewMode()" title="화면 모드 전환" style="padding:4px 8px; font-size:0.75rem;">
+                <span id="viewModeIcon">🔮</span>
             </button>
             <button class="btn-exit" onclick="exitApp()" title="앱 완전 종료">
-                <span>⏻ 종료</span>
+                <span>⏻</span>
             </button>
         </div>
     </div>
 
     <!-- 1. 노윤서 스타일 실사 아바타 몰입형 캔버스 (화면 전체 융합) -->
-    <div class="avatar-wrapper" id="avatarWrapper" onclick="handleVisualClick()" title="민지에게 말 걸기">
+    <div class="avatar-wrapper" id="avatarWrapper" onclick="handleVisualClick(event)" title="화면 탭: 대화 / 메뉴 토글">
         <div class="avatar-ambient-glow" id="avatarGlow"></div>
         <div class="avatar-img-container">
             <img id="avatarImg" src="/static/avatar/idle.jpg" alt="Minji AI Avatar" class="avatar-img">
@@ -1195,59 +1257,53 @@ def read_root():
 
     <div class="main-stage">
         <!-- 2. Her 오라클 구체 모드 -->
-        <div class="orb-wrapper" id="orbWrapper" onclick="handleVisualClick()" style="display:none;" title="민지에게 말 걸기">
+        <div class="orb-wrapper" id="orbWrapper" onclick="handleVisualClick(event)" style="display:none;" title="민지에게 말 걸기">
             <div class="orb-glow" id="orbGlow"></div>
             <div class="orb" id="avatarOrb"></div>
         </div>
         
-        <div class="status-container">
-            <div class="status-badge" id="stateLabel">Ready</div>
-            <div class="status-text" id="statusText">화면을 눌러 민지와 연결하세요</div>
-            <div class="barge-in-hint" id="bargeInHint" style="display:none;">💡 민지가 말하는 도중 언제든 말씀하시면 즉시 멈추고 귀 기울여요</div>
+        <div class="status-container" id="statusContainer">
+            <div class="status-badge" id="stateLabel" style="display:none;">Ready</div>
+            <div class="status-text" id="statusText">화면을 눌러 민지와 대화하세요</div>
         </div>
     </div>
 
     <div class="controls">
         <div id="connectGroup">
-            <button class="btn btn-primary" id="connectBtn" onclick="initMinji()" style="width: 100%;">
+            <button class="connect-dock-btn" id="connectBtn" onclick="initMinji()">
                 <span>✨ 민지와 대화 시작하기</span>
             </button>
         </div>
 
-        <div id="activeControls" style="display:none; flex-direction:column; gap:10px;">
-            <div style="display:flex; justify-content:center; align-items:center; gap:8px; margin-bottom:2px;">
-                <span style="font-size:0.8rem; color:#aaa;">민지 목소리:</span>
-                <select id="voiceSelect" style="background:#1c1c24; color:#ff9a76; border:1px solid #ff7b54; border-radius:12px; padding:6px 12px; font-size:0.85rem; outline:none; cursor:pointer;">
-                    <option value="nova" selected>✨ 가장 얇고 산뜻한 20대 노윤서 톤 (Nova HD - 추천)</option>
-                    <option value="coral">🌸 맑고 깨끗한 톤 (Coral HD)</option>
-                    <option value="shimmer">🍃 여리고 가녀린 감성 톤 (Shimmer HD)</option>
-                    <option value="sage">💖 차분하고 깊은 사만다 톤 (Sage HD)</option>
-                </select>
-            </div>
-            <div class="btn-row">
-                <button class="btn" id="micToggleBtn" onclick="toggleMic()">
-                    <span id="micIcon">🎙️</span> <span id="micText">마이크 끄기</span>
-                </button>
-                <button class="btn" onclick="openCamOverlay()">
-                    <span>📷 이거 봐봐</span>
-                </button>
-            </div>
-            <div class="btn-row" id="quickButtons">
-                <button class="btn btn-ghost" onclick="resetMemory()">
-                    <span>🔄 기억 초기화</span>
-                </button>
-                <button class="btn btn-ghost" onclick="toggleTextInput(true)">
-                    <span>💬 텍스트로 말하기</span>
-                </button>
-            </div>
-            <div id="textInputContainer" style="display:none; width:100%; margin-top:4px;">
+        <div id="activeControls" style="display:none; flex-direction:column; align-items:center; width:100%;">
+            <!-- 텍스트 입력창 (💬 클릭 시 나타남) -->
+            <div id="textInputContainer" style="display:none; width:100%; max-width:380px; margin-bottom:10px;">
                 <div style="display:flex; gap:6px; width:100%;">
                     <input type="text" id="customUserText" placeholder="민지에게 보낼 말 입력..." 
-                           style="flex:1; background:#14141c; border:1px solid #ff7b54; border-radius:24px; padding:12px 18px; color:#fff; font-size:0.95rem; outline:none;" 
+                           style="flex:1; background:rgba(20,20,28,0.85); border:1px solid #ff7b54; border-radius:24px; padding:10px 16px; color:#fff; font-size:0.9rem; outline:none; backdrop-filter:blur(10px);" 
                            onkeydown="if(event.key === 'Enter') sendCustomText()">
-                    <button class="btn btn-primary" onclick="sendCustomText()" style="width:55px; padding:0; border-radius:24px; font-size:1.1rem;">🚀</button>
-                    <button class="btn btn-ghost" onclick="toggleTextInput(false)" style="width:40px; padding:0; border-radius:24px; font-size:0.9rem;">✕</button>
+                    <button class="btn btn-primary" onclick="sendCustomText()" style="width:48px; padding:0; border-radius:24px; font-size:1.1rem;">🚀</button>
+                    <button class="btn btn-ghost" onclick="toggleTextInput(false)" style="width:36px; padding:0; border-radius:24px; font-size:0.85rem;">✕</button>
                 </div>
+            </div>
+
+            <!-- 하단 핵심 아이콘 플로팅 캡슐독 (이미지를 전혀 가리지 않는 미니멀 디자인) -->
+            <div class="capsule-dock" id="bottomCapsuleDock">
+                <button class="cap-btn" id="micToggleBtn" onclick="toggleMic()" title="마이크 켜기/끄기">
+                    <span id="micIcon">🎙️</span>
+                </button>
+                <button class="cap-btn" onclick="openCamOverlay()" title="카메라로 보여주기 ('이거 봐봐')">
+                    <span>📷</span>
+                </button>
+                <button class="cap-btn primary" id="personaToggleBtn" onclick="togglePersonaMode()" title="모드 전환 (여친 ⇄ 비서)">
+                    <span id="personaIcon">💖</span>
+                </button>
+                <button class="cap-btn" onclick="toggleTextInput()" title="텍스트 입력">
+                    <span>💬</span>
+                </button>
+                <button class="cap-btn" onclick="toggleHeaderMenu(event)" title="상세 메뉴 펼치기">
+                    <span>⚙️</span>
+                </button>
             </div>
         </div>
     </div>
@@ -1433,7 +1489,13 @@ def read_root():
             setOrbState('idle');
             if (statusText) statusText.innerText = "전원이 완전히 꺼졌습니다.";
 
-            // 3. 완전 종료 OLED 화면 표시
+            // 3. 브라우저 닫기 즉시 시도 (무음)
+            try {
+                window.open('', '_self', '');
+                window.close();
+            } catch(e){}
+
+            // 4. 완전 종료 OLED 화면 표시
             if (pwGate) {
                 pwGate.classList.add('hidden');
                 pwGate.style.display = 'none';
@@ -1441,20 +1503,22 @@ def read_root():
             if (shutdownScreen) {
                 shutdownScreen.style.display = 'flex';
             }
-
-            try {
-                window.close();
-            } catch(e){}
         }
 
-        // 브라우저 닫기 시도
+        // 브라우저 닫기 시도 (무음 처리: 경고창 없이 창 닫기 또는 바탕화면 복귀)
         function attemptCloseWindow() {
             try {
+                window.open('', '_self', '');
                 window.close();
             } catch(e){}
-            setTimeout(() => {
-                alert(`브라우저의 보안 정책상 탭이 자동으로 닫히지 않을 수 있습니다.\n현재 창(탭)이나 브라우저를 직접 닫아주세요.`);
-            }, 300);
+            // 브라우저 정책상 window.close()가 제한될 경우 경고 팝업 없이 조용히 빈 화면이나 이전 탭으로 이동
+            try {
+                if (window.history.length > 1) {
+                    window.history.back();
+                } else {
+                    window.location.replace("about:blank");
+                }
+            } catch(e){}
         }
 
         // 전원 꺼짐 화면에서 다시 켜기 (Face ID 즉시 연동)
@@ -1758,7 +1822,7 @@ def read_root():
             }
         }
 
-        // 모드 전환 토글
+        // 모드 전환 토글 (여친 ⇄ 비서)
         function togglePersonaMode() {
             currentPersonaMode = (currentPersonaMode === 'girlfriend') ? 'secretary' : 'girlfriend';
             localStorage.setItem('minji_persona_mode', currentPersonaMode);
@@ -1766,7 +1830,39 @@ def read_root():
         }
         applyPersonaMode(false);
 
-        function handleVisualClick() {
+        // 상단 상세 메뉴 토글 및 자동 숨김 타이머 (4.5초 뒤 자동 수납)
+        let headerHideTimer = null;
+        function toggleHeaderMenu(e) {
+            if (e) e.stopPropagation();
+            const header = document.getElementById('appHeader');
+            if (!header) return;
+            const isVisible = header.classList.contains('active');
+            if (isVisible) {
+                header.classList.remove('active');
+                if (headerHideTimer) {
+                    clearTimeout(headerHideTimer);
+                    headerHideTimer = null;
+                }
+            } else {
+                header.classList.add('active');
+                if (headerHideTimer) clearTimeout(headerHideTimer);
+                headerHideTimer = setTimeout(() => {
+                    header.classList.remove('active');
+                }, 4500);
+            }
+        }
+
+        // 화면 탭 제스처 처리 (상단 메뉴 열려있으면 닫기, 아니면 대화 인터랙션)
+        function handleVisualClick(e) {
+            const header = document.getElementById('appHeader');
+            if (header && header.classList.contains('active')) {
+                header.classList.remove('active');
+                if (headerHideTimer) {
+                    clearTimeout(headerHideTimer);
+                    headerHideTimer = null;
+                }
+                return;
+            }
             handleOrbClick();
         }
 
@@ -2001,13 +2097,13 @@ def read_root():
                 setOrbState('muted');
                 micToggleBtn.classList.add('btn-muted');
                 micIcon.innerText = "🔇";
-                micText.innerText = "마이크 켜기";
+                if (micText) micText.innerText = "마이크 켜기";
                 statusText.innerText = "마이크가 꺼졌습니다.";
             } else {
                 setOrbState('idle');
                 micToggleBtn.classList.remove('btn-muted');
                 micIcon.innerText = "🎙️";
-                micText.innerText = "마이크 끄기";
+                if (micText) micText.innerText = "마이크 끄기";
                 statusText.innerText = "마이크가 켜졌습니다. 편하게 말씀하세요.";
                 startListening();
             }
@@ -2162,15 +2258,18 @@ def read_root():
         // 텍스트 인라인 입력 모드 토글
         function toggleTextInput(show) {
             const container = document.getElementById('textInputContainer');
-            const quickBtns = document.getElementById('quickButtons');
             const input = document.getElementById('customUserText');
+            if (!container) return;
+            if (show === undefined) {
+                show = (container.style.display === 'none' || !container.style.display);
+            }
             if (show) {
                 container.style.display = 'block';
-                quickBtns.style.display = 'none';
-                setTimeout(() => input.focus(), 100);
+                setTimeout(() => {
+                    if (input) input.focus();
+                }, 100);
             } else {
                 container.style.display = 'none';
-                quickBtns.style.display = 'flex';
             }
         }
 
