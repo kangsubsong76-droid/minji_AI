@@ -260,21 +260,23 @@ async def setup_elevenlabs(req: ElevenLabsSetupRequest):
 async def generate_tts(req: TTSRequest):
     # 텍스트 정제: 마크다운 및 특수기호 제거로 순수 구어체 음성 보장
     cleaned_text = re.sub(r'[*#_~`\[\]\(\)<>]', '', req.text).strip()
+    selected_voice = (req.voice or "coral").lower()
 
-    # [최우선 1순위]: ElevenLabs Pro 노윤서 클론 보이스 (키가 등록된 경우)
-    if elevenlabs_key:
+    # 1. 만약 노윤서 클론 보이스(roh_yoon_seo 또는 elevenlabs)를 선택한 경우:
+    # 한국어 최적화 모델(eleven_multilingual_v2) + 남성적 저음 방지(use_speaker_boost: False)로 앳된 여성 피치 보장
+    if selected_voice in ["roh_yoon_seo", "elevenlabs"] and elevenlabs_key:
         voice_id = ensure_roh_voice_clone()
         if voice_id:
             try:
                 tts_url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
                 tts_payload = json.dumps({
                     "text": cleaned_text,
-                    "model_id": "eleven_turbo_v2_5",  # 초저지연 실시간 모델 (~75ms)
+                    "model_id": "eleven_multilingual_v2",  # 다국어 고품질 감성 모델 (한국어 음색 보존)
                     "voice_settings": {
-                        "stability": 0.40,
-                        "similarity_boost": 0.88,
-                        "style": 0.20,
-                        "use_speaker_boost": True
+                        "stability": 0.50,
+                        "similarity_boost": 0.70,
+                        "style": 0.25,
+                        "use_speaker_boost": False  # 굵은 톤 방지: 저음 부스트 차단
                     }
                 }).encode("utf-8")
                 tts_req = urllib.request.Request(
@@ -287,33 +289,32 @@ async def generate_tts(req: TTSRequest):
                     },
                     method="POST"
                 )
-                with urllib.request.urlopen(tts_req, timeout=12) as resp:
+                with urllib.request.urlopen(tts_req, timeout=15) as resp:
                     audio_bytes = resp.read()
                     return Response(content=audio_bytes, media_type="audio/mpeg")
             except Exception as el_err:
                 print(f"[ElevenLabs TTS Error -> Fallback OpenAI]: {el_err}")
 
-    # [2순위]: OpenAI TTS (Fallback)
+    # 2. OpenAI 초고속 고음질 여성 보이스 (Coral, Nova, Shimmer, Sage 등)
     if not openai_client:
         raise HTTPException(status_code=500, detail="음성 엔진 API KEY가 서버에 설정되지 않았습니다.")
-    
-    # 허용 보이스 목록
-    valid_voices = ["sage", "coral", "shimmer", "nova", "alloy", "fable", "echo", "onyx", "ash"]
-    selected_voice = req.voice if req.voice in valid_voices else "coral"
+
+    valid_voices = ["coral", "nova", "shimmer", "sage", "alloy", "fable", "echo", "onyx", "ash"]
+    oai_voice = selected_voice if selected_voice in valid_voices else "coral"
 
     try:
-        # gpt-4o-mini-tts: 노윤서 인터뷰 실제 음성 분석 기반 - 맑고 얇은 20대 초반 청명 보이스
+        # 20대 초반 여대생/배우 노윤서 톤: 맑고 높으며 상큼한 애교 가득 여성 구어체
         VOICE_INSTRUCTIONS = (
-            "You are Minji, a 21-year-old Korean college girl with a light, clear, and youthful voice. "
-            "Your pitch is naturally slightly higher, fresh, and airy — NOT deep, NOT husky, NOT heavy. "
-            "Speak Korean naturally with a fresh Seoul accent, like a real 21-year-old girl chatting on the phone. "
-            "Sound lively, unhurried, friendly, and authentic."
+            "You are Minji, a sweet, bright, high-spirited 20-year-old Korean college girl. "
+            "Speak Korean in a distinctly high-pitched, light, clear, and feminine young voice. "
+            "Your pitch is naturally airy, playful, and cheerful, like a real 20-year-old Korean girl chatting sweetly with her boyfriend. "
+            "Never sound low, heavy, husky, or masculine."
         )
         response = openai_client.audio.speech.create(
             model="gpt-4o-mini-tts",
-            voice=selected_voice,
+            voice=oai_voice,
             input=cleaned_text,
-            speed=1.0,
+            speed=1.06,  # 앳되고 발랄한 템포
             extra_body={"instructions": VOICE_INSTRUCTIONS}
         )
         return Response(content=response.content, media_type="audio/mpeg")
@@ -322,9 +323,9 @@ async def generate_tts(req: TTSRequest):
         try:
             response = openai_client.audio.speech.create(
                 model="tts-1-hd",
-                voice=selected_voice,
+                voice=oai_voice,
                 input=cleaned_text,
-                speed=1.0
+                speed=1.05
             )
             return Response(content=response.content, media_type="audio/mpeg")
         except Exception as err2:
@@ -1412,12 +1413,12 @@ def read_root():
         </div>
         <!-- 2행: 음성 선택 + 볼륨 슬라이더 -->
         <div style="display:flex; align-items:center; justify-content:space-between; width:100%; gap:8px; box-sizing:border-box;">
-            <select id="voiceSelect" style="flex:1; max-width:135px; background:#1c1c24; color:#ff9a76; border:1px solid #ff7b54; border-radius:12px; padding:4px 6px; font-size:0.72rem; outline:none; cursor:pointer; box-sizing:border-box;">
-                <option value="roh_yoon_seo" selected>✨ 노윤서 (ElevenLabs)</option>
-                <option value="nova">✨ 20대 Nova</option>
-                <option value="coral">🌸 맑은 Coral</option>
-                <option value="shimmer">🍃 감성 Shimmer</option>
-                <option value="sage">💖 깊은 Sage</option>
+            <select id="voiceSelect" style="flex:1; max-width:145px; background:#1c1c24; color:#ff9a76; border:1px solid #ff7b54; border-radius:12px; padding:4px 6px; font-size:0.72rem; outline:none; cursor:pointer; box-sizing:border-box;">
+                <option value="coral" selected>🌸 20대 청순 여친 (Coral)</option>
+                <option value="roh_yoon_seo">✨ 노윤서 클론 (ElevenLabs v2)</option>
+                <option value="nova">💖 러블리 애교 (Nova)</option>
+                <option value="shimmer">🍃 감성 힐링 (Shimmer)</option>
+                <option value="sage">💼 매혹 비서 (Sage)</option>
             </select>
             <div style="flex:1.4; display:flex; align-items:center; gap:6px; background:rgba(20,20,30,0.6); padding:4px 8px; border-radius:12px; border:1px solid rgba(255,255,255,0.08); box-sizing:border-box;">
                 <span style="font-size:0.8rem; flex-shrink:0;">🔊</span>
@@ -1983,7 +1984,7 @@ def read_root():
                     btn.style.background = 'rgba(79, 172, 254, 0.15)';
                 }
                 if (title) title.innerText = 'Minji AI · 서민지 비서';
-                if (voiceSelect) voiceSelect.value = 'coral';
+                if (voiceSelect) voiceSelect.value = 'roh_yoon_seo';
             } else {
                 if (icon) icon.innerText = '💖';
                 if (text) text.innerText = '여친 모드';
@@ -2000,7 +2001,7 @@ def read_root():
                     btn.style.background = 'rgba(255, 123, 84, 0.15)';
                 }
                 if (title) title.innerText = 'Minji AI · 베이글 여친';
-                if (voiceSelect) voiceSelect.value = 'nova';
+                if (voiceSelect) voiceSelect.value = 'coral';
             }
 
             // 현재 아바타 이미지 즉각 교체
