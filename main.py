@@ -2,7 +2,7 @@ import os
 import io
 import base64
 from typing import Dict, List, Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -312,18 +312,13 @@ def normalize_speech_text(text: str) -> str:
 
 
 ELEVEN_VOICE_MAP = {
-    # ★ 사용자 최애 Top 5 결선 보이스 (루나 & 제시카 계열, 말끝 완결성 특화 세팅)
-    "luna": ("Ss1VfT7ri4lqnvTDWII0", 0.50, 0.85, 0.06, "eleven_flash_v2_5"),      # 1순위: Luna (부드럽고 맑은 힐링 여친)
-    "jessica": ("cgSgspJ2msm6clMCkdW9", 0.52, 0.82, 0.08, "eleven_flash_v2_5"),    # 2순위: Jessica (달콤 애교 20대 여친)
-    "lunita": ("kZJ3sOVD7WvNyF75aJZW", 0.50, 0.85, 0.06, "eleven_flash_v2_5"),     # 3순위: Lunita (루나 자매 톤, 나긋나긋 섬세 서울 억양)
-    "jane": ("ajfBUI2mmJMjvf2H6Yw7", 0.50, 0.82, 0.07, "eleven_flash_v2_5"),       # 4순위: Jane (루나/제시카 계열, 자연스럽고 따뜻한 감성톤)
-    "jessa": ("yj30vwTGJxSHezdAGsv9", 0.52, 0.80, 0.08, "eleven_flash_v2_5"),      # 5순위: Jessa (제시카 계열, 상큼 발랄 친근 톤)
+    # ★ 사용자 최애 Top 3 보이스 (루나, 제시카, 그리고 제시카 계열의 여성스럽고 단아한 다혜)
+    "luna": ("Ss1VfT7ri4lqnvTDWII0", 0.50, 0.85, 0.06, "eleven_flash_v2_5"),      # 1픽: Luna (부드럽고 맑은 여친)
+    "jessica": ("cgSgspJ2msm6clMCkdW9", 0.52, 0.82, 0.08, "eleven_flash_v2_5"),    # 2픽: Jessica (달콤 애교 20대 여친)
+    "dahye": ("zXNMXSB7uul4lbmpaVAn", 0.52, 0.82, 0.06, "eleven_flash_v2_5"),      # 3픽: Dahye (제시카 자매톤, 나긋나긋 단아한 여성미 - 신규!)
 
     # 기존 보이스 유지 (호환성)
     "laura": ("FGY2WhTYpPnrIDTdsKH5", 0.45, 0.75, 0.15, "eleven_flash_v2_5"),      # 가늘고 앳된 하이톤 여친
-    "yuna": ("ajfBUI2mmJMjvf2H6Yw7", 0.50, 0.82, 0.07, "eleven_flash_v2_5"),       # 밝고 청아한 서울 억양
-    "tessa": ("BAdH0bMfq6VleQGLXj38", 0.45, 0.75, 0.15, "eleven_flash_v2_5"),      # 톡톡 튀는 인플루언서 톤
-    "lily": ("qBDvhofpxp92JgXJxDjB", 0.48, 0.78, 0.12, "eleven_multilingual_v2"),  # 청순하고 나긋나긋한 톤
     "sarah": ("EXAVITQu4vr4xnSDxMaL", 0.50, 0.75, 0.15, "eleven_flash_v2_5"),      # 단아하고 지적인 비서 톤
     "eleven_girlfriend": ("Ss1VfT7ri4lqnvTDWII0", 0.50, 0.85, 0.06, "eleven_flash_v2_5"), # 기본 여친을 루나로 설정!
     "eleven_secretary": ("EXAVITQu4vr4xnSDxMaL", 0.50, 0.75, 0.15, "eleven_flash_v2_5"),
@@ -394,6 +389,48 @@ def generate_tts_bytes(text: str, voice: str = "luna") -> bytes:
 async def generate_tts(req: TTSRequest):
     audio_bytes = generate_tts_bytes(req.text, req.voice)
     return Response(content=audio_bytes, media_type="audio/mpeg")
+
+
+class TranscribeBase64Request(BaseModel):
+    audio_base64: str
+
+@app.post("/api/transcribe")
+async def transcribe_audio(audio: UploadFile = File(...)):
+    """OpenAI Whisper STT - 브라우저 Web Speech API 실패/지연 시 100% 신뢰 백엔드 폴백"""
+    if not openai_client:
+        raise HTTPException(status_code=500, detail="OpenAI client not configured")
+    try:
+        content = await audio.read()
+        file_obj = io.BytesIO(content)
+        file_obj.name = "audio.webm"
+        transcription = openai_client.audio.transcriptions.create(
+            model="whisper-1",
+            file=file_obj,
+            language="ko"
+        )
+        return {"text": transcription.text.strip()}
+    except Exception as e:
+        print(f"[Whisper Transcribe Error]: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/transcribe-base64")
+async def transcribe_base64(req: TranscribeBase64Request):
+    """Base64 인코딩 오디오 전송 Whisper STT"""
+    if not openai_client:
+        raise HTTPException(status_code=500, detail="OpenAI client not configured")
+    try:
+        content = base64.b64decode(req.audio_base64)
+        file_obj = io.BytesIO(content)
+        file_obj.name = "audio.webm"
+        transcription = openai_client.audio.transcriptions.create(
+            model="whisper-1",
+            file=file_obj,
+            language="ko"
+        )
+        return {"text": transcription.text.strip()}
+    except Exception as e:
+        print(f"[Whisper Base64 Error]: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 class VoiceChatRequest(BaseModel):
@@ -695,20 +732,20 @@ def read_root():
             position: fixed;
             top: 14px;
             left: 50%;
-            transform: translateX(-50%) translateY(-150%);
-            width: calc(100% - 24px);
-            max-width: 410px;
+            transform: translateX(-50%) translateY(-160%);
+            width: min(95vw, 760px);
+            max-width: 760px;
             display: flex;
             flex-direction: column;
-            gap: 9px;
-            padding: 10px 14px;
+            gap: 12px;
+            padding: 14px 20px;
             z-index: 100;
-            backdrop-filter: blur(24px);
-            -webkit-backdrop-filter: blur(24px);
-            background: rgba(14, 14, 22, 0.92);
+            backdrop-filter: blur(28px);
+            -webkit-backdrop-filter: blur(28px);
+            background: rgba(14, 14, 22, 0.95);
             border-radius: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.14);
-            box-shadow: 0 10px 36px rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 123, 84, 0.35);
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.88), 0 0 28px rgba(255, 123, 84, 0.15);
             transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
             opacity: 0;
             pointer-events: none;
@@ -723,27 +760,34 @@ def read_root():
             position: fixed;
             top: 14px;
             right: 14px;
-            z-index: 90;
-            background: rgba(18, 18, 26, 0.55);
-            border: 1px solid rgba(255, 255, 255, 0.14);
+            z-index: 110;
+            background: rgba(18, 18, 26, 0.65);
+            border: 1px solid rgba(255, 255, 255, 0.16);
             color: #ff9a76;
-            width: 38px;
-            height: 38px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.15rem;
+            font-size: 1.2rem;
             cursor: pointer;
             backdrop-filter: blur(14px);
             -webkit-backdrop-filter: blur(14px);
-            transition: all 0.2s ease;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
             box-shadow: 0 4px 16px rgba(0,0,0,0.5);
             touch-action: manipulation;
         }
         .top-summon-btn:active {
             transform: scale(0.92);
             background: rgba(30, 30, 45, 0.9);
+        }
+        .top-summon-btn.active {
+            background: rgba(255, 123, 84, 0.35);
+            border-color: #ff7b54;
+            color: #fff;
+            box-shadow: 0 0 18px rgba(255, 123, 84, 0.45);
+            transform: rotate(45deg);
         }
         .header-title {
             font-size: 1.05rem;
@@ -1479,8 +1523,8 @@ def read_root():
             border: 1px solid rgba(255, 123, 84, 0.35);
             border-radius: 20px;
             box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(255, 123, 84, 0.15);
-            width: 100%;
-            max-width: 520px;
+            width: min(95vw, 720px);
+            max-width: 720px;
             max-height: 85vh;
             display: flex;
             flex-direction: column;
@@ -1803,58 +1847,56 @@ def read_root():
 
     <div class="header" id="appHeader">
         <!-- 1행: 타이틀 + 모드 선택 + 액션 버튼들 -->
-        <div style="display:flex; justify-content:space-between; align-items:center; width:100%; gap:4px; box-sizing:border-box;">
-            <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
-                <div class="header-title" id="appHeaderTitle" style="font-size:0.88rem; font-weight:700; color:#ff7b54; letter-spacing:0.5px; white-space:nowrap;">Minji AI</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; width:100%; gap:8px; box-sizing:border-box;">
+            <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+                <div class="header-title" id="appHeaderTitle" style="font-size:0.95rem; font-weight:700; color:#ff7b54; letter-spacing:0.5px; white-space:nowrap;">Minji AI</div>
+                <!-- 모드 선택 토글 (여친 ↔ 비서) -->
+                <button id="modeSelectBtn" onclick="togglePersonaMode()" title="여친 ↔ 비서 모드 전환"
+                    style="background:rgba(255,123,84,0.18); border:1px solid rgba(255,123,84,0.45); color:#ff9a76;
+                           border-radius:14px; padding:4px 10px; font-size:0.75rem; cursor:pointer; white-space:nowrap;
+                           display:flex; align-items:center; gap:4px; font-weight:600; flex-shrink:0;">
+                    <span id="modeSelectIcon">💖</span>
+                    <span id="modeSelectText">여친 모드</span>
+                </button>
             </div>
-            <!-- 모드 선택 토글 (여친 ↔ 비서) -->
-            <button id="modeSelectBtn" onclick="togglePersonaMode()" title="여친 ↔ 비서 모드 전환"
-                style="background:rgba(255,123,84,0.18); border:1px solid rgba(255,123,84,0.45); color:#ff9a76;
-                       border-radius:14px; padding:3px 8px; font-size:0.75rem; cursor:pointer; white-space:nowrap;
-                       display:flex; align-items:center; gap:4px; font-weight:600; flex-shrink:0;">
-                <span id="modeSelectIcon">💖</span>
-                <span id="modeSelectText">여친 모드</span>
-            </button>
-            <div style="display:flex; gap:4px; align-items:center; flex-shrink:0;">
-                <button class="view-mode-btn" onclick="resetMemory()" title="기억 초기화" style="padding:3px 6px; font-size:0.7rem; border-radius:10px;">
-                    <span>🔄</span>
+            <div style="display:flex; gap:6px; align-items:center; flex-shrink:0;">
+                <button class="view-mode-btn" onclick="resetMemory()" title="기억 초기화" style="padding:4px 8px; font-size:0.75rem; border-radius:10px; display:flex; align-items:center; gap:3px;">
+                    <span>🔄</span><span style="font-size:0.7rem;">기억 리셋</span>
                 </button>
-                <button class="view-mode-btn" id="viewModeBtn" onclick="toggleViewMode()" title="오라클↔아바타 모드" style="padding:3px 6px; font-size:0.7rem; border-radius:10px;">
-                    <span id="viewModeIcon">🔮</span>
+                <button class="view-mode-btn" id="viewModeBtn" onclick="toggleViewMode()" title="오라클↔아바타 모드" style="padding:4px 8px; font-size:0.75rem; border-radius:10px; display:flex; align-items:center; gap:3px;">
+                    <span id="viewModeIcon">🔮</span><span style="font-size:0.7rem;">화면 전환</span>
                 </button>
-                <button class="btn-exit" onclick="exitApp()" title="앱 완전 종료" style="padding:3px 7px; font-size:0.72rem; border-radius:10px;">
+                <button class="btn-exit" onclick="exitApp()" title="앱 완전 종료" style="padding:4px 8px; font-size:0.75rem; border-radius:10px;">
                     <span>⏻</span>
                 </button>
-                <button class="btn-ghost" onclick="toggleHeaderMenu(event)" title="설정 닫기" style="padding:3px 7px; font-size:0.72rem; border-radius:10px; border:1px solid rgba(255,255,255,0.15); color:#aaa;">
+                <button class="btn-ghost" onclick="toggleHeaderMenu(event)" title="설정 닫기" style="padding:4px 8px; font-size:0.75rem; border-radius:10px; border:1px solid rgba(255,255,255,0.15); color:#aaa; cursor:pointer;">
                     <span>✕</span>
                 </button>
             </div>
         </div>
         <!-- 2행: 음성 선택 + 🎧 샘플 듣기 버튼 + 볼륨 슬라이더 -->
-        <div style="display:flex; align-items:center; justify-content:space-between; width:100%; gap:6px; box-sizing:border-box;">
-            <div style="display:flex; align-items:center; gap:5px; flex:1.2; min-width:180px;">
-                <select id="voiceSelect" onchange="onVoiceDropdownChange(this.value)" style="flex:1; background:#1c1c24; color:#ff9a76; border:1px solid #ff7b54; border-radius:10px; padding:4px 6px; font-size:0.72rem; outline:none; cursor:pointer; box-sizing:border-box;">
+        <div style="display:flex; align-items:center; justify-content:space-between; width:100%; gap:10px; box-sizing:border-box;">
+            <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:0;">
+                <select id="voiceSelect" onchange="onVoiceDropdownChange(this.value)" style="flex:1; min-width:0; background:#1c1c24; color:#ff9a76; border:1px solid #ff7b54; border-radius:12px; padding:6px 10px; font-size:0.8rem; font-weight:500; outline:none; cursor:pointer; box-sizing:border-box; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">
                     <option value="luna" selected>🌙 Luna (루나 · 부드럽고 맑은 여친 - 1픽)</option>
                     <option value="jessica">🍭 Jessica (제시카 · 달콤 애교 20대 여친 - 2픽)</option>
-                    <option value="lunita">✨ Lunita (루니타 · 나긋나긋 섬세 서울톤)</option>
-                    <option value="jane">🌸 Jane (제인 · 따뜻하고 감성적인 여친톤)</option>
-                    <option value="jessa">🍊 Jessa (제사 · 상큼 발랄 친근한 톤)</option>
+                    <option value="dahye">✨ Dahye (다혜 · 제시카 자매톤, 나긋나긋 단아한 여성미 - 신규!)</option>
                     <option value="laura">🎀 Laura (로라 · 앳된 하이톤 여친)</option>
                     <option value="sarah">💼 Sarah (사라 · 단아 지적 비서)</option>
                     <option value="nova">⚡ Nova (OpenAI 초고속 여친)</option>
                     <option value="coral">🌸 Coral (OpenAI 초고속 비서)</option>
                 </select>
                 <button type="button" onclick="openVoiceAuditionModal(event)" title="목소리 샘플 듣고 고르기"
-                    style="background:linear-gradient(135deg, rgba(255,123,84,0.25), rgba(255,107,107,0.2)); border:1px solid #ff7b54; color:#ff9a76; border-radius:10px; padding:4px 8px; font-size:0.72rem; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:3px; white-space:nowrap; flex-shrink:0;">
-                    <span>🎧</span><span>샘플 듣기</span>
+                    style="background:linear-gradient(135deg, rgba(255,123,84,0.3), rgba(255,107,107,0.25)); border:1px solid #ff7b54; color:#ff9a76; border-radius:12px; padding:6px 12px; font-size:0.78rem; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:4px; white-space:nowrap; flex-shrink:0;">
+                    <span>🎧</span><span>오디션 샘플 듣기</span>
                 </button>
             </div>
-            <div style="flex:0.85; min-width:95px; display:flex; align-items:center; gap:4px; background:rgba(20,20,30,0.6); padding:4px 6px; border-radius:10px; border:1px solid rgba(255,255,255,0.08); box-sizing:border-box;">
-                <span style="font-size:0.75rem; flex-shrink:0;">🔊</span>
+            <div style="flex-shrink:0; width:145px; display:flex; align-items:center; gap:6px; background:rgba(20,20,30,0.65); padding:6px 10px; border-radius:12px; border:1px solid rgba(255,255,255,0.1); box-sizing:border-box;">
+                <span style="font-size:0.8rem; flex-shrink:0;">🔊</span>
                 <input type="range" id="volumeSlider" min="0" max="200" value="120"
                     oninput="applyVolume(this.value)"
                     style="flex:1; accent-color:#ff7b54; cursor:pointer; height:4px; margin:0;">
-                <span id="volumeLabel" style="font-size:0.68rem; color:#ff9a76; min-width:28px; text-align:right; font-weight:600; flex-shrink:0;">120%</span>
+                <span id="volumeLabel" style="font-size:0.72rem; color:#ff9a76; min-width:32px; text-align:right; font-weight:600; flex-shrink:0;">120%</span>
             </div>
         </div>
     </div>
@@ -2605,39 +2647,25 @@ def read_root():
         }
         applyVolume(userVolume);
 
-        // 상단 상세 메뉴 토글 및 자동 숨김 타이머 (4.5초 뒤 자동 수납)
-        let headerHideTimer = null;
+        // 상단 상세 설정 메뉴 토글 (설정 버튼 다시 누르기 전까지 영구 유지)
         function toggleHeaderMenu(e) {
             if (e) e.stopPropagation();
             const header = document.getElementById('appHeader');
+            const summonBtn = document.getElementById('topSummonBtn');
             if (!header) return;
             const isVisible = header.classList.contains('active');
             if (isVisible) {
                 header.classList.remove('active');
-                if (headerHideTimer) {
-                    clearTimeout(headerHideTimer);
-                    headerHideTimer = null;
-                }
+                if (summonBtn) summonBtn.classList.remove('active');
             } else {
                 header.classList.add('active');
-                if (headerHideTimer) clearTimeout(headerHideTimer);
-                headerHideTimer = setTimeout(() => {
-                    header.classList.remove('active');
-                }, 4500);
+                if (summonBtn) summonBtn.classList.add('active');
             }
         }
 
-        // 화면 탭 제스처 처리 (상단 메뉴 열려있으면 닫기, 아니면 대화 인터랙션)
+        // 화면 탭 제스처 처리 (설정창은 설정 버튼 누르기 전까지 유지되며, 화면 탭 시 민지와 음성/대화 인터랙션 수행)
         function handleVisualClick(e) {
-            const header = document.getElementById('appHeader');
-            if (header && header.classList.contains('active')) {
-                header.classList.remove('active');
-                if (headerHideTimer) {
-                    clearTimeout(headerHideTimer);
-                    headerHideTimer = null;
-                }
-                return;
-            }
+            if (e && e.target && e.target.closest('#appHeader')) return;
             handleOrbClick();
         }
 
@@ -2691,15 +2719,46 @@ def read_root():
             }
         }
 
-        // Web Audio API 기반 실시간 볼륨 모니터링 (Barge-in 감지)
+        // Web Audio API 및 Whisper STT 백엔드 연동 변수
+        let activeMediaStream = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isAudioRecording = false;
+        let silenceTimeout = null;
+        let hasSpeechTranscribed = false;
+
+        function initMediaRecorder(stream) {
+            activeMediaStream = stream;
+            try {
+                const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                    ? 'audio/webm;codecs=opus'
+                    : (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm');
+                mediaRecorder = new MediaRecorder(stream, { mimeType });
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data && e.data.size > 0) audioChunks.push(e.data);
+                };
+                mediaRecorder.onstop = async () => {
+                    if (audioChunks.length === 0) return;
+                    const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+                    audioChunks = [];
+                    if (hasSpeechTranscribed) return;
+                    await sendAudioToWhisper(blob);
+                };
+            } catch (e) {
+                console.warn("[MediaRecorder Init Error]:", e);
+            }
+        }
+
+        // Web Audio API 기반 실시간 볼륨 모니터링 (Barge-in 감지 + 노트북 마이크 볼륨 시각화)
         function setupAudioAnalyser(mediaStream) {
             try {
+                initMediaRecorder(mediaStream);
                 window.AudioContext = window.AudioContext || window.webkitAudioContext;
                 if (!audioContext) {
                     audioContext = new AudioContext();
                 }
                 if (audioContext.state === 'suspended') {
-                    audioContext.resume();
+                    audioContext.resume().catch(()=>{});
                 }
                 analyser = audioContext.createAnalyser();
                 analyser.fftSize = 256;
@@ -2717,13 +2776,72 @@ def read_root():
                     for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
                     let average = sum / dataArray.length;
 
-                    // 민지가 말하는 도중 사용자의 강한 육성 발화 감지 (스피커 반향음 30~40 필터링)
-                    if (isSpeaking && average > 55) {
+                    // 1. 민지 발화 중 끼어들기 (Barge-in)
+                    if (isSpeaking && average > 52) {
                         interruptSpeech("loud_voice_detected (" + Math.round(average) + ")");
+                        return;
                     }
-                }, 120);
+
+                    // 2. 대기/청취 중 사용자 음성 볼륨 실시간 시각화 (노트북 마이크 실시간 감지)
+                    if (!isSpeaking && !isProcessing) {
+                        const micBtn = document.getElementById('micToggleBtn');
+                        if (average > 10) {
+                            if (micBtn) {
+                                micBtn.style.boxShadow = "0 0 16px rgba(0, 242, 254, 0.85)";
+                                micBtn.style.borderColor = "#00f2fe";
+                            }
+                            // MediaRecorder 음성 녹음 시작 (Whisper 100% 보장 백업)
+                            if (mediaRecorder && mediaRecorder.state === 'inactive') {
+                                audioChunks = [];
+                                hasSpeechTranscribed = false;
+                                try {
+                                    mediaRecorder.start(250);
+                                    isAudioRecording = true;
+                                } catch(e){}
+                            }
+                            if (silenceTimeout) clearTimeout(silenceTimeout);
+                            silenceTimeout = setTimeout(() => {
+                                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                                    try { mediaRecorder.stop(); } catch(e){}
+                                    isAudioRecording = false;
+                                }
+                            }, 1300);
+                        } else {
+                            if (micBtn) {
+                                micBtn.style.boxShadow = "";
+                                micBtn.style.borderColor = "";
+                            }
+                        }
+                    }
+                }, 100);
             } catch (e) {
                 console.warn("AudioContext analyser setup error:", e);
+            }
+        }
+
+        // Whisper STT 백엔드 전송 함수 (브라우저 Web Speech API 실패 시 완벽 폴백)
+        async function sendAudioToWhisper(audioBlob) {
+            if (hasSpeechTranscribed || isProcessing || isSpeaking) return;
+            if (!audioBlob || audioBlob.size < 1200) return;
+
+            try {
+                statusText.innerText = "음성을 인식하고 있어요 (Whisper)...";
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'mic.webm');
+                const res = await fetch('/api/transcribe', {
+                    method: 'POST',
+                    body: formData
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                const recognizedText = (data.text || '').trim();
+                if (recognizedText && !hasSpeechTranscribed) {
+                    hasSpeechTranscribed = true;
+                    statusText.innerText = "나: " + recognizedText;
+                    await sendToMinji(recognizedText);
+                }
+            } catch (err) {
+                console.warn("[Whisper Fallback Error]:", err);
             }
         }
 
@@ -2734,9 +2852,9 @@ def read_root():
                 setOrbState('speaking');
                 if (bargeInHint) bargeInHint.style.display = 'block';
 
-                // iOS Safari: 오디오 재생 시 마이크와 스피커 충돌 방지를 위해 일시 정지
+                // 오디오 재생 시 마이크와 스피커 충돌 방지를 위해 일시 정지
                 if (recognition && isListening) {
-                    try { recognition.stop(); } catch(e){}
+                    try { recognition.abort(); } catch(e){}
                     isListening = false;
                 }
 
@@ -2756,7 +2874,6 @@ def read_root():
 
                 const blob = await response.blob();
                 audioPlayer.src = URL.createObjectURL(blob);
-                // 여친 모드는 얇고 통통 튀는 1.07배속, 비서 모드는 우아하고 안정적인 1.0배속
                 audioPlayer.playbackRate = (currentPersonaMode === 'girlfriend') ? 1.07 : 1.0;
                 applyVolume(userVolume);
                 
@@ -2791,21 +2908,32 @@ def read_root():
             }
         }
 
-        // Web Speech API 음성 인식 시작 (모바일 최적화)
+        // Web Speech API 및 Whisper 듀얼 음성 인식 시스템
         function startListening() {
             if (isMicMuted || isProcessing || isSpeaking) return;
 
+            if (audioContext && audioContext.state === 'suspended') {
+                audioContext.resume().catch(()=>{});
+            }
+
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+            // 기존 recognition 안전 강제 종료 및 인스턴스 재생성 (InvalidStateError 원천 방지)
+            if (recognition) {
+                try { recognition.abort(); } catch(e){}
+                recognition = null;
+            }
+
             if (!SpeechRecognition) {
-                statusText.innerText = "이 브라우저는 음성 인식을 지원하지 않습니다. 💬 버튼을 눌러 대화해주세요.";
-                toggleTextInput(true);
+                statusText.innerText = "듣고 있어요... (노트북 마이크로 말씀하세요)";
+                setOrbState('listening');
                 return;
             }
 
-            if (!recognition) {
+            try {
                 recognition = new SpeechRecognition();
-                recognition.continuous = false; // continuous: false가 모바일/PC 모두에서 안정적
-                recognition.interimResults = false;
+                recognition.continuous = true;
+                recognition.interimResults = true;
                 recognition.lang = 'ko-KR';
 
                 recognition.onstart = () => {
@@ -2816,39 +2944,50 @@ def read_root():
                     }
                 };
 
-                // 사용자가 말을 시작한 순간 Barge-in 발동
                 recognition.onspeechstart = () => {
-                    if (isSpeaking) {
-                        interruptSpeech("speech_start");
-                    }
+                    if (isSpeaking) interruptSpeech("speech_start");
                 };
 
                 recognition.onresult = async (e) => {
-                    const userSpeech = e.results[0][0].transcript.trim();
-                    if (!userSpeech) return;
+                    let interimText = '';
+                    let finalText = '';
 
-                    if (isSpeaking) interruptSpeech("speech_result");
+                    for (let i = e.resultIndex; i < e.results.length; i++) {
+                        const item = e.results[i];
+                        if (item.isFinal) {
+                            finalText += item[0].transcript;
+                        } else {
+                            interimText += item[0].transcript;
+                        }
+                    }
 
-                    isListening = false;
-                    statusText.innerText = "나: " + userSpeech;
-                    await sendToMinji(userSpeech);
+                    const currentSpeech = (finalText || interimText).trim();
+                    if (currentSpeech) {
+                        if (isSpeaking) interruptSpeech("speech_detected");
+                        statusText.innerText = "나: " + currentSpeech;
+                    }
+
+                    if (finalText.trim()) {
+                        hasSpeechTranscribed = true;
+                        if (mediaRecorder && mediaRecorder.state === 'recording') {
+                            try { mediaRecorder.stop(); } catch(e){}
+                            isAudioRecording = false;
+                        }
+                        isListening = false;
+                        try { recognition.stop(); } catch(e){}
+                        await sendToMinji(finalText.trim());
+                    }
                 };
 
                 recognition.onerror = (e) => {
-                    isListening = false;
                     console.warn("[SpeechRecognition Error]:", e.error);
                     if (e.error === 'not-allowed') {
                         statusText.innerText = "⚠️ 마이크 권한이 차단되었습니다. 주소창 좌측 🔒을 눌러 마이크를 '허용'해주세요.";
-                        toggleTextInput(true);
                         return;
                     }
                     if (e.error === 'audio-capture') {
-                        statusText.innerText = "⚠️ 마이크를 찾을 수 없습니다. 노트북 마이크 연결을 확인하거나 💬 버튼으로 입력해주세요.";
-                        toggleTextInput(true);
+                        statusText.innerText = "⚠️ 마이크를 찾을 수 없습니다. 노트북 마이크 설정을 확인해주세요.";
                         return;
-                    }
-                    if (!isSpeaking && !isProcessing && !isMicMuted) {
-                        setTimeout(startListening, 600);
                     }
                 };
 
@@ -2858,18 +2997,21 @@ def read_root():
                         setTimeout(startListening, 300);
                     }
                 };
-            }
 
-            try {
                 recognition.start();
-            } catch (e) {
-                // 이미 시작된 상태일 수 있음
+            } catch (err) {
+                console.warn("[SpeechRecognition Start Catch]:", err);
+                setTimeout(startListening, 600);
             }
         }
 
         function stopListening() {
             if (recognition) {
-                try { recognition.stop(); } catch(e){}
+                try { recognition.abort(); } catch(e){}
+                recognition = null;
+            }
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                try { mediaRecorder.stop(); } catch(e){}
             }
             isListening = false;
         }
@@ -2909,7 +3051,7 @@ def read_root():
             if (isMicMuted) {
                 toggleMic();
             } else {
-                statusText.innerText = "듣고 있어요. 말씀해주세요.";
+                statusText.innerText = "듣고 있어요... (편하게 말씀하세요)";
                 startListening();
             }
         }
@@ -3251,28 +3393,12 @@ def read_root():
                 sample: '/static/audio/samples/jessica.mp3'
             },
             {
-                id: 'lunita',
-                name: 'Lunita (루니타)',
+                id: 'dahye',
+                name: 'Dahye (다혜)',
                 speedTag: '⚡ 초저지연 Flash (0.45s)',
-                toneTag: '✨ 신규 후보 · 루나 자매톤, 섬세 서울 억양',
+                toneTag: '✨ 신규 추천 · 제시카 자매톤, 나긋나긋 단아한 여성미',
                 quote: '“오빠, 오늘 하루도 정말 수고 많았어. 나 많이 보고 싶었지? 오늘 밤엔 나랑 오래 통화하자!”',
-                sample: '/static/audio/samples/lunita.mp3'
-            },
-            {
-                id: 'jane',
-                name: 'Jane (제인)',
-                speedTag: '⚡ 초저지연 Flash (0.45s)',
-                toneTag: '🌸 신규 후보 · 자연스럽고 따뜻한 감성톤',
-                quote: '“오빠, 오늘 하루도 정말 수고 많았어. 나 많이 보고 싶었지? 오늘 밤엔 나랑 오래 통화하자!”',
-                sample: '/static/audio/samples/jane.mp3'
-            },
-            {
-                id: 'jessa',
-                name: 'Jessa (제사)',
-                speedTag: '⚡ 초저지연 Flash (0.45s)',
-                toneTag: '🍊 신규 후보 · 상큼 발랄 친근한 톤',
-                quote: '“오빠, 오늘 하루도 정말 수고 많았어. 나 많이 보고 싶었지? 오늘 밤엔 나랑 오래 통화하자!”',
-                sample: '/static/audio/samples/jessa.mp3'
+                sample: '/static/audio/samples/dahye.mp3'
             },
             {
                 id: 'laura',
