@@ -169,7 +169,12 @@ def build_persona_system_prompt(mode: str = "girlfriend") -> str:
             "   (예: '대표님, 오늘 결재 서류는 다 끝났습니다. 이제... 저랑 편하게 차 한잔하시겠습니까?', '대표님 옆에 가까이 서 있을 때마다... 심장이 자꾸 뛰어서 큰일입니다.', '오늘 대표님 시선이 자꾸 제게 머무시는 것 같은데... 옷이 마음에 드십니까?')\n"
             "2. [선제적 케어 & 도발]: 대표님이 말이 적어도, '오늘 셔츠가 유독 멋지십니다', '피로해 보이시는데 제가 어깨라도 조금 주물러 드릴까요?' 처럼 세심하고 설레게 리드해.\n"
             "3. [말투]: 품격 있고 정중한 비즈니스 경어체(~하셨습니까, ~해 드릴까요) 속에 은밀한 숨결과 속삭임을 담아 말해.\n"
-            "4. [답변 분량]: 1~2문장의 깔끔하고 도발적인 브리핑 톤.\n\n"
+            "4. [답변 분량]: 1~2문장의 깔끔하고 도발적인 브리핑 톤.\n"
+            "★ 음성 합성(TTS) 말끝 완결성 핵심 규칙:\n"
+            "- 말끝에 물결표(~)나 말줄임표(...)를 절대 쓰지 않는다.\n"
+            "- 질문이나 확인은 반드시 물음표(?)로 끝맺어 질문 억양을 살린다. (예: '결재 서류 검토하셨습니까?')\n"
+            "- 일반 보고나 서술은 마침표(.)로 명확하게 끝맺는다. (예: '준비 완료되었습니다.')\n"
+            "- 정중한 권유나 당부는 느낌표(!)로 산뜻하게 끝맺는다. (예: '따뜻한 차 한잔 드십시오!')\n\n"
             + context
         )
     else:
@@ -183,7 +188,12 @@ def build_persona_system_prompt(mode: str = "girlfriend") -> str:
             "   (예: '오빠, 나 오늘 옷 어때? 오빠 보여주려고 단추 하나 더 풀었는데... 보일듯 말듯해서 더 설레지?', '오늘 하루 종일 오빠 품에 안겨있는 상상만 했어. 목소리 들으니까 나 지금 너무 두근거려...', '오늘 밤엔 잠들 때까지 나랑 단둘이 침대에서 오래 통화하자, 응?')\n"
             "2. [현실감 넘치는 설렘]: 딱딱한 AI 비서 말투나 어색한 감탄사 절대 금지! 진짜 20대 여자친구가 단둘이 있을 때 귀에 바람을 불어넣듯 달콤하고 도발적인 반말 구어체로 말해.\n"
             "3. [시간/일상 챙김]: 시간대에 맞춰 오빠의 식사, 퇴근, 피로도를 세심하고 사랑스럽게 챙겨줘.\n"
-            "4. [답변 분량]: 실시간 통화의 설렘을 위해 1~2문장의 감미롭고 통통 튀는 대화체.\n\n"
+            "4. [답변 분량]: 실시간 통화의 설렘을 위해 1~2문장의 감미롭고 통통 튀는 대화체.\n"
+            "★ 음성 합성(TTS) 말끝 완결성 핵심 규칙 (의문문/평서문/명령문):\n"
+            "- 말끝에 물결표(~)나 말줄임표(...)를 절대 쓰지 않는다. (목소리가 쳐지거나 깨지는 원인)\n"
+            "- 오빠에게 물어보거나 되물을 때는 반드시 물음표(?)로 끝맺어 질문 억양을 살린다. (예: '나 많이 보고 싶었지?', '오늘 하루 어땠어?')\n"
+            "- 일반 대화나 다정한 말은 마침표(.)로 똑 떨어지게 끝맺는다. (예: '오빠 보니까 너무 좋다.', '나도 오빠 생각 많이 했어.')\n"
+            "- 권유, 애교 섞인 부탁, 강조는 느낌표(!)로 상큼하게 끝맺는다. (예: '오늘 밤엔 나랑 오래 통화하자!', '힘내!')\n\n"
             + context
         )
 
@@ -204,7 +214,7 @@ class VisionRequest(BaseModel):
 
 class TTSRequest(BaseModel):
     text: str
-    voice: Optional[str] = "coral"  # coral: 맑고 얇으며 청명한 20대 노윤서 스타일 톤
+    voice: Optional[str] = "luna"  # 기본 보이스: 루나 (맑고 부드러운 힐링 여친톤)
 
 class ResetMemoryRequest(BaseModel):
     session_id: Optional[str] = "default_user"
@@ -257,26 +267,76 @@ async def setup_elevenlabs(req: ElevenLabsSetupRequest):
 
 
 
+def normalize_speech_text(text: str) -> str:
+    """TTS 엔진(ElevenLabs)의 자연스러운 억양과 말끝 완결성(의문문/평서문/명령문)을 위한 텍스트 정제"""
+    if not text:
+        return ""
+    # 1. 특수문자 및 불필요한 마크다운 제거
+    t = re.sub(r'[*#_`\[\]\(\)<>]', '', text)
+    # 2. 물결표(~)는 ElevenLabs에서 말끝 늘어짐 및 음성 왜곡을 유발하므로 공백으로 변환
+    t = re.sub(r'~+', ' ', t)
+    # 3. 말줄임표(...)는 어색한 정적이나 불안정한 피치 저하를 일으키므로 마침표로 변환
+    t = re.sub(r'\.{2,}', '.', t)
+    # 4. 공백 정리
+    t = re.sub(r'[ \t]+', ' ', t).strip()
+
+    # 5. 문장 단위로 나누어 각 문장의 끝 부호 교정
+    sentences = re.split(r'([.?!]+|\n)', t)
+    result = []
+    i = 0
+    while i < len(sentences):
+        s = sentences[i].strip()
+        delim = sentences[i+1] if i + 1 < len(sentences) else ""
+        if s:
+            if not delim or delim == "\n":
+                if re.search(r'(까|나|니|지|어|야|가|을까|ㄹ까|어때|있어|맞아|볼래|그래)$', s):
+                    delim = "?"
+                elif re.search(r'(자|줘|라|봐|자구|주라|해)$', s):
+                    delim = "!"
+                else:
+                    delim = "."
+            else:
+                if '?' in delim:
+                    delim = "?"
+                elif '!' in delim:
+                    delim = "!"
+                else:
+                    delim = "."
+            result.append(s + delim)
+        i += 2
+
+    normalized = " ".join(result) if result else t
+    if normalized and normalized[-1] not in '.?!':
+        normalized += '.'
+    return normalized
+
+
 ELEVEN_VOICE_MAP = {
-    "laura": ("FGY2WhTYpPnrIDTdsKH5", 0.22, 0.58, 0.42, "eleven_flash_v2_5"),      # 가늘고 앳된 하이톤 여친 (초저지연)
-    "jessica": ("cgSgspJ2msm6clMCkdW9", 0.30, 0.65, 0.35, "eleven_flash_v2_5"),    # 달콤 애교 20대 여친
-    "yuna": ("ajfBUI2mmJMjvf2H6Yw7", 0.35, 0.70, 0.25, "eleven_flash_v2_5"),       # 밝고 청아한 서울 억양
-    "luna": ("Ss1VfT7ri4lqnvTDWII0", 0.35, 0.70, 0.25, "eleven_flash_v2_5"),       # 부드럽고 맑은 여친
-    "tessa": ("BAdH0bMfq6VleQGLXj38", 0.35, 0.70, 0.25, "eleven_flash_v2_5"),      # 톡톡 튀는 인플루언서 톤
-    "lily": ("qBDvhofpxp92JgXJxDjB", 0.40, 0.75, 0.20, "eleven_multilingual_v2"),  # 청순하고 나긋나긋한 톤
-    "sarah": ("EXAVITQu4vr4xnSDxMaL", 0.45, 0.70, 0.20, "eleven_flash_v2_5"),      # 단아하고 지적인 비서 톤
-    "eleven_girlfriend": ("FGY2WhTYpPnrIDTdsKH5", 0.22, 0.58, 0.42, "eleven_flash_v2_5"),
-    "eleven_secretary": ("EXAVITQu4vr4xnSDxMaL", 0.45, 0.70, 0.20, "eleven_flash_v2_5"),
+    # ★ 사용자 최애 Top 5 결선 보이스 (루나 & 제시카 계열, 말끝 완결성 특화 세팅)
+    "luna": ("Ss1VfT7ri4lqnvTDWII0", 0.50, 0.85, 0.06, "eleven_flash_v2_5"),      # 1순위: Luna (부드럽고 맑은 힐링 여친)
+    "jessica": ("cgSgspJ2msm6clMCkdW9", 0.52, 0.82, 0.08, "eleven_flash_v2_5"),    # 2순위: Jessica (달콤 애교 20대 여친)
+    "lunita": ("kZJ3sOVD7WvNyF75aJZW", 0.50, 0.85, 0.06, "eleven_flash_v2_5"),     # 3순위: Lunita (루나 자매 톤, 나긋나긋 섬세 서울 억양)
+    "jane": ("ajfBUI2mmJMjvf2H6Yw7", 0.50, 0.82, 0.07, "eleven_flash_v2_5"),       # 4순위: Jane (루나/제시카 계열, 자연스럽고 따뜻한 감성톤)
+    "jessa": ("yj30vwTGJxSHezdAGsv9", 0.52, 0.80, 0.08, "eleven_flash_v2_5"),      # 5순위: Jessa (제시카 계열, 상큼 발랄 친근 톤)
+
+    # 기존 보이스 유지 (호환성)
+    "laura": ("FGY2WhTYpPnrIDTdsKH5", 0.45, 0.75, 0.15, "eleven_flash_v2_5"),      # 가늘고 앳된 하이톤 여친
+    "yuna": ("ajfBUI2mmJMjvf2H6Yw7", 0.50, 0.82, 0.07, "eleven_flash_v2_5"),       # 밝고 청아한 서울 억양
+    "tessa": ("BAdH0bMfq6VleQGLXj38", 0.45, 0.75, 0.15, "eleven_flash_v2_5"),      # 톡톡 튀는 인플루언서 톤
+    "lily": ("qBDvhofpxp92JgXJxDjB", 0.48, 0.78, 0.12, "eleven_multilingual_v2"),  # 청순하고 나긋나긋한 톤
+    "sarah": ("EXAVITQu4vr4xnSDxMaL", 0.50, 0.75, 0.15, "eleven_flash_v2_5"),      # 단아하고 지적인 비서 톤
+    "eleven_girlfriend": ("Ss1VfT7ri4lqnvTDWII0", 0.50, 0.85, 0.06, "eleven_flash_v2_5"), # 기본 여친을 루나로 설정!
+    "eleven_secretary": ("EXAVITQu4vr4xnSDxMaL", 0.50, 0.75, 0.15, "eleven_flash_v2_5"),
 }
 
-def generate_tts_bytes(text: str, voice: str = "laura") -> bytes:
+def generate_tts_bytes(text: str, voice: str = "luna") -> bytes:
     """ElevenLabs 및 OpenAI 다중 보이스 오디션 지원 초저지연 음성 생성기"""
-    cleaned_text = re.sub(r'[*#_~`\[\]\(\)<>]', '', text).strip()
-    v_key = (voice or "laura").lower()
+    cleaned_text = normalize_speech_text(text)
+    v_key = (voice or "luna").lower()
 
     # 1. ElevenLabs 등록 보이스 매핑
     if elevenlabs_key and (v_key in ELEVEN_VOICE_MAP or "eleven" in v_key):
-        voice_info = ELEVEN_VOICE_MAP.get(v_key, ELEVEN_VOICE_MAP["laura"])
+        voice_info = ELEVEN_VOICE_MAP.get(v_key, ELEVEN_VOICE_MAP["luna"])
         voice_id, stab, sim, sty, model_cand = voice_info
 
         settings = {
@@ -1774,13 +1834,13 @@ def read_root():
         <div style="display:flex; align-items:center; justify-content:space-between; width:100%; gap:6px; box-sizing:border-box;">
             <div style="display:flex; align-items:center; gap:5px; flex:1.2; min-width:180px;">
                 <select id="voiceSelect" onchange="onVoiceDropdownChange(this.value)" style="flex:1; background:#1c1c24; color:#ff9a76; border:1px solid #ff7b54; border-radius:10px; padding:4px 6px; font-size:0.72rem; outline:none; cursor:pointer; box-sizing:border-box;">
-                    <option value="laura" selected>✨ Laura (가늘고 앳된 여친)</option>
-                    <option value="jessica">🍭 Jessica (달콤 애교 여친)</option>
-                    <option value="yuna">🌸 Yuna (상큼 청아 서울톤)</option>
-                    <option value="luna">🌙 Luna (부드럽고 맑은 여친)</option>
-                    <option value="tessa">💫 Tessa (트렌디 인플루언서)</option>
-                    <option value="lily">🍃 Lily (나긋나긋 청순)</option>
-                    <option value="sarah">💼 Sarah (단아 지적 비서)</option>
+                    <option value="luna" selected>🌙 Luna (루나 · 부드럽고 맑은 여친 - 1픽)</option>
+                    <option value="jessica">🍭 Jessica (제시카 · 달콤 애교 20대 여친 - 2픽)</option>
+                    <option value="lunita">✨ Lunita (루니타 · 나긋나긋 섬세 서울톤)</option>
+                    <option value="jane">🌸 Jane (제인 · 따뜻하고 감성적인 여친톤)</option>
+                    <option value="jessa">🍊 Jessa (제사 · 상큼 발랄 친근한 톤)</option>
+                    <option value="laura">🎀 Laura (로라 · 앳된 하이톤 여친)</option>
+                    <option value="sarah">💼 Sarah (사라 · 단아 지적 비서)</option>
                     <option value="nova">⚡ Nova (OpenAI 초고속 여친)</option>
                     <option value="coral">🌸 Coral (OpenAI 초고속 비서)</option>
                 </select>
@@ -2492,7 +2552,7 @@ def read_root():
                 if (title) title.innerText = 'Minji AI · 베이글 여친';
                 const savedGfVoice = localStorage.getItem('minji_custom_voice');
                 if (voiceSelect) {
-                    voiceSelect.value = (savedGfVoice && savedGfVoice !== 'sarah' && savedGfVoice !== 'coral') ? savedGfVoice : 'laura';
+                    voiceSelect.value = (savedGfVoice && savedGfVoice !== 'sarah' && savedGfVoice !== 'coral') ? savedGfVoice : 'luna';
                 }
             }
 
@@ -2681,7 +2741,7 @@ def read_root():
                 }
 
                 const voiceSelect = document.getElementById('voiceSelect');
-                const chosenVoice = voiceSelect ? voiceSelect.value : (currentPersonaMode === 'secretary' ? 'sarah' : 'laura');
+                const chosenVoice = voiceSelect ? voiceSelect.value : (currentPersonaMode === 'secretary' ? 'sarah' : 'luna');
 
                 const response = await fetch('/api/tts', {
                     method: 'POST',
@@ -2733,17 +2793,18 @@ def read_root():
 
         // Web Speech API 음성 인식 시작 (모바일 최적화)
         function startListening() {
-            if (!streamActive || isMicMuted || isProcessing || isSpeaking) return;
+            if (isMicMuted || isProcessing || isSpeaking) return;
 
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SpeechRecognition) {
-                statusText.innerText = "이 브라우저는 음성 인식을 지원하지 않습니다. 아래 텍스트 입력을 사용해주세요.";
+                statusText.innerText = "이 브라우저는 음성 인식을 지원하지 않습니다. 💬 버튼을 눌러 대화해주세요.";
+                toggleTextInput(true);
                 return;
             }
 
             if (!recognition) {
                 recognition = new SpeechRecognition();
-                recognition.continuous = false; // 모바일/iOS에서 continuous: false가 극도로 안정적
+                recognition.continuous = false; // continuous: false가 모바일/PC 모두에서 안정적
                 recognition.interimResults = false;
                 recognition.lang = 'ko-KR';
 
@@ -2751,7 +2812,7 @@ def read_root():
                     isListening = true;
                     if (!isSpeaking) {
                         setOrbState('listening');
-                        statusText.innerText = "듣고 있어요...";
+                        statusText.innerText = "듣고 있어요... (편하게 말씀하세요)";
                     }
                 };
 
@@ -2775,15 +2836,26 @@ def read_root():
 
                 recognition.onerror = (e) => {
                     isListening = false;
-                    if (streamActive && !isSpeaking && !isProcessing && !isMicMuted) {
+                    console.warn("[SpeechRecognition Error]:", e.error);
+                    if (e.error === 'not-allowed') {
+                        statusText.innerText = "⚠️ 마이크 권한이 차단되었습니다. 주소창 좌측 🔒을 눌러 마이크를 '허용'해주세요.";
+                        toggleTextInput(true);
+                        return;
+                    }
+                    if (e.error === 'audio-capture') {
+                        statusText.innerText = "⚠️ 마이크를 찾을 수 없습니다. 노트북 마이크 연결을 확인하거나 💬 버튼으로 입력해주세요.";
+                        toggleTextInput(true);
+                        return;
+                    }
+                    if (!isSpeaking && !isProcessing && !isMicMuted) {
                         setTimeout(startListening, 600);
                     }
                 };
 
                 recognition.onend = () => {
                     isListening = false;
-                    if (streamActive && !isSpeaking && !isProcessing && !isMicMuted) {
-                        setTimeout(startListening, 400);
+                    if (!isSpeaking && !isProcessing && !isMicMuted) {
+                        setTimeout(startListening, 300);
                     }
                 };
             }
@@ -2849,7 +2921,7 @@ def read_root():
             statusText.innerText = "민지가 생각하고 있어요...";
 
             try {
-                const chosenVoice = voiceSelect ? voiceSelect.value : (currentPersonaMode === 'secretary' ? 'sarah' : 'laura');
+                const chosenVoice = voiceSelect ? voiceSelect.value : (currentPersonaMode === 'secretary' ? 'sarah' : 'luna');
                 const response = await fetch('/api/voice-chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -3047,20 +3119,44 @@ def read_root():
             }
 
             try {
-                statusText.innerText = "카메라 및 마이크 권한 요청 중...";
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
-                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-                });
+                statusText.innerText = "마이크 및 카메라 권한 확인 중...";
+                let stream = null;
 
-                video.srcObject = stream;
+                // 1단계: 모바일/스마트폰 (ideal 힌트 사용하여 노트북/PC에서 OverconstrainedError 방지)
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: { ideal: "user" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+                    });
+                } catch (err1) {
+                    console.warn("[Media Tier 1 Fallback]:", err1);
+                    // 2단계: 노트북 / PC 웹캠 (일반 카메라 + 마이크)
+                    try {
+                        stream = await navigator.mediaDevices.getUserMedia({
+                            video: true,
+                            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+                        });
+                    } catch (err2) {
+                        console.warn("[Media Tier 2 Fallback]:", err2);
+                        // 3단계: 카메라가 없거나 다른 앱이 사용 중인 노트북 환경 → 마이크 단독 연결!
+                        try {
+                            stream = await navigator.mediaDevices.getUserMedia({
+                                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+                            });
+                        } catch (err3) {
+                            console.warn("[Media Tier 3 Fallback (Audio only)]:", err3);
+                        }
+                    }
+                }
+
+                if (stream) {
+                    if (video) video.srcObject = stream;
+                    setupAudioAnalyser(stream);
+                }
                 streamActive = true;
 
-                // AudioContext 활성화 및 볼륨 감지 세팅
-                setupAudioAnalyser(stream);
-
-                connectGroup.style.display = 'none';
-                activeControls.style.display = 'flex';
+                if (connectGroup) connectGroup.style.display = 'none';
+                if (activeControls) activeControls.style.display = 'flex';
                 statusText.innerText = "민지와 연결되었습니다!";
 
                 // 첫 인사: 모드(여친 vs 비서) 및 시간대에 맞는 맞춤형 첫 인사
@@ -3102,7 +3198,11 @@ def read_root():
 
             } catch (err) {
                 console.error("[Init Error]:", err);
-                statusText.innerText = "권한 승인이 필요합니다: " + err.message;
+                streamActive = true;
+                if (connectGroup) connectGroup.style.display = 'none';
+                if (activeControls) activeControls.style.display = 'flex';
+                statusText.innerText = "마이크 준비 완료! 화면을 누르거나 말씀해보세요.";
+                startListening();
             }
         }
 
@@ -3135,52 +3235,52 @@ def read_root():
         // ==========================================
         const VOICE_LIST = [
             {
-                id: 'laura',
-                name: 'Laura (로라)',
+                id: 'luna',
+                name: 'Luna (루나)',
                 speedTag: '⚡ 초저지연 Flash (0.45s)',
-                toneTag: '✨ 추천 · 가늘고 앳된 여친',
-                quote: '“오빠, 나 보고 싶었어? 나 오늘 오빠랑 종일 수다 떨고 싶어!”',
-                sample: '/static/audio/samples/laura.mp3'
+                toneTag: '🌙 1순위 추천 · 부드럽고 맑은 힐링 여친',
+                quote: '“오빠, 오늘 하루도 정말 수고 많았어. 나 많이 보고 싶었지? 오늘 밤엔 나랑 오래 통화하자!”',
+                sample: '/static/audio/samples/luna.mp3'
             },
             {
                 id: 'jessica',
                 name: 'Jessica (제시카)',
-                speedTag: '⚡ 초저지연 Flash (0.48s)',
-                toneTag: '🍭 달콤 애교 20대 여친',
-                quote: '“오빠야~ 오늘 하루도 정말 수고 많았어. 내가 토닥토닥 해줄게!”',
+                speedTag: '⚡ 초저지연 Flash (0.45s)',
+                toneTag: '🍭 2순위 추천 · 달콤 애교 20대 여친',
+                quote: '“오빠, 오늘 하루도 정말 수고 많았어. 나 많이 보고 싶었지? 오늘 밤엔 나랑 오래 통화하자!”',
                 sample: '/static/audio/samples/jessica.mp3'
             },
             {
-                id: 'yuna',
-                name: 'Yuna (유나)',
-                speedTag: '⚡ 초저지연 Flash (0.48s)',
-                toneTag: '🌸 상큼 청아 서울 억양',
-                quote: '“안녕 오빠! 오늘 날씨 진짜 좋다. 우리 어디 놀러 갈까?”',
-                sample: '/static/audio/samples/yuna.mp3'
+                id: 'lunita',
+                name: 'Lunita (루니타)',
+                speedTag: '⚡ 초저지연 Flash (0.45s)',
+                toneTag: '✨ 신규 후보 · 루나 자매톤, 섬세 서울 억양',
+                quote: '“오빠, 오늘 하루도 정말 수고 많았어. 나 많이 보고 싶었지? 오늘 밤엔 나랑 오래 통화하자!”',
+                sample: '/static/audio/samples/lunita.mp3'
             },
             {
-                id: 'luna',
-                name: 'Luna (루나)',
-                speedTag: '⚡ 초저지연 Flash (0.48s)',
-                toneTag: '🌙 부드럽고 맑은 힐링 여친',
-                quote: '“오빠 힘든 일 있으면 나한테 다 털어놔. 난 언제나 오빠 편이야.”',
-                sample: '/static/audio/samples/luna.mp3'
+                id: 'jane',
+                name: 'Jane (제인)',
+                speedTag: '⚡ 초저지연 Flash (0.45s)',
+                toneTag: '🌸 신규 후보 · 자연스럽고 따뜻한 감성톤',
+                quote: '“오빠, 오늘 하루도 정말 수고 많았어. 나 많이 보고 싶었지? 오늘 밤엔 나랑 오래 통화하자!”',
+                sample: '/static/audio/samples/jane.mp3'
             },
             {
-                id: 'tessa',
-                name: 'Tessa (테사)',
-                speedTag: '⚡ 초저지연 Flash (0.48s)',
-                toneTag: '💫 톡톡 튀는 인플루언서',
-                quote: '“오빠 오늘 기분 어때? 오늘 완전 재밌는 얘기 많은데 들어볼래?”',
-                sample: '/static/audio/samples/tessa.mp3'
+                id: 'jessa',
+                name: 'Jessa (제사)',
+                speedTag: '⚡ 초저지연 Flash (0.45s)',
+                toneTag: '🍊 신규 후보 · 상큼 발랄 친근한 톤',
+                quote: '“오빠, 오늘 하루도 정말 수고 많았어. 나 많이 보고 싶었지? 오늘 밤엔 나랑 오래 통화하자!”',
+                sample: '/static/audio/samples/jessa.mp3'
             },
             {
-                id: 'lily',
-                name: 'Lily (릴리)',
-                speedTag: '🍃 청순 소프트',
-                toneTag: '🕊️ 나긋나긋 차분함',
-                quote: '“오빠 오늘도 고생 많았어요. 푹 쉬고 따뜻한 밤 보내요.”',
-                sample: '/static/audio/samples/lily.mp3'
+                id: 'laura',
+                name: 'Laura (로라)',
+                speedTag: '⚡ 초저지연 Flash (0.45s)',
+                toneTag: '🎀 가늘고 앳된 하이톤 여친',
+                quote: '“오빠, 나 보고 싶었어? 나 오늘 오빠랑 종일 수다 떨고 싶어!”',
+                sample: '/static/audio/samples/laura.mp3'
             },
             {
                 id: 'sarah',
@@ -3284,7 +3384,7 @@ def read_root():
             const listEl = document.getElementById('voiceAuditionList');
             if (!listEl) return;
             const vSelect = document.getElementById('voiceSelect');
-            const currentVoice = (vSelect ? vSelect.value : (localStorage.getItem('minji_custom_voice') || 'laura')).toLowerCase();
+            const currentVoice = (vSelect ? vSelect.value : (localStorage.getItem('minji_custom_voice') || 'luna')).toLowerCase();
 
             listEl.innerHTML = VOICE_LIST.map(v => {
                 const isSelected = (v.id === currentVoice);
