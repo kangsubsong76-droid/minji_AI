@@ -410,22 +410,23 @@ def read_root():
             top: 14px;
             left: 50%;
             transform: translateX(-50%) translateY(-150%);
-            width: calc(100% - 28px);
-            max-width: 440px;
+            width: calc(100% - 24px);
+            max-width: 410px;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 16px;
+            flex-direction: column;
+            gap: 9px;
+            padding: 10px 14px;
             z-index: 100;
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            background: rgba(14, 14, 22, 0.85);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            background: rgba(14, 14, 22, 0.92);
             border-radius: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            box-shadow: 0 10px 36px rgba(0, 0, 0, 0.8);
             transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
             opacity: 0;
             pointer-events: none;
+            box-sizing: border-box;
         }
         .header.active {
             transform: translateX(-50%) translateY(0);
@@ -1223,46 +1224,48 @@ def read_root():
     </button>
 
     <div class="header" id="appHeader">
-        <!-- 1행: 타이틀 + 모드 선택 + 종료 -->
-        <div style="display:flex; justify-content:space-between; align-items:center; width:100%; gap:6px;">
-            <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
-                <div class="header-title" id="appHeaderTitle">Minji AI</div>
-                <span style="font-size:0.6rem; background:rgba(217,119,87,0.2); color:#ff9a76; border:1px solid rgba(217,119,87,0.4); padding:2px 5px; border-radius:8px;">Sonnet 5</span>
+        <!-- 1행: 타이틀 + 모드 선택 + 액션 버튼들 -->
+        <div style="display:flex; justify-content:space-between; align-items:center; width:100%; gap:4px; box-sizing:border-box;">
+            <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
+                <div class="header-title" id="appHeaderTitle" style="font-size:0.88rem; font-weight:700; color:#ff7b54; letter-spacing:0.5px; white-space:nowrap;">Minji AI</div>
             </div>
             <!-- 모드 선택 토글 (여친 ↔ 비서) -->
             <button id="modeSelectBtn" onclick="togglePersonaMode()" title="여친 ↔ 비서 모드 전환"
-                style="background:rgba(255,123,84,0.15); border:1.5px solid rgba(255,123,84,0.45); color:#ff9a76;
-                       border-radius:16px; padding:5px 12px; font-size:0.8rem; cursor:pointer; white-space:nowrap;
-                       display:flex; align-items:center; gap:5px;">
+                style="background:rgba(255,123,84,0.18); border:1px solid rgba(255,123,84,0.45); color:#ff9a76;
+                       border-radius:14px; padding:3px 8px; font-size:0.75rem; cursor:pointer; white-space:nowrap;
+                       display:flex; align-items:center; gap:4px; font-weight:600; flex-shrink:0;">
                 <span id="modeSelectIcon">💖</span>
                 <span id="modeSelectText">여친 모드</span>
             </button>
-            <div style="display:flex; gap:5px; align-items:center; flex-shrink:0;">
-                <button class="view-mode-btn" onclick="resetMemory()" title="기억 초기화" style="padding:4px 8px; font-size:0.75rem;">
+            <div style="display:flex; gap:4px; align-items:center; flex-shrink:0;">
+                <button class="view-mode-btn" onclick="resetMemory()" title="기억 초기화" style="padding:3px 6px; font-size:0.7rem; border-radius:10px;">
                     <span>🔄</span>
                 </button>
-                <button class="view-mode-btn" id="viewModeBtn" onclick="toggleViewMode()" title="오라클↔아바타 모드" style="padding:4px 8px; font-size:0.75rem;">
+                <button class="view-mode-btn" id="viewModeBtn" onclick="toggleViewMode()" title="오라클↔아바타 모드" style="padding:3px 6px; font-size:0.7rem; border-radius:10px;">
                     <span id="viewModeIcon">🔮</span>
                 </button>
-                <button class="btn-exit" onclick="exitApp()" title="앱 완전 종료">
+                <button class="btn-exit" onclick="exitApp()" title="앱 완전 종료" style="padding:3px 7px; font-size:0.72rem; border-radius:10px;">
                     <span>⏻</span>
+                </button>
+                <button class="btn-ghost" onclick="toggleHeaderMenu(event)" title="설정 닫기" style="padding:3px 7px; font-size:0.72rem; border-radius:10px; border:1px solid rgba(255,255,255,0.15); color:#aaa;">
+                    <span>✕</span>
                 </button>
             </div>
         </div>
         <!-- 2행: 음성 선택 + 볼륨 슬라이더 -->
-        <div style="display:flex; align-items:center; gap:8px; width:100%; margin-top:8px; flex-wrap:wrap;">
-            <select id="voiceSelect" style="background:#1c1c24; color:#ff9a76; border:1px solid #ff7b54; border-radius:12px; padding:4px 8px; font-size:0.72rem; outline:none; cursor:pointer; flex:1; min-width:110px;">
-                <option value="nova" selected>✨ Nova (노윤서 톤)</option>
-                <option value="coral">🌸 Coral (맑은 톤)</option>
-                <option value="shimmer">🍃 Shimmer (감성 톤)</option>
-                <option value="sage">💖 Sage (사만다 톤)</option>
+        <div style="display:flex; align-items:center; justify-content:space-between; width:100%; gap:8px; box-sizing:border-box;">
+            <select id="voiceSelect" style="flex:1; max-width:130px; background:#1c1c24; color:#ff9a76; border:1px solid #ff7b54; border-radius:12px; padding:4px 6px; font-size:0.72rem; outline:none; cursor:pointer; box-sizing:border-box;">
+                <option value="nova" selected>✨ 20대 Nova</option>
+                <option value="coral">🌸 맑은 Coral</option>
+                <option value="shimmer">🍃 감성 Shimmer</option>
+                <option value="sage">💖 깊은 Sage</option>
             </select>
-            <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:120px;">
-                <span style="font-size:0.85rem; flex-shrink:0;">🔊</span>
+            <div style="flex:1.4; display:flex; align-items:center; gap:6px; background:rgba(20,20,30,0.6); padding:4px 8px; border-radius:12px; border:1px solid rgba(255,255,255,0.08); box-sizing:border-box;">
+                <span style="font-size:0.8rem; flex-shrink:0;">🔊</span>
                 <input type="range" id="volumeSlider" min="0" max="200" value="120"
                     oninput="applyVolume(this.value)"
-                    style="flex:1; accent-color:#ff7b54; cursor:pointer; height:4px;">
-                <span id="volumeLabel" style="font-size:0.7rem; color:#ff9a76; min-width:34px; text-align:right;">120%</span>
+                    style="flex:1; accent-color:#ff7b54; cursor:pointer; height:4px; margin:0;">
+                <span id="volumeLabel" style="font-size:0.7rem; color:#ff9a76; min-width:32px; text-align:right; font-weight:600; flex-shrink:0;">120%</span>
             </div>
         </div>
     </div>
