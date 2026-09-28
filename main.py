@@ -1427,16 +1427,6 @@ def read_root():
                 <span id="volumeLabel" style="font-size:0.7rem; color:#ff9a76; min-width:32px; text-align:right; font-weight:600; flex-shrink:0;">120%</span>
             </div>
         </div>
-        <!-- 3행: ElevenLabs 키 직접 입력 바 (비공개 마스킹 보안 입력) -->
-        <div id="elevenKeyRow" style="display:flex; align-items:center; gap:6px; width:100%; box-sizing:border-box; background:rgba(25,25,35,0.7); padding:4px 8px; border-radius:12px; border:1px dashed rgba(255,123,84,0.35);">
-            <span style="font-size:0.75rem;">🔑</span>
-            <input type="password" id="elevenApiKeyInput" placeholder="ElevenLabs Key 직접 입력 (sk_...)" 
-                   style="flex:1; background:transparent; border:none; color:#fff; font-size:0.72rem; outline:none;"
-                   autocomplete="off" autocorrect="off" autocapitalize="none">
-            <button onclick="registerElevenKey()" style="background:#ff7b54; color:#fff; border:none; border-radius:8px; padding:3px 8px; font-size:0.7rem; font-weight:600; cursor:pointer; white-space:nowrap;">
-                연동
-            </button>
-        </div>
     </div>
 
     <!-- 1. 노윤서 스타일 실사 아바타 몰입형 캔버스 (화면 전체 융합) -->
@@ -2061,34 +2051,6 @@ def read_root():
             }
         }
         applyVolume(userVolume);
-
-        // ElevenLabs API 키 직접 등록 및 노윤서 보이스 자동 연동
-        async function registerElevenKey() {
-            const input = document.getElementById('elevenApiKeyInput');
-            const key = input ? input.value.trim() : '';
-            if (!key) {
-                alert("ElevenLabs API Key를 입력해주세요.");
-                return;
-            }
-            statusText.innerText = "ElevenLabs 노윤서 보이스 연동 중...";
-            try {
-                const res = await fetch('/api/setup-elevenlabs', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ api_key: key })
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || "연동 실패");
-                alert(data.message || "✨ 노윤서 공식 클론 보이스가 성공적으로 연동되었습니다!");
-                input.value = "••••••••••••••••";
-                statusText.innerText = "✨ 노윤서 클론 보이스 활성화 완료!";
-                const vs = document.getElementById('voiceSelect');
-                if (vs) vs.value = "roh_yoon_seo";
-            } catch(e) {
-                alert("ElevenLabs 연동 오류: " + e.message);
-                statusText.innerText = "ElevenLabs 오류: " + e.message;
-            }
-        }
 
         // 상단 상세 메뉴 토글 및 자동 숨김 타이머 (4.5초 뒤 자동 수납)
         let headerHideTimer = null;
