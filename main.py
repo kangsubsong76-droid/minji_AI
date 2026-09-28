@@ -1217,32 +1217,53 @@ def read_root():
         </div>
     </div>
 
-    <!-- 상단 플로팅 메뉴 호출 버튼 (평상시 숨겨진 헤더를 열거나 닫음) -->
+    <!-- 상단 플로팅 메뉴 호출 버튼 (우측 상단 단 1개만 유지) -->
     <button class="top-summon-btn" id="topSummonBtn" onclick="toggleHeaderMenu(event)" title="설정 & 메뉴 열기">
         <span>⚙️</span>
     </button>
 
     <div class="header" id="appHeader">
-        <div style="display:flex; align-items:center; gap:6px;">
-            <div class="header-title" id="appHeaderTitle">Minji AI</div>
-            <span style="font-size:0.65rem; background:rgba(217, 119, 87, 0.2); color:#ff9a76; border:1px solid rgba(217,119,87,0.4); padding:2px 6px; border-radius:8px;">Sonnet 5.0</span>
+        <!-- 1행: 타이틀 + 모드 선택 + 종료 -->
+        <div style="display:flex; justify-content:space-between; align-items:center; width:100%; gap:6px;">
+            <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+                <div class="header-title" id="appHeaderTitle">Minji AI</div>
+                <span style="font-size:0.6rem; background:rgba(217,119,87,0.2); color:#ff9a76; border:1px solid rgba(217,119,87,0.4); padding:2px 5px; border-radius:8px;">Sonnet 5</span>
+            </div>
+            <!-- 모드 선택 토글 (여친 ↔ 비서) -->
+            <button id="modeSelectBtn" onclick="togglePersonaMode()" title="여친 ↔ 비서 모드 전환"
+                style="background:rgba(255,123,84,0.15); border:1.5px solid rgba(255,123,84,0.45); color:#ff9a76;
+                       border-radius:16px; padding:5px 12px; font-size:0.8rem; cursor:pointer; white-space:nowrap;
+                       display:flex; align-items:center; gap:5px;">
+                <span id="modeSelectIcon">💖</span>
+                <span id="modeSelectText">여친 모드</span>
+            </button>
+            <div style="display:flex; gap:5px; align-items:center; flex-shrink:0;">
+                <button class="view-mode-btn" onclick="resetMemory()" title="기억 초기화" style="padding:4px 8px; font-size:0.75rem;">
+                    <span>🔄</span>
+                </button>
+                <button class="view-mode-btn" id="viewModeBtn" onclick="toggleViewMode()" title="오라클↔아바타 모드" style="padding:4px 8px; font-size:0.75rem;">
+                    <span id="viewModeIcon">🔮</span>
+                </button>
+                <button class="btn-exit" onclick="exitApp()" title="앱 완전 종료">
+                    <span>⏻</span>
+                </button>
+            </div>
         </div>
-        <div style="display:flex; gap:6px; align-items:center;">
-            <select id="voiceSelect" style="background:#1c1c24; color:#ff9a76; border:1px solid #ff7b54; border-radius:12px; padding:4px 8px; font-size:0.75rem; outline:none; cursor:pointer;">
-                <option value="nova" selected>✨ 20대 노윤서 톤 (Nova)</option>
-                <option value="coral">🌸 맑은 톤 (Coral)</option>
-                <option value="shimmer">🍃 감성 톤 (Shimmer)</option>
-                <option value="sage">💖 사만다 톤 (Sage)</option>
+        <!-- 2행: 음성 선택 + 볼륨 슬라이더 -->
+        <div style="display:flex; align-items:center; gap:8px; width:100%; margin-top:8px; flex-wrap:wrap;">
+            <select id="voiceSelect" style="background:#1c1c24; color:#ff9a76; border:1px solid #ff7b54; border-radius:12px; padding:4px 8px; font-size:0.72rem; outline:none; cursor:pointer; flex:1; min-width:110px;">
+                <option value="nova" selected>✨ Nova (노윤서 톤)</option>
+                <option value="coral">🌸 Coral (맑은 톤)</option>
+                <option value="shimmer">🍃 Shimmer (감성 톤)</option>
+                <option value="sage">💖 Sage (사만다 톤)</option>
             </select>
-            <button class="view-mode-btn" onclick="resetMemory()" title="기억 초기화" style="padding:4px 8px; font-size:0.75rem;">
-                <span>🔄 리셋</span>
-            </button>
-            <button class="view-mode-btn" id="viewModeBtn" onclick="toggleViewMode()" title="화면 모드 전환" style="padding:4px 8px; font-size:0.75rem;">
-                <span id="viewModeIcon">🔮</span>
-            </button>
-            <button class="btn-exit" onclick="exitApp()" title="앱 완전 종료">
-                <span>⏻</span>
-            </button>
+            <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:120px;">
+                <span style="font-size:0.85rem; flex-shrink:0;">🔊</span>
+                <input type="range" id="volumeSlider" min="0" max="200" value="120"
+                    oninput="applyVolume(this.value)"
+                    style="flex:1; accent-color:#ff7b54; cursor:pointer; height:4px;">
+                <span id="volumeLabel" style="font-size:0.7rem; color:#ff9a76; min-width:34px; text-align:right;">120%</span>
+            </div>
         </div>
     </div>
 
@@ -1289,12 +1310,12 @@ def read_root():
                 </div>
             </div>
 
-            <!-- 하단 핵심 아이콘 플로팅 캡슐독 (이미지를 전혀 가리지 않는 미니멀 디자인) -->
+            <!-- 하단 캡슐독: ⚙️ 제거 → ⏻ 종료 추가, 설정버튼은 상단 1개만 유지 -->
             <div class="capsule-dock" id="bottomCapsuleDock">
                 <button class="cap-btn" id="micToggleBtn" onclick="toggleMic()" title="마이크 켜기/끄기">
                     <span id="micIcon">🎙️</span>
                 </button>
-                <button class="cap-btn" onclick="openCamOverlay()" title="카메라로 보여주기 ('이거 봐봐')">
+                <button class="cap-btn" onclick="openCamOverlay()" title="카메라로 보여주기">
                     <span>📷</span>
                 </button>
                 <button class="cap-btn primary" id="personaToggleBtn" onclick="togglePersonaMode()" title="모드 전환 (여친 ⇄ 비서)">
@@ -1303,8 +1324,8 @@ def read_root():
                 <button class="cap-btn" onclick="toggleTextInput()" title="텍스트 입력">
                     <span>💬</span>
                 </button>
-                <button class="cap-btn" onclick="toggleHeaderMenu(event)" title="상세 메뉴 펼치기">
-                    <span>⚙️</span>
+                <button class="cap-btn" onclick="exitApp()" title="앱 종료" style="color:#ff6868; border-color:rgba(255,68,68,0.4);">
+                    <span>⏻</span>
                 </button>
             </div>
         </div>
@@ -1778,12 +1799,22 @@ def read_root():
             const btn = document.getElementById('personaToggleBtn');
             const icon = document.getElementById('personaIcon');
             const text = document.getElementById('personaText');
+            const modeSelectBtn = document.getElementById('modeSelectBtn');
+            const modeSelectIcon = document.getElementById('modeSelectIcon');
+            const modeSelectText = document.getElementById('modeSelectText');
             const title = document.getElementById('appHeaderTitle');
             const voiceSelect = document.getElementById('voiceSelect');
 
             if (currentPersonaMode === 'secretary') {
                 if (icon) icon.innerText = '💼';
                 if (text) text.innerText = '비서 모드';
+                if (modeSelectIcon) modeSelectIcon.innerText = '💼';
+                if (modeSelectText) modeSelectText.innerText = '비서 모드';
+                if (modeSelectBtn) {
+                    modeSelectBtn.style.borderColor = '#4facfe';
+                    modeSelectBtn.style.color = '#8ad4ff';
+                    modeSelectBtn.style.background = 'rgba(79, 172, 254, 0.18)';
+                }
                 if (btn) {
                     btn.style.borderColor = '#4facfe';
                     btn.style.color = '#8ad4ff';
@@ -1794,6 +1825,13 @@ def read_root():
             } else {
                 if (icon) icon.innerText = '💖';
                 if (text) text.innerText = '여친 모드';
+                if (modeSelectIcon) modeSelectIcon.innerText = '💖';
+                if (modeSelectText) modeSelectText.innerText = '여친 모드';
+                if (modeSelectBtn) {
+                    modeSelectBtn.style.borderColor = '#ff7b54';
+                    modeSelectBtn.style.color = '#ff9a76';
+                    modeSelectBtn.style.background = 'rgba(255, 123, 84, 0.18)';
+                }
                 if (btn) {
                     btn.style.borderColor = '#ff7b54';
                     btn.style.color = '#ff9a76';
@@ -1831,6 +1869,26 @@ def read_root():
             applyPersonaMode(true);
         }
         applyPersonaMode(false);
+
+        // 음성 볼륨 제어 (기본 120%, 최대 200% 증폭 부스트)
+        let userVolume = parseFloat(localStorage.getItem('minji_volume') || '120');
+        function applyVolume(val) {
+            if (val !== undefined && val !== null) {
+                userVolume = Math.max(0, Math.min(200, parseFloat(val)));
+                localStorage.setItem('minji_volume', userVolume);
+            }
+            const slider = document.getElementById('volumeSlider');
+            const label = document.getElementById('volumeLabel');
+            if (slider && Math.round(slider.value) !== Math.round(userVolume)) {
+                slider.value = userVolume;
+            }
+            if (label) label.innerText = `${Math.round(userVolume)}%`;
+
+            if (audioPlayer) {
+                audioPlayer.volume = Math.min(1.0, userVolume / 100);
+            }
+        }
+        applyVolume(userVolume);
 
         // 상단 상세 메뉴 토글 및 자동 숨김 타이머 (4.5초 뒤 자동 수납)
         let headerHideTimer = null;
@@ -1986,6 +2044,7 @@ def read_root():
                 audioPlayer.src = URL.createObjectURL(blob);
                 // 여친 모드는 얇고 통통 튀는 1.07배속, 비서 모드는 우아하고 안정적인 1.0배속
                 audioPlayer.playbackRate = (currentPersonaMode === 'girlfriend') ? 1.07 : 1.0;
+                applyVolume(userVolume);
                 
                 audioPlayer.onended = () => {
                     if (!isSpeaking) return;
