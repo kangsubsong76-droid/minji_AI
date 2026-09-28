@@ -1266,6 +1266,8 @@ def read_root():
             <div class="status-badge" id="stateLabel" style="display:none;">Ready</div>
             <div class="status-text" id="statusText">화면을 눌러 민지와 대화하세요</div>
         </div>
+        <!-- 숨김 elems: barge-in 힌트 (JS null 방지) -->
+        <div id="bargeInHint" style="display:none;" class="barge-in-hint">💡 민지가 말하는 중 말씀하시면 즉시 멈춰요</div>
     </div>
 
     <div class="controls">
@@ -1434,7 +1436,7 @@ def read_root():
 
         // [핵심] 앱 완전 종료 및 보안 잠금
         function exitApp() {
-            if (!confirm(`민지 AI를 완전히 종료하고 보안 잠금할까요?\n카메라와 마이크가 즉시 꺼지며 전원이 안전하게 차단됩니다.`)) return;
+            // confirm() 팝업 제거 - iOS/PWA에서 동작 불안정하여 즉시 처리
 
             // 1. 카메라/마이크 모든 하드웨어 트랙 완벽 해제
             try {
@@ -1958,7 +1960,7 @@ def read_root():
             try {
                 isSpeaking = true;
                 setOrbState('speaking');
-                bargeInHint.style.display = 'block';
+                if (bargeInHint) bargeInHint.style.display = 'block';
 
                 // iOS Safari: 오디오 재생 시 마이크와 스피커 충돌 방지를 위해 일시 정지
                 if (recognition && isListening) {
