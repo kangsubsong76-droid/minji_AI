@@ -258,25 +258,36 @@ async def setup_elevenlabs(req: ElevenLabsSetupRequest):
 
 @app.post("/api/tts")
 def generate_tts_bytes(text: str, voice: str = "eleven_girlfriend") -> bytes:
-    """ElevenLabs 기반 20대 여성 보이스 (남성 톤 완전 배제 & 초저지연 스트리밍)"""
+    """초저지연(0.4초) ElevenLabs Flash v2.5 기반 가늘고 앳된 20대 여성 보이스 생성기"""
     cleaned_text = re.sub(r'[*#_~`\[\]\(\)<>]', '', text).strip()
     selected_voice = (voice or "eleven_girlfriend").lower()
 
-    # 1. [기본값]: ElevenLabs 순수 20대 여성 프리셋 (남성 톤 0%, 자연스러운 한국어 감성)
+    # 1. [기본값]: ElevenLabs Flash v2.5 초저지연 엔진 + 가늘고 얇은 앳된 20대 목소리
     if (selected_voice in ["eleven_girlfriend", "roh_girlfriend", "eleven_secretary", "roh_secretary", "elevenlabs"] or not openai_client) and elevenlabs_key:
         is_secretary = "secretary" in selected_voice
-        # Jessica (cgSgspJ2msm6clMCkdW9): 달콤·애교 20대 여친 / Sarah (EXAVITQu4vr4xnSDxMaL): 단아·지적 20대 비서
-        voice_id = "EXAVITQu4vr4xnSDxMaL" if is_secretary else "cgSgspJ2msm6clMCkdW9"
         
-        settings = {
-            "stability": 0.45 if is_secretary else 0.35,
-            "similarity_boost": 0.75,
-            "style": 0.20,
-            "use_speaker_boost": False  # 남성 흉성 울림 완전 차단
-        }
+        if is_secretary:
+            # 비서 보이스: Sarah (EXAVITQu4vr4xnSDxMaL) - 단아하고 지적인 20대 수석 비서
+            voice_id = "EXAVITQu4vr4xnSDxMaL"
+            settings = {
+                "stability": 0.45,
+                "similarity_boost": 0.70,
+                "style": 0.20,
+                "use_speaker_boost": False
+            }
+        else:
+            # 여친 보이스: Laura (FGY2WhTYpPnrIDTdsKH5) - 가늘고 얇은 하이톤의 앳되고 귀여운 20대 여친 보이스!
+            # 남성 흉성 울림 100% 배제 (use_speaker_boost: False), stability를 낮추고 style을 높여 가늘고 상큼한 톤 극대화
+            voice_id = "FGY2WhTYpPnrIDTdsKH5"
+            settings = {
+                "stability": 0.22,
+                "similarity_boost": 0.58,
+                "style": 0.42,
+                "use_speaker_boost": False
+            }
 
-        # 초저지연 Flash 및 Multilingual 모델 순차 시도
-        for model_candidate in ["eleven_multilingual_v2", "eleven_flash_v2_5"]:
+        # 초고속 Flash v2.5 모델 최우선 직결 (optimize_streaming_latency=4)
+        for model_candidate in ["eleven_flash_v2_5", "eleven_multilingual_v2"]:
             try:
                 tts_url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?optimize_streaming_latency=4"
                 tts_payload = json.dumps({
@@ -294,7 +305,7 @@ def generate_tts_bytes(text: str, voice: str = "eleven_girlfriend") -> bytes:
                     },
                     method="POST"
                 )
-                with urllib.request.urlopen(tts_req, timeout=7) as resp:
+                with urllib.request.urlopen(tts_req, timeout=5) as resp:
                     audio_data = resp.read()
                     if audio_data and len(audio_data) > 100:
                         return audio_data
@@ -1632,7 +1643,7 @@ def read_root():
 
                 const isFaceIdRegistered = localStorage.getItem('minji_faceid_registered') === 'true';
                 if (faceIdBtnText) {
-                    faceIdBtnText.innerText = isFaceIdRegistered ? `${bio.name}로 잠금 해제` : `${bio.name} 등록하고 시작`;
+                    faceIdBtnText.innerText = isFaceIdRegistered ? `아이폰 Face ID로 즉시 해제` : `아이폰 Face ID 등록하고 시작`;
                 }
 
                 // 인증 완료 여부 확인
@@ -1645,6 +1656,14 @@ def read_root():
                     if (pwGate) {
                         pwGate.classList.remove('hidden');
                         pwGate.style.display = 'flex';
+                    }
+                    // 이미 등록된 상태라면 진입 0.4초 뒤 Face ID 자동 트리거! (화면만 보면 바로 열림)
+                    if (isFaceIdRegistered && isPlatformAuthAvailable) {
+                        setTimeout(() => {
+                            if (localStorage.getItem(PW_KEY) !== '1') {
+                                loginWithFaceID();
+                            }
+                        }, 400);
                     }
                 }
             } catch(e) {
@@ -1723,8 +1742,8 @@ def read_root():
             isListening = false;
             isProcessing = false;
 
-            // [보안 잠금 요청 반영] 앱 종료 시 보안 토큰 파기하여 재진입 시 생체인증 요구
-            localStorage.removeItem(PW_KEY);
+            // 앱 종료 시 전원 끄기 화면 진입 (수동 잠금 버튼 lockApp()을 누를 때만 토큰 삭제)
+            // localStorage.removeItem(PW_KEY);
 
             // 2. UI 기본 컨트롤 숨김
             if (connectGroup) connectGroup.style.display = 'block';
@@ -1809,10 +1828,10 @@ def read_root():
                 const credential = await navigator.credentials.create({
                     publicKey: {
                         challenge: challenge,
-                        rp: { name: "Minji AI" },
+                        rp: { name: "Minji AI", id: location.hostname },
                         user: {
                             id: userId,
-                            name: "owner@minji.ai",
+                            name: "master",
                             displayName: "Minji AI Master"
                         },
                         pubKeyCredParams: [
@@ -1821,7 +1840,7 @@ def read_root():
                         ],
                         authenticatorSelection: {
                             authenticatorAttachment: "platform",
-                            residentKey: "required",
+                            residentKey: "preferred",
                             userVerification: "required"
                         },
                         timeout: 60000
@@ -1837,13 +1856,13 @@ def read_root():
                         pwGate.classList.add('hidden');
                         pwGate.style.display = 'none';
                     }
-                    alert(`✨ ${bio.name} 등록 완료! 이제 원터치 얼굴/생체인식으로 바로 열립니다.`);
+                    alert(`✨ Face ID 등록 완료! 이제 얼굴인식으로 즉시 열립니다.`);
                     initAuthGate();
                 }
             } catch (err) {
                 console.warn("Face ID 등록 취소/에러:", err);
                 if (err.name !== 'NotAllowedError') {
-                    alert(`${bio.name} 등록 안내: ${err.message}\n(비밀번호 minji76으로도 즉시 접속하실 수 있습니다)`);
+                    alert(`${bio.name} 안내: ${err.message}\n(비밀번호 minji76으로도 접속하실 수 있습니다)`);
                 }
             }
         }
@@ -1862,6 +1881,7 @@ def read_root():
                 const assertion = await navigator.credentials.get({
                     publicKey: {
                         challenge: challenge,
+                        rpId: location.hostname,
                         allowCredentials: allowList.length ? allowList : undefined,
                         userVerification: "required",
                         timeout: 60000
