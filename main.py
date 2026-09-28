@@ -954,11 +954,11 @@ def read_root():
             height: 100%;
             object-fit: cover;
             object-position: center 25%;
-            transition: opacity 0.75s cubic-bezier(0.4, 0, 0.2, 1), transform 0.8s ease, filter 0.5s ease;
+            filter: brightness(0.96) contrast(1.04);
+            transition: opacity 0.4s ease;
             animation: humanBreathe 5.5s infinite ease-in-out;
             mask-image: none !important;
             -webkit-mask-image: none !important;
-            will-change: opacity, transform;
         }
 
         .avatar-img-active {
@@ -1998,19 +1998,30 @@ def read_root():
         const avatarImgA = document.getElementById('avatarImgA');
         const avatarImgB = document.getElementById('avatarImgB');
         let activeAvatarSlot = 'A';
+        let currentDisplayedAvatarSrc = "/static/avatar/idle.jpg";
 
-        // 듀얼 버퍼 0.75초 부드러운 디졸브(크로스페이드) 이미지 전환기
+        // 안정적인 듀얼 슬롯 0.4초 크로스페이드 이미지 전환기 (깜빡임 및 중복 로드 완전 차단)
         function setAvatarImageSmooth(newSrc) {
-            if (!newSrc) return;
+            if (!newSrc || newSrc === currentDisplayedAvatarSrc) return;
             const currentImg = (activeAvatarSlot === 'A') ? avatarImgA : avatarImgB;
             const nextImg = (activeAvatarSlot === 'A') ? avatarImgB : avatarImgA;
 
             if (!currentImg || !nextImg) {
-                if (avatarImgA) avatarImgA.src = newSrc;
+                if (avatarImgA) {
+                    avatarImgA.src = newSrc;
+                    currentDisplayedAvatarSrc = newSrc;
+                }
                 return;
             }
 
-            if (currentImg.src && currentImg.src.includes(newSrc)) return;
+            // 이미 대상 이미지가 슬롯에 대기 중인 경우 즉시 활성화
+            if (nextImg.src && nextImg.src.includes(newSrc)) {
+                nextImg.className = 'avatar-img avatar-img-active';
+                currentImg.className = 'avatar-img avatar-img-inactive';
+                activeAvatarSlot = (activeAvatarSlot === 'A') ? 'B' : 'A';
+                currentDisplayedAvatarSrc = newSrc;
+                return;
+            }
 
             const loader = new Image();
             loader.onload = () => {
@@ -2018,6 +2029,10 @@ def read_root():
                 nextImg.className = 'avatar-img avatar-img-active';
                 currentImg.className = 'avatar-img avatar-img-inactive';
                 activeAvatarSlot = (activeAvatarSlot === 'A') ? 'B' : 'A';
+                currentDisplayedAvatarSrc = newSrc;
+            };
+            loader.onerror = () => {
+                console.warn("[Avatar Load Error]:", newSrc);
             };
             loader.src = newSrc;
         }
@@ -2108,7 +2123,7 @@ def read_root():
 
         // [핵심] 앱 완전 종료 및 보안 잠금
         function exitApp() {
-            // confirm() 팝업 제거 - iOS/PWA에서 동작 불안정하여 즉시 처리
+            if (!confirm("민지와의 대화를 종료하시겠습니까?")) return;
 
             // 1. 카메라/마이크 모든 하드웨어 트랙 완벽 해제
             try {
@@ -2154,22 +2169,13 @@ def read_root():
             isListening = false;
             isProcessing = false;
 
-            // 앱 종료 시 전원 끄기 화면 진입 (수동 잠금 버튼 lockApp()을 누를 때만 토큰 삭제)
-            // localStorage.removeItem(PW_KEY);
-
             // 2. UI 기본 컨트롤 숨김
             if (connectGroup) connectGroup.style.display = 'block';
             if (activeControls) activeControls.style.display = 'none';
             setOrbState('idle');
-            if (statusText) statusText.innerText = "전원이 완전히 꺼졌습니다.";
+            if (statusText) statusText.innerText = "대화가 종료되었습니다.";
 
-            // 3. 브라우저 닫기 즉시 시도 (무음)
-            try {
-                window.open('', '_self', '');
-                window.close();
-            } catch(e){}
-
-            // 4. 완전 종료 OLED 화면 표시
+            // 3. 완전 종료 OLED 화면 표시 (절대 자동으로 브라우저 창을 닫지 않음)
             if (pwGate) {
                 pwGate.classList.add('hidden');
                 pwGate.style.display = 'none';
@@ -2397,101 +2403,44 @@ def read_root():
         // 페르소나 모드 관리 (💖 여친 모드 vs 💼 비서 모드)
         let currentPersonaMode = localStorage.getItem('minji_persona_mode') || 'girlfriend';
 
-        // 두 페르소나 전용 선별된 베이글 아바타 정예 풀
+        // 페르소나 모드별 전용 대표 아바타 (여친 모드 vs 비서 모드: 상태별 통일된 인물 표정 연동)
         const avatarImagePools = {
             girlfriend: {
-                idle: [
-                    "/static/gallery/gf_01_deep_vneck_cream_glam.jpg",
-                    "/static/gallery/gf_02_wrap_knit_peach_glam.jpg",
-                    "/static/gallery/gf_03_sweetheart_pink_sofa.jpg",
-                    "/static/gallery/gf_04_vneck_ribbed_classic.jpg",
-                    "/static/gallery/gf_05_offshoulder_lavender_cafe.jpg",
-                    "/static/avatar/idle.jpg",
-                    "/static/avatar/idle_2.jpg"
-                ],
-                listening: [
-                    "/static/gallery/gf_02_wrap_knit_peach_glam.jpg",
-                    "/static/gallery/gf_05_offshoulder_lavender_cafe.jpg",
-                    "/static/gallery/gf_01_deep_vneck_cream_glam.jpg",
-                    "/static/avatar/listening.jpg"
-                ],
-                thinking: [
-                    "/static/gallery/gf_03_sweetheart_pink_sofa.jpg",
-                    "/static/gallery/gf_01_deep_vneck_cream_glam.jpg",
-                    "/static/gallery/gf_04_vneck_ribbed_classic.jpg",
-                    "/static/avatar/thinking.jpg"
-                ],
-                speaking: [
-                    "/static/gallery/gf_01_deep_vneck_cream_glam.jpg",
-                    "/static/gallery/gf_02_wrap_knit_peach_glam.jpg",
-                    "/static/gallery/gf_03_sweetheart_pink_sofa.jpg",
-                    "/static/avatar/speaking.jpg"
-                ]
+                idle: "/static/avatar/idle.jpg",
+                listening: "/static/avatar/listening.jpg",
+                thinking: "/static/avatar/thinking.jpg",
+                speaking: "/static/avatar/speaking.jpg"
             },
             secretary: {
-                idle: [
-                    "/static/gallery/sec_01_champagne_silk_open_glam.jpg",
-                    "/static/gallery/sec_02_silk_desk_lean_glam.jpg",
-                    "/static/gallery/sec_03_silk_folder_briefing.jpg",
-                    "/static/gallery/sec_04_charcoal_blazer_lace_tablet.jpg",
-                    "/static/gallery/sec_05_champagne_draped_blouse.jpg",
-                    "/static/avatar_secretary/idle.jpg",
-                    "/static/avatar_secretary/idle_2.jpg"
-                ],
-                listening: [
-                    "/static/gallery/sec_02_silk_desk_lean_glam.jpg",
-                    "/static/gallery/sec_04_charcoal_blazer_lace_tablet.jpg",
-                    "/static/gallery/sec_01_champagne_silk_open_glam.jpg",
-                    "/static/avatar_secretary/listening.jpg"
-                ],
-                thinking: [
-                    "/static/gallery/sec_03_silk_folder_briefing.jpg",
-                    "/static/gallery/sec_05_champagne_draped_blouse.jpg",
-                    "/static/gallery/sec_02_silk_desk_lean_glam.jpg",
-                    "/static/avatar_secretary/thinking.jpg"
-                ],
-                speaking: [
-                    "/static/gallery/sec_01_champagne_silk_open_glam.jpg",
-                    "/static/gallery/sec_02_silk_desk_lean_glam.jpg",
-                    "/static/gallery/sec_04_charcoal_blazer_lace_tablet.jpg",
-                    "/static/avatar_secretary/speaking.jpg"
-                ]
+                idle: "/static/avatar_secretary/idle.jpg",
+                listening: "/static/avatar_secretary/listening.jpg",
+                thinking: "/static/avatar_secretary/thinking.jpg",
+                speaking: "/static/avatar_secretary/speaking.jpg"
             }
         };
 
-        // 최근 선택된 이미지 인덱스 추적 (중복 방지)
-        const lastPoolIndex = {};
-
-        // 풀에서 중복 없이 다양한 이미지를 가져오는 헬퍼
+        // 상태별 안정적인 대표 이미지 반환 (대화 흐름에 맞추어 표정만 부드럽게 전환)
         function getAvatarImage(mode, state) {
             const personaPool = avatarImagePools[mode] || avatarImagePools.girlfriend;
-            const statePool = personaPool[state] || personaPool.idle || [];
-            if (!statePool || statePool.length === 0) return "/static/avatar/idle_1.jpg";
-            if (statePool.length === 1) return statePool[0];
-
-            const poolKey = `${mode}_${state}`;
-            const lastIdx = lastPoolIndex[poolKey] !== undefined ? lastPoolIndex[poolKey] : -1;
-            
-            let nextIdx;
-            do {
-                nextIdx = Math.floor(Math.random() * statePool.length);
-            } while (nextIdx === lastIdx && statePool.length > 1);
-
-            lastPoolIndex[poolKey] = nextIdx;
-            return statePool[nextIdx];
+            return personaPool[state] || personaPool.idle || "/static/avatar/idle.jpg";
         }
 
-        // 전체 아바타 이미지 즉시 백그라운드 프리로드 (전환 시 깜빡임 완전 제거)
+        // 핵심 아바타 이미지 백그라운드 프리로드
         function preloadAllAvatars() {
-            for (const modeKey in avatarImagePools) {
-                for (const stateKey in avatarImagePools[modeKey]) {
-                    const pool = avatarImagePools[modeKey][stateKey];
-                    pool.forEach(url => {
-                        const img = new Image();
-                        img.src = url;
-                    });
-                }
-            }
+            const coreAvatars = [
+                "/static/avatar/idle.jpg",
+                "/static/avatar/listening.jpg",
+                "/static/avatar/thinking.jpg",
+                "/static/avatar/speaking.jpg",
+                "/static/avatar_secretary/idle.jpg",
+                "/static/avatar_secretary/listening.jpg",
+                "/static/avatar_secretary/thinking.jpg",
+                "/static/avatar_secretary/speaking.jpg"
+            ];
+            coreAvatars.forEach(url => {
+                const img = new Image();
+                img.src = url;
+            });
         }
         preloadAllAvatars();
 
@@ -2517,17 +2466,10 @@ def read_root():
         }
         applyViewMode();
 
-        // Idle 상태 시 주기적 슬라이드 순환 타이머 (6.5초마다 자연스럽게 다음 사진으로 부드러운 디졸브 전환)
+        // 대기 중 무작위 이미지 전환 타이머는 완전 해제 (옷/배경이 계속 바뀌어 어지러운 현상 제거)
         let idleRotationTimer = null;
         function startIdleRotation() {
             stopIdleRotation();
-            idleRotationTimer = setInterval(() => {
-                const currentState = avatarOrb ? (avatarOrb.className.replace('orb', '').trim() || 'idle') : 'idle';
-                if (currentState === 'idle' || currentState === '') {
-                    const nextSrc = getAvatarImage(currentPersonaMode, 'idle');
-                    setAvatarImageSmooth(nextSrc);
-                }
-            }, 6500);
         }
         function stopIdleRotation() {
             if (idleRotationTimer) {
@@ -2667,8 +2609,13 @@ def read_root():
             localStorage.setItem("minji_session_id", sessionId);
         }
 
+        let currentOrbState = '';
+
         // 상태 업데이트 헬퍼 (모드별 아바타 동적 바인딩)
         function setOrbState(state) {
+            if (currentOrbState === state) return;
+            currentOrbState = state;
+
             avatarOrb.className = 'orb ' + (state || '');
             if (avatarWrapper) {
                 avatarWrapper.className = 'avatar-wrapper ' + (state || '');
@@ -2767,16 +2714,19 @@ def read_root():
                     for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
                     let average = sum / dataArray.length;
 
-                    // 1. 민지 발화 중 끼어들기 (Barge-in)
-                    if (isSpeaking && average > 52) {
-                        interruptSpeech("loud_voice_detected (" + Math.round(average) + ")");
-                        return;
+                    // 1. 민지 발화 중 끼어들기 (Barge-in: 스피커 음향 자가 간섭 및 에코 방지)
+                    if (isSpeaking) {
+                        const elapsed = Date.now() - speechStartTime;
+                        if (elapsed > 1200 && average > 75) {
+                            interruptSpeech("loud_voice_detected (" + Math.round(average) + ")");
+                            return;
+                        }
                     }
 
-                    // 2. 대기/청취 중 사용자 음성 볼륨 실시간 시각화 (노트북 마이크 실시간 감지)
+                    // 2. 대기/청취 중 사용자 음성 볼륨 실시간 시각화 (노트북 팬/생활 소음 차단 26 이상)
                     if (!isSpeaking && !isProcessing) {
                         const micBtn = document.getElementById('micToggleBtn');
-                        if (average > 10) {
+                        if (average > 26) {
                             if (micBtn) {
                                 micBtn.style.boxShadow = "0 0 16px rgba(0, 242, 254, 0.85)";
                                 micBtn.style.borderColor = "#00f2fe";
@@ -2874,10 +2824,11 @@ def read_root():
                     isSpeaking = false;
                     setOrbState(isMicMuted ? 'muted' : 'idle');
                     if (callback) callback();
-                    if (!isMicMuted) setTimeout(startListening, 300);
+                    if (!isMicMuted) setTimeout(startListening, 400);
                 };
 
                 try {
+                    speechStartTime = Date.now();
                     await audioPlayer.play();
                 } catch (playErr) {
                     console.warn("[Autoplay Blocked]:", playErr);
@@ -2900,9 +2851,18 @@ def read_root():
             }
         }
 
-        // Web Speech API 및 Whisper 듀얼 음성 인식 시스템
+        let speechStartTime = 0;
+        let recognitionRestartTimeout = null;
+        let isStartingRecognition = false;
+        let recognitionFailCount = 0;
+
+        // Web Speech API 및 Whisper 듀얼 음성 인식 시스템 (브라우저 크래시 방지 및 안정화)
         function startListening() {
-            if (isMicMuted || isProcessing || isSpeaking) return;
+            if (isMicMuted || isProcessing || isSpeaking || isStartingRecognition) return;
+            if (recognitionRestartTimeout) {
+                clearTimeout(recognitionRestartTimeout);
+                recognitionRestartTimeout = null;
+            }
 
             if (audioContext && audioContext.state === 'suspended') {
                 audioContext.resume().catch(()=>{});
@@ -2910,9 +2870,13 @@ def read_root():
 
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-            // 기존 recognition 안전 강제 종료 및 인스턴스 재생성 (InvalidStateError 원천 방지)
+            // 기존 recognition 안전 종료
             if (recognition) {
-                try { recognition.abort(); } catch(e){}
+                try {
+                    recognition.onend = null;
+                    recognition.onerror = null;
+                    recognition.abort();
+                } catch(e){}
                 recognition = null;
             }
 
@@ -2930,6 +2894,8 @@ def read_root():
 
                 recognition.onstart = () => {
                     isListening = true;
+                    isStartingRecognition = false;
+                    recognitionFailCount = 0;
                     if (!isSpeaking) {
                         setOrbState('listening');
                         statusText.innerText = "듣고 있어요... (편하게 말씀하세요)";
@@ -2972,6 +2938,8 @@ def read_root():
                 };
 
                 recognition.onerror = (e) => {
+                    isStartingRecognition = false;
+                    if (e.error === 'no-speech') return;
                     console.warn("[SpeechRecognition Error]:", e.error);
                     if (e.error === 'not-allowed') {
                         statusText.innerText = "⚠️ 마이크 권한이 차단되었습니다. 주소창 좌측 🔒을 눌러 마이크를 '허용'해주세요.";
@@ -2985,15 +2953,26 @@ def read_root():
 
                 recognition.onend = () => {
                     isListening = false;
-                    if (!isSpeaking && !isProcessing && !isMicMuted) {
-                        setTimeout(startListening, 300);
+                    isStartingRecognition = false;
+                    if (!isSpeaking && !isProcessing && !isMicMuted && streamActive) {
+                        if (recognitionRestartTimeout) clearTimeout(recognitionRestartTimeout);
+                        recognitionRestartTimeout = setTimeout(() => {
+                            if (!isSpeaking && !isProcessing && !isMicMuted && streamActive) {
+                                startListening();
+                            }
+                        }, 700);
                     }
                 };
 
+                isStartingRecognition = true;
                 recognition.start();
             } catch (err) {
                 console.warn("[SpeechRecognition Start Catch]:", err);
-                setTimeout(startListening, 600);
+                isStartingRecognition = false;
+                recognitionFailCount++;
+                const backoffDelay = Math.min(3000, 800 * recognitionFailCount);
+                if (recognitionRestartTimeout) clearTimeout(recognitionRestartTimeout);
+                recognitionRestartTimeout = setTimeout(startListening, backoffDelay);
             }
         }
 
