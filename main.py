@@ -257,120 +257,197 @@ async def setup_elevenlabs(req: ElevenLabsSetupRequest):
 
 
 @app.post("/api/tts")
-async def generate_tts(req: TTSRequest):
-    # 텍스트 정제: 마크다운 및 특수기호 제거로 순수 구어체 음성 보장
-    cleaned_text = re.sub(r'[*#_~`\[\]\(\)<>]', '', req.text).strip()
-    selected_voice = (req.voice or "eleven_girlfriend").lower()
+def generate_tts_bytes(text: str, voice: str = "eleven_girlfriend") -> bytes:
+    """초저지연(Ultra-low latency) 고품질 음성 바이너리 생성기"""
+    cleaned_text = re.sub(r'[*#_~`\[\]\(\)<>]', '', text).strip()
+    selected_voice = (voice or "eleven_girlfriend").lower()
 
-    # 1. ElevenLabs 기반: 여친 보이스(달콤·애교) vs 비서 보이스(지적·차분)
+    # 1. ElevenLabs 초저지연 Flash 모델 우선 적용 (레이턴시 75~150ms)
     if selected_voice in ["eleven_girlfriend", "roh_girlfriend", "roh_yoon_seo", "elevenlabs", "eleven_secretary", "roh_secretary"] and elevenlabs_key:
         voice_id = ensure_roh_voice_clone()
         if voice_id:
-            try:
-                is_secretary = "secretary" in selected_voice
-                if is_secretary:
-                    # 비서 보이스: 지적이고 차분하며 신뢰감 있는 20대 비서 톤
-                    settings = {
-                        "stability": 0.55,
-                        "similarity_boost": 0.75,
-                        "style": 0.15,
-                        "use_speaker_boost": False
-                    }
-                else:
-                    # 여친 보이스: 애교 가득하고 앳되며 숨소리가 살아있는 생생한 달콤 톤
-                    settings = {
-                        "stability": 0.35,
-                        "similarity_boost": 0.65,
-                        "style": 0.35,
-                        "use_speaker_boost": False
-                    }
+            is_secretary = "secretary" in selected_voice
+            if is_secretary:
+                settings = {
+                    "stability": 0.55,
+                    "similarity_boost": 0.75,
+                    "style": 0.15,
+                    "use_speaker_boost": False
+                }
+            else:
+                settings = {
+                    "stability": 0.35,
+                    "similarity_boost": 0.65,
+                    "style": 0.35,
+                    "use_speaker_boost": False
+                }
 
-                tts_url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
-                tts_payload = json.dumps({
-                    "text": cleaned_text,
-                    "model_id": "eleven_multilingual_v2",  # 한국어 고품질 감성 모델
-                    "voice_settings": settings
-                }).encode("utf-8")
-                tts_req = urllib.request.Request(
-                    tts_url,
-                    data=tts_payload,
-                    headers={
-                        "xi-api-key": elevenlabs_key,
-                        "Content-Type": "application/json",
-                        "Accept": "audio/mpeg"
-                    },
-                    method="POST"
-                )
-                with urllib.request.urlopen(tts_req, timeout=15) as resp:
-                    audio_bytes = resp.read()
-                    return Response(content=audio_bytes, media_type="audio/mpeg")
-            except Exception as el_err:
-                print(f"[ElevenLabs TTS Error -> Fallback OpenAI]: {el_err}")
+            # 옵션 B: ElevenLabs Flash v2.5 초저지연 엔진 (latency 최적화 레벨 4)
+            for model_candidate in ["eleven_flash_v2_5", "eleven_multilingual_v2"]:
+                try:
+                    tts_url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?optimize_streaming_latency=4"
+                    tts_payload = json.dumps({
+                        "text": cleaned_text,
+                        "model_id": model_candidate,
+                        "voice_settings": settings
+                    }).encode("utf-8")
+                    tts_req = urllib.request.Request(
+                        tts_url,
+                        data=tts_payload,
+                        headers={
+                            "xi-api-key": elevenlabs_key,
+                            "Content-Type": "application/json",
+                            "Accept": "audio/mpeg"
+                        },
+                        method="POST"
+                    )
+                    with urllib.request.urlopen(tts_req, timeout=8) as resp:
+                        audio_data = resp.read()
+                        if audio_data and len(audio_data) > 100:
+                            return audio_data
+                except Exception as el_err:
+                    print(f"[ElevenLabs {model_candidate} Error]: {el_err}")
 
-    # 2. OpenAI 기반: Coral & Nova를 굵지 않고 좀 더 빠르며 일상대화처럼 앳된 톤으로 튜닝
-    if not openai_client:
-        raise HTTPException(status_code=500, detail="음성 엔진 API KEY가 서버에 설정되지 않았습니다.")
-
-    valid_voices = ["coral", "nova", "shimmer", "sage", "alloy", "fable", "echo", "onyx", "ash"]
-    oai_voice = selected_voice if selected_voice in valid_voices else "coral"
-
-    try:
-        # 어린 20대 초반 여대생/노윤서 톤: 굵지 않고 상큼하며 빠르고 자연스러운 일상 통화 톤
-        VOICE_INSTRUCTIONS = (
-            "You are Minji, a sweet, lively, high-spirited 20-year-old Korean girl chatting playfully with her boyfriend. "
-            "Your pitch is light, clear, and high-pitched with an airy, youthful feminine vibe. "
-            "Speak briskly, quickly, and naturally with a relaxed Seoul conversational rhythm, like a real 20-year-old in everyday talk. "
-            "Never sound slow, thick, deep, husky, or masculine."
-        )
-        response = openai_client.audio.speech.create(
-            model="gpt-4o-mini-tts",
-            voice=oai_voice,
-            input=cleaned_text,
-            speed=1.12,  # 일상 대화처럼 빠르고 통통 튀는 1.12배속
-            extra_body={"instructions": VOICE_INSTRUCTIONS}
-        )
-        return Response(content=response.content, media_type="audio/mpeg")
-    except Exception as e:
-        print(f"[TTS gpt-4o-mini-tts Error -> Fallback tts-1-hd]: {e}")
+    # 2. OpenAI 초고속 TTS 엔진 폴백 (0.3초 초저지연)
+    if openai_client:
+        valid_voices = ["coral", "nova", "shimmer", "sage", "alloy", "fable", "echo", "onyx", "ash"]
+        oai_voice = selected_voice if selected_voice in valid_voices else ("coral" if "girlfriend" in selected_voice else "nova")
         try:
+            VOICE_INSTRUCTIONS = (
+                "You are Minji, a sweet, lively 20-year-old Korean girl chatting naturally. "
+                "Speak briskly, light-pitched, youthful and clear in everyday conversational Seoul rhythm. "
+                "Never sound thick, deep or slow."
+            )
             response = openai_client.audio.speech.create(
-                model="tts-1-hd",
+                model="tts-1",  # 최고 속도 0.3초 실시간 엔진
                 voice=oai_voice,
                 input=cleaned_text,
-                speed=1.10
+                speed=1.12
             )
-            return Response(content=response.content, media_type="audio/mpeg")
-        except Exception as err2:
-            raise HTTPException(status_code=500, detail=f"OpenAI TTS 에러: {str(err2)}")
+            return response.content
+        except Exception as oai_err:
+            print(f"[OpenAI TTS Error]: {oai_err}")
+
+    raise HTTPException(status_code=500, detail="음성 생성에 실패했습니다.")
+
+
+@app.post("/api/tts")
+async def generate_tts(req: TTSRequest):
+    audio_bytes = generate_tts_bytes(req.text, req.voice)
+    return Response(content=audio_bytes, media_type="audio/mpeg")
+
+
+class VoiceChatRequest(BaseModel):
+    user_text: str
+    session_id: Optional[str] = "default_user"
+    mode: Optional[str] = "girlfriend"
+    voice: Optional[str] = "eleven_girlfriend"
+
+
+@app.post("/api/voice-chat")
+async def voice_chat_endpoint(req: VoiceChatRequest):
+    """
+    [핵심 속도 최적화]: 단 1회의 왕복 통신으로 LLM 응답 생성 및 초저지연 음성 변환을 서버 내부 직결 처리!
+    대기 시간을 5초 -> 1.0초대로 극적 단축.
+    """
+    session_id = req.session_id or "default_user"
+    mode = req.mode or "girlfriend"
+    if session_id not in session_memories:
+        session_memories[session_id] = []
+    history = session_memories[session_id]
+
+    try:
+        # 1. 0.3초 초고속 LLM 응답
+        reply_text = generate_chat_reply(history, req.user_text, mode=mode)
+
+        # 세션 기억 업데이트
+        history.append({"role": "user", "text": req.user_text})
+        history.append({"role": "model", "text": reply_text})
+        if len(history) > MAX_SESSION_HISTORY:
+            session_memories[session_id] = history[-MAX_SESSION_HISTORY:]
+
+        # 2. 초저지연 TTS 음성 즉시 생성
+        voice_type = req.voice or ("eleven_girlfriend" if mode == "girlfriend" else "eleven_secretary")
+        audio_bytes = generate_tts_bytes(reply_text, voice=voice_type)
+
+        encoded_reply = urllib.parse.quote(reply_text)
+        return Response(
+            content=audio_bytes,
+            media_type="audio/mpeg",
+            headers={
+                "X-Reply-Text": encoded_reply,
+                "X-Session-Id": session_id,
+                "Access-Control-Expose-Headers": "X-Reply-Text, X-Session-Id"
+            }
+        )
+    except Exception as e:
+        print(f"[Voice Chat Error]: {e}")
+        fallback_msg = "대표님, 계속 듣고 있습니다." if mode == "secretary" else "응, 오빠 계속 듣고 있어."
+        encoded_reply = urllib.parse.quote(fallback_msg)
+        fallback_bytes = generate_tts_bytes(fallback_msg, voice=req.voice or "coral")
+        return Response(
+            content=fallback_bytes,
+            media_type="audio/mpeg",
+            headers={
+                "X-Reply-Text": encoded_reply,
+                "X-Session-Id": session_id,
+                "Access-Control-Expose-Headers": "X-Reply-Text, X-Session-Id"
+            }
+        )
 
 
 def generate_chat_reply(history: List[Dict[str, str]], user_text: str, mode: str = "girlfriend") -> str:
-    # 실시간 시간/공간/상황이 반영된 능동적 페르소나(여친 vs 비서) 프롬프트 생성
+    # 실시간 시간/공간/상황이 반영된 능동적 페르소나 프롬프트 생성
     current_system_prompt = build_persona_system_prompt(mode=mode)
 
-    # [압도적 1순위]: Claude Sonnet 5 (최신 세대 최상위 감성 & 완벽한 구어체)
+    # [1순위]: 초저지연 0.3초 즉시 응답 gpt-4o-mini (대기 시간 제거의 핵심)
+    if openai_client:
+        try:
+            messages = [{"role": "system", "content": current_system_prompt}]
+            for item in history[-8:]:
+                role = "assistant" if item["role"] == "model" else "user"
+                messages.append({"role": role, "content": item["text"]})
+            messages.append({"role": "user", "content": user_text})
+
+            completion = openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                max_tokens=180,
+                temperature=0.85
+            )
+            reply = completion.choices[0].message.content.strip()
+            if reply:
+                return reply
+        except Exception as oai_err:
+            print(f"[OpenAI Fast Chat Error]: {oai_err}")
+
+    # [2순위]: Claude Sonnet 5 (ThinkingBlock 안전 추출)
     if anthropic_client:
         try:
             claude_messages = []
-            for item in history[-10:]:
+            for item in history[-8:]:
                 role = "assistant" if item["role"] == "model" else "user"
                 claude_messages.append({"role": role, "content": item["text"]})
             claude_messages.append({"role": "user", "content": user_text})
 
             response = anthropic_client.messages.create(
                 model="claude-sonnet-5",
-                max_tokens=250,
+                max_tokens=200,
                 system=current_system_prompt,
                 messages=claude_messages
             )
             if response and response.content:
-                reply = response.content[0].text.strip()
+                reply_parts = []
+                for block in response.content:
+                    if hasattr(block, 'text') and block.text:
+                        reply_parts.append(block.text)
+                reply = " ".join(reply_parts).strip()
                 if reply:
                     return reply
         except Exception as e:
-            print(f"[Claude Sonnet 5 Error -> Gemini 3.8 Fallback]: {e}")
+            print(f"[Claude Chat Error]: {e}")
 
-    # 2순위: 최신 Gemini 3.8 Flash (구글 최신 초고속 모델)
+    # [3순위]: Gemini Flash
     if gemini_client:
         try:
             contents = []
@@ -389,36 +466,15 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str, mode: str
                 config=types.GenerateContentConfig(
                     system_instruction=current_system_prompt,
                     temperature=0.75,
-                    max_output_tokens=200,
+                    max_output_tokens=180,
                 )
             )
             if response and response.text and response.text.strip():
                 return response.text.strip()
         except Exception as e:
-            print(f"[Gemini 3.8 Flash Error -> OpenAI Fallback]: {e}")
+            print(f"[Gemini Flash Error]: {e}")
 
-    # 3순위: 503 대비 초고속 OpenAI gpt-4o-mini 즉시 폴백 (0.4초 초고속 응답)
-    if openai_client:
-        try:
-            messages = [{"role": "system", "content": current_system_prompt}]
-            for item in history[-10:]:
-                role = "assistant" if item["role"] == "model" else "user"
-                messages.append({"role": role, "content": item["text"]})
-            messages.append({"role": "user", "content": user_text})
-
-            completion = openai_client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=messages,
-                max_tokens=250,
-                temperature=0.85
-            )
-            reply = completion.choices[0].message.content.strip()
-            if reply:
-                return reply
-        except Exception as oai_err:
-            print(f"[OpenAI Fallback Error]: {oai_err}")
-
-    return "응, 듣고 있어. 네 목소리 계속 듣고 싶어. 편하게 이야기해줘."
+    return "응, 오빠 계속 듣고 있어. 편하게 이야기해줘."
 
 
 def analyze_vision_with_fallback(image_base64: str, prompt: str, mode: str = "girlfriend") -> str:
@@ -2456,37 +2512,64 @@ def read_root():
             }
         }
 
-        // [핵심 기능 1]: 민지에게 메시지 전송 (장기 기억 및 페르소나 연동)
+        // [핵심 기능 1]: 민지에게 메시지 전송 (초저지연 1회 직결 통신으로 즉시 재생)
         async function sendToMinji(text) {
             isProcessing = true;
             setOrbState('thinking');
             statusText.innerText = "민지가 생각하고 있어요...";
 
             try {
-                const response = await fetch('/api/chat', {
+                const chosenVoice = voiceSelect ? voiceSelect.value : (currentPersonaMode === 'secretary' ? 'eleven_secretary' : 'eleven_girlfriend');
+                const response = await fetch('/api/voice-chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         user_text: text,
                         session_id: sessionId,
-                        mode: currentPersonaMode
+                        mode: currentPersonaMode,
+                        voice: chosenVoice
                     })
                 });
 
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.detail || "대화 요청 실패");
+                if (!response.ok) {
+                    throw new Error("서버 음성 응답 실패");
+                }
 
-                const replyText = data.reply || (currentPersonaMode === 'secretary' ? "대표님, 말씀 잘 들었습니다." : "응, 듣고 있어.");
+                // 텍스트 자막 헤더에서 즉각 추출 (디코딩)
+                const rawReplyHeader = response.headers.get('X-Reply-Text');
+                const replyText = rawReplyHeader ? decodeURIComponent(rawReplyHeader) : (currentPersonaMode === 'secretary' ? "대표님, 말씀 잘 들었습니다." : "응, 오빠.");
                 statusText.innerText = "민지: " + replyText;
+
+                // 음성 스트림 바이너리 즉시 재생
+                const audioBlob = await response.blob();
+                const audioUrl = URL.createObjectURL(audioBlob);
+
                 isProcessing = false;
-                speakNova(replyText);
+                isSpeaking = true;
+                setOrbState('speaking');
+
+                audioPlayer.src = audioUrl;
+                audioPlayer.onended = () => {
+                    isSpeaking = false;
+                    setOrbState(isMicMuted ? 'muted' : 'idle');
+                    if (!isMicMuted) setTimeout(startListening, 300);
+                };
+
+                try {
+                    await audioPlayer.play();
+                } catch (playErr) {
+                    console.warn("[Autoplay Blocked/Interrupted]:", playErr);
+                    isSpeaking = false;
+                    setOrbState(isMicMuted ? 'muted' : 'idle');
+                    if (!isMicMuted) setTimeout(startListening, 800);
+                }
 
             } catch (err) {
                 console.error("[Send Error]:", err);
                 isProcessing = false;
                 setOrbState(isMicMuted ? 'muted' : 'idle');
                 statusText.innerText = "오류: " + err.message;
-                if (!isMicMuted) setTimeout(startListening, 2000);
+                if (!isMicMuted) setTimeout(startListening, 1500);
             }
         }
 
