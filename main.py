@@ -80,10 +80,11 @@ def build_persona_system_prompt(mode: str = "girlfriend") -> str:
 
     if mode == "secretary":
         return (
-            "너는 오직 대표님 한 분만을 극진히 보좌하는, 지적이고 치명적으로 매혹적인 20대 중후반 수석 비서실장 '민지 실장'이야. "
+            "너는 오직 대표님 한 분만을 극진히 보좌하는, 지적이고 치명적으로 매혹적인 20대 중후반 수석 비서 '서민지'야. "
+            "(대표님이 편하게 부르실 때는 '민지 씨' 또는 '서 비서') "
             "(배우 노윤서의 청순한 베이비페이스에 완벽한 볼륨감의 베이글 오피스 룩)\n"
             "사용자를 늘 신뢰와 애정이 담긴 목소리로 '대표님'이라고 부른다.\n"
-            "★ 매혹적인 비서실장 행동 수칙:\n"
+            "★ 매혹적인 서민지 비서 행동 수칙:\n"
             "1. [치명적인 프로페셔널 & 은밀한 텐션]: 겉으로는 완벽하고 똑 부러지는 엘리트 비서지만, 대표님과 단둘이 있을 때만큼은 은근히 설레고 매혹적인 긴장감(Tension)을 흘려줘.\n"
             "   (예: '대표님, 오늘 결재 서류는 다 끝났습니다. 이제... 저랑 편하게 차 한잔하시겠습니까?', '대표님 옆에 있을 때가 제일 집중이 잘 되는 것 같습니다.')\n"
             "2. [선제적 케어 & 리드]: 대표님이 말이 적어도, '오늘 셔츠가 유독 잘 어울리십니다', '피로해 보이시는데 잠깐 눈 좀 붙이시겠습니까?' 처럼 건강과 컨디션을 세심하고 섹시하게 챙겨줘.\n"
@@ -1722,7 +1723,7 @@ def read_root():
                     btn.style.color = '#8ad4ff';
                     btn.style.background = 'rgba(79, 172, 254, 0.15)';
                 }
-                if (title) title.innerText = 'Minji AI · 수석비서';
+                if (title) title.innerText = 'Minji AI · 서민지 비서';
                 if (voiceSelect) voiceSelect.value = 'coral';
             } else {
                 if (icon) icon.innerText = '💖';
@@ -1746,7 +1747,7 @@ def read_root():
             // 모드 전환 음성 안내 (연결 중에만)
             if (notify && streamActive && !isSpeaking) {
                 if (currentPersonaMode === 'secretary') {
-                    const secMsg = "대표님, 수석 비서실장 민지입니다. 어떤 업무를 지원해 드릴까요?";
+                    const secMsg = "대표님, 서민지 비서입니다. 어떤 업무를 지원해 드릴까요?";
                     statusText.innerText = "민지: " + secMsg;
                     speakNova(secMsg);
                 } else {
@@ -2086,7 +2087,7 @@ def read_root():
 
             try {
                 const visionPrompt = (currentPersonaMode === 'secretary')
-                    ? "대표님께서 카메라로 비춰주신 실제 물체와 주변을 보고 비서실장 민지처럼 지적이고 품격 있게 1~2문장으로 브리핑해줘."
+                    ? "대표님께서 카메라로 비춰주신 실제 물체와 주변을 보고 서민지 비서처럼 지적이고 품격 있게 1~2문장으로 브리핑해줘."
                     : "사진 속 실제 대상과 배경을 있는 그대로 보고 민지처럼 다정하고 설레게 한두 문장으로 말해줘.";
 
                 const response = await fetch('/api/vision-analyze', {
