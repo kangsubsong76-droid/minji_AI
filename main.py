@@ -257,43 +257,25 @@ async def setup_elevenlabs(req: ElevenLabsSetupRequest):
 
 
 @app.post("/api/tts")
-def generate_tts_bytes(text: str, voice: str = "nova") -> bytes:
-    """초저지연(0.3초) 순수 20대 여성 보이스 생성기 (남성 톤 완전 배제)"""
+def generate_tts_bytes(text: str, voice: str = "eleven_girlfriend") -> bytes:
+    """ElevenLabs 기반 20대 여성 보이스 (남성 톤 완전 배제 & 초저지연 스트리밍)"""
     cleaned_text = re.sub(r'[*#_~`\[\]\(\)<>]', '', text).strip()
-    selected_voice = (voice or "nova").lower()
+    selected_voice = (voice or "eleven_girlfriend").lower()
 
-    # 1. [최우선]: OpenAI 초고속 0.2~0.3초 순수 20대 여성 보이스 (Nova & Coral)
-    # - nova: 활기차고 앳되며 통통 튀는 20대 초반 여친 (체감 딜레이 제로, 남성 톤 0%)
-    # - coral: 차분하고 똑 부러지는 20대 엘리트 비서
-    if selected_voice in ["nova", "coral", "shimmer", "alloy"] or not elevenlabs_key:
-        if openai_client:
-            oai_voice = selected_voice if selected_voice in ["nova", "coral", "shimmer"] else ("coral" if "secretary" in selected_voice else "nova")
-            try:
-                response = openai_client.audio.speech.create(
-                    model="tts-1",  # 최고 속도 0.2~0.3초 실시간 엔진
-                    voice=oai_voice,
-                    input=cleaned_text,
-                    speed=1.12
-                )
-                if response and response.content:
-                    return response.content
-            except Exception as oai_err:
-                print(f"[OpenAI TTS Error]: {oai_err}")
-
-    # 2. ElevenLabs 선택 시: 남성 음색이 전혀 없는 검증된 순수 20대 여성 프리셋 (Jessica & Sarah)
-    if selected_voice in ["eleven_girlfriend", "roh_girlfriend", "eleven_secretary", "roh_secretary", "elevenlabs"] and elevenlabs_key:
+    # 1. [기본값]: ElevenLabs 순수 20대 여성 프리셋 (남성 톤 0%, 자연스러운 한국어 감성)
+    if (selected_voice in ["eleven_girlfriend", "roh_girlfriend", "eleven_secretary", "roh_secretary", "elevenlabs"] or not openai_client) and elevenlabs_key:
         is_secretary = "secretary" in selected_voice
-        # 남성 진행자 소리가 섞인 클론 대신, 순수 100% 20대 여성 보이스로 직결!
-        # Jessica (cgSgspJ2msm6clMCkdW9): 달콤·애교 여친 / Sarah (EXAVITQu4vr4xnSDxMaL): 단아·지적 비서
+        # Jessica (cgSgspJ2msm6clMCkdW9): 달콤·애교 20대 여친 / Sarah (EXAVITQu4vr4xnSDxMaL): 단아·지적 20대 비서
         voice_id = "EXAVITQu4vr4xnSDxMaL" if is_secretary else "cgSgspJ2msm6clMCkdW9"
         
         settings = {
-            "stability": 0.50 if is_secretary else 0.35,
+            "stability": 0.45 if is_secretary else 0.35,
             "similarity_boost": 0.75,
             "style": 0.20,
-            "use_speaker_boost": False
+            "use_speaker_boost": False  # 남성 흉성 울림 완전 차단
         }
 
+        # 초저지연 Flash 및 Multilingual 모델 순차 시도
         for model_candidate in ["eleven_multilingual_v2", "eleven_flash_v2_5"]:
             try:
                 tts_url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?optimize_streaming_latency=4"
@@ -312,28 +294,30 @@ def generate_tts_bytes(text: str, voice: str = "nova") -> bytes:
                     },
                     method="POST"
                 )
-                with urllib.request.urlopen(tts_req, timeout=6) as resp:
+                with urllib.request.urlopen(tts_req, timeout=7) as resp:
                     audio_data = resp.read()
                     if audio_data and len(audio_data) > 100:
                         return audio_data
             except Exception as el_err:
                 print(f"[ElevenLabs {model_candidate} Error]: {el_err}")
 
-    # 최종 폴백: OpenAI nova
+    # 2. OpenAI 초고속 엔진 (Nova / Coral 선택 시 또는 ElevenLabs 폴백)
     if openai_client:
+        valid_voices = ["coral", "nova", "shimmer", "sage", "alloy", "fable", "echo", "onyx", "ash"]
+        oai_voice = selected_voice if selected_voice in valid_voices else ("coral" if "secretary" in selected_voice else "nova")
         try:
             response = openai_client.audio.speech.create(
                 model="tts-1",
-                voice="nova",
+                voice=oai_voice,
                 input=cleaned_text,
                 speed=1.12
             )
-            return response.content
+            if response and response.content:
+                return response.content
         except Exception as oai_err:
-            print(f"[OpenAI Fallback Error]: {oai_err}")
+            print(f"[OpenAI TTS Error]: {oai_err}")
 
     raise HTTPException(status_code=500, detail="음성 생성에 실패했습니다.")
-
 
 
 @app.post("/api/tts")
@@ -1486,11 +1470,11 @@ def read_root():
         </div>
         <!-- 2행: 음성 선택 + 볼륨 슬라이더 -->
         <div style="display:flex; align-items:center; justify-content:space-between; width:100%; gap:8px; box-sizing:border-box;">
-            <select id="voiceSelect" style="flex:1; max-width:155px; background:#1c1c24; color:#ff9a76; border:1px solid #ff7b54; border-radius:12px; padding:4px 6px; font-size:0.72rem; outline:none; cursor:pointer; box-sizing:border-box;">
-                <option value="nova" selected>⚡ 20대 상큼 여친 (Nova - 초고속)</option>
-                <option value="coral">💼 20대 단아 비서 (Coral - 초고속)</option>
-                <option value="eleven_girlfriend">💖 제시카 여친 (ElevenLabs)</option>
-                <option value="eleven_secretary">✨ 사라 비서 (ElevenLabs)</option>
+            <select id="voiceSelect" style="flex:1; max-width:165px; background:#1c1c24; color:#ff9a76; border:1px solid #ff7b54; border-radius:12px; padding:4px 6px; font-size:0.72rem; outline:none; cursor:pointer; box-sizing:border-box;">
+                <option value="eleven_girlfriend" selected>✨ 20대 달콤 여친 (ElevenLabs)</option>
+                <option value="eleven_secretary">💼 20대 지적 비서 (ElevenLabs)</option>
+                <option value="nova">⚡ 20대 상큼 여친 (Nova - 초고속)</option>
+                <option value="coral">🌸 20대 단아 비서 (Coral - 초고속)</option>
                 <option value="shimmer">🍃 감성 힐링 (Shimmer)</option>
             </select>
             <div style="flex:1.4; display:flex; align-items:center; gap:6px; background:rgba(20,20,30,0.6); padding:4px 8px; border-radius:12px; border:1px solid rgba(255,255,255,0.08); box-sizing:border-box;">
@@ -2149,7 +2133,7 @@ def read_root():
                     btn.style.background = 'rgba(79, 172, 254, 0.15)';
                 }
                 if (title) title.innerText = 'Minji AI · 서민지 비서';
-                if (voiceSelect) voiceSelect.value = 'coral';
+                if (voiceSelect) voiceSelect.value = 'eleven_secretary';
             } else {
                 if (icon) icon.innerText = '💖';
                 if (text) text.innerText = '여친 모드';
@@ -2166,7 +2150,7 @@ def read_root():
                     btn.style.background = 'rgba(255, 123, 84, 0.15)';
                 }
                 if (title) title.innerText = 'Minji AI · 베이글 여친';
-                if (voiceSelect) voiceSelect.value = 'nova';
+                if (voiceSelect) voiceSelect.value = 'eleven_girlfriend';
             }
 
             // 현재 아바타 이미지 즉각 교체
@@ -2524,7 +2508,7 @@ def read_root():
             statusText.innerText = "민지가 생각하고 있어요...";
 
             try {
-                const chosenVoice = voiceSelect ? voiceSelect.value : (currentPersonaMode === 'secretary' ? 'coral' : 'nova');
+                const chosenVoice = voiceSelect ? voiceSelect.value : (currentPersonaMode === 'secretary' ? 'eleven_secretary' : 'eleven_girlfriend');
                 const response = await fetch('/api/voice-chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
