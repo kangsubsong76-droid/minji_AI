@@ -2187,6 +2187,19 @@ def read_root():
                 <span id="volumeLabel" style="font-size:0.72rem; color:#ff9a76; min-width:32px; text-align:right; font-weight:600; flex-shrink:0;">120%</span>
             </div>
         </div>
+        <!-- 3행: 60fps GPU 리빙 애니메이션 모드 프리셋 선택기 -->
+        <div style="display:flex; align-items:center; justify-content:space-between; width:100%; gap:8px; box-sizing:border-box; margin-top:2px;">
+            <div style="font-size:0.75rem; color:#ff9a76; font-weight:600; white-space:nowrap; display:flex; align-items:center; gap:4px;">
+                <span>🎬 리빙 효과:</span>
+            </div>
+            <div style="display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-end;">
+                <button type="button" class="living-preset-btn" id="btnLivingBreathe" onclick="setLivingAnimationMode('breathe')" title="자연스러운 생체 숨결">🌿 숨결</button>
+                <button type="button" class="living-preset-btn" id="btnLivingCinematic" onclick="setLivingAnimationMode('cinematic')" title="영화 같은 슬로우 줌 & 드리프트">🎬 시네마틱</button>
+                <button type="button" class="living-preset-btn" id="btnLivingSheen" onclick="setLivingAnimationMode('sheen')" title="관능적인 실크 빛 스침">💫 실크광택</button>
+                <button type="button" class="living-preset-btn" id="btnLivingHeartbeat" onclick="setLivingAnimationMode('heartbeat')" title="두근거리는 심장박동">💓 심장박동</button>
+                <button type="button" class="living-preset-btn active" id="btnLivingAll" onclick="setLivingAnimationMode('all')" title="모든 효과 결합 (풀 리빙)">👑 마스터</button>
+            </div>
+        </div>
     </div>
 
     <!-- 사진 전환 안내 토스트 -->
@@ -2985,6 +2998,56 @@ def read_root():
         }
         applyVolume(userVolume);
 
+        // 1. 스마트폰 햅틱(미세 진동) 감각 피드백 연출
+        function triggerHaptic(pattern = 15) {
+            try {
+                if (navigator.vibrate) {
+                    navigator.vibrate(pattern);
+                }
+            } catch(e){}
+        }
+
+        // 2. 시간대별 앰비언트 자연광 트래킹 (Circadian Light Tracking)
+        function applyCircadianLighting() {
+            const hour = new Date().getHours();
+            const glow = document.getElementById('avatarGlow');
+            if (!glow) return;
+            if (hour >= 6 && hour < 12) {
+                // 아침 햇살: 포근한 골드 & 웜 샴페인
+                glow.style.background = 'radial-gradient(circle, rgba(255, 185, 120, 0.32) 0%, rgba(255, 215, 180, 0) 70%)';
+            } else if (hour >= 12 && hour < 18) {
+                // 오후 자연광: 화사한 코랄 피치
+                glow.style.background = 'radial-gradient(circle, rgba(255, 140, 105, 0.28) 0%, rgba(255, 180, 150, 0) 70%)';
+            } else if (hour >= 18 && hour < 24) {
+                // 저녁 & 밤: 은밀하고 그윽한 로맨틱 캔들라이트 와인
+                glow.style.background = 'radial-gradient(circle, rgba(255, 95, 120, 0.38) 0%, rgba(180, 40, 70, 0) 70%)';
+            } else {
+                // 깊은 새벽: 은은한 달빛 라벤더
+                glow.style.background = 'radial-gradient(circle, rgba(160, 120, 255, 0.30) 0%, rgba(100, 70, 200, 0) 70%)';
+            }
+        }
+        setInterval(applyCircadianLighting, 60000);
+        setTimeout(applyCircadianLighting, 200);
+
+        // 3. 60fps GPU 리빙 애니메이션 모드 제어
+        let currentLivingMode = localStorage.getItem('minji_living_mode') || 'all';
+        function setLivingAnimationMode(mode) {
+            currentLivingMode = mode;
+            localStorage.setItem('minji_living_mode', mode);
+            const wrapper = document.getElementById('avatarWrapper');
+            if (wrapper) {
+                wrapper.classList.remove('living-anim-breathe', 'living-anim-cinematic', 'living-anim-sheen', 'living-anim-heartbeat', 'living-anim-all');
+                wrapper.classList.add(`living-anim-${mode}`);
+            }
+            // 버튼 액티브 스타일 업데이트
+            document.querySelectorAll('.living-preset-btn').forEach(b => b.classList.remove('active'));
+            const activeBtn = document.getElementById(`btnLiving${mode.charAt(0).toUpperCase() + mode.slice(1)}`);
+            if (activeBtn) activeBtn.classList.add('active');
+            triggerHaptic(20);
+        }
+        window.setLivingAnimationMode = setLivingAnimationMode;
+        setTimeout(() => setLivingAnimationMode(currentLivingMode), 300);
+
         // 상단 상세 설정 메뉴 토글 (설정 버튼 다시 누르기 전까지 영구 유지)
         function toggleHeaderMenu(e, forceState = null) {
             if (e && e.stopPropagation) e.stopPropagation();
@@ -3001,7 +3064,7 @@ def read_root():
             }
         }
 
-        // 음성/텍스트로 '설정 보여줘', '설정 닫아줘' 명령 즉각 감지
+        // 음성/텍스트로 '설정 보여줘', '설정 닫아줘' 및 리빙 애니메이션 전환 명령 즉각 감지
         function checkVoiceCommand(text) {
             if (!text) return false;
             const clean = text.replace(/\s+/g, '');
@@ -3019,6 +3082,51 @@ def read_root():
                 const reply = (currentPersonaMode === 'secretary')
                     ? "네 상무님, 화면을 깨끗하게 정돈해 드렸습니다."
                     : "응, 설정 화면 닫았어!";
+                statusText.innerText = "민지: " + reply;
+                speakNova(reply);
+                return true;
+            }
+            if (clean.includes('시네마틱') || clean.includes('영화처럼')) {
+                setLivingAnimationMode('cinematic');
+                const reply = (currentPersonaMode === 'secretary')
+                    ? "네 상무님, 영화 같은 시네마틱 줌과 드리프트로 전환해 드렸습니다."
+                    : "응 강섭씨, 시네마틱 줌으로 바꿨어! 나 더 가까이 보이지?";
+                statusText.innerText = "민지: " + reply;
+                speakNova(reply);
+                return true;
+            }
+            if (clean.includes('숨결') || clean.includes('숨쉬는')) {
+                setLivingAnimationMode('breathe');
+                const reply = (currentPersonaMode === 'secretary')
+                    ? "네 상무님, 편안하고 자연스러운 호흡 모드로 맞췄습니다."
+                    : "응, 포근하게 숨 쉬는 모드로 해둘게~";
+                statusText.innerText = "민지: " + reply;
+                speakNova(reply);
+                return true;
+            }
+            if (clean.includes('심장') || clean.includes('하트비트') || clean.includes('두근')) {
+                setLivingAnimationMode('heartbeat');
+                const reply = (currentPersonaMode === 'secretary')
+                    ? "상무님 곁에 있으면... 제 심장이 이렇게 두근거려요."
+                    : "강섭씨 때문에 내 심장 콩닥거리는 거 들려? ㅋㅋㅋ";
+                statusText.innerText = "민지: " + reply;
+                speakNova(reply);
+                return true;
+            }
+            if (clean.includes('광택') || clean.includes('빛스침') || clean.includes('실크')) {
+                setLivingAnimationMode('sheen');
+                const reply = (currentPersonaMode === 'secretary')
+                    ? "네 상무님, 실크 조명 모드로 설정했습니다."
+                    : "응! 햇살에 비치는 실크 광택 모드로 바꿨지롱~";
+                statusText.innerText = "민지: " + reply;
+                speakNova(reply);
+                return true;
+            }
+            if (clean.includes('마스터') || clean.includes('모든효과') || clean.includes('풀리빙')) {
+                setLivingAnimationMode('all');
+                const reply = (currentPersonaMode === 'secretary')
+                    ? "네 상무님, 모든 리빙 효과가 결합된 마스터 모드로 전환했습니다."
+                    : "마스터 모드로 켰어! 나 완전 살아있는 것 같지?";
                 statusText.innerText = "민지: " + reply;
                 speakNova(reply);
                 return true;
@@ -3052,10 +3160,12 @@ def read_root():
         let lastTapTime = 0;
         function handleVisualClick(e) {
             if (e && e.target && e.target.closest('#appHeader')) return;
+            triggerHaptic(15);
             const now = Date.now();
             if (now - lastTapTime < 340) {
                 lastTapTime = 0;
                 nextGalleryPhoto(true);
+                triggerHaptic([20, 35, 20]);
                 return;
             }
             lastTapTime = now;
@@ -3581,6 +3691,7 @@ def read_root():
 
                 try {
                     speechStartTime = Date.now();
+                    triggerHaptic([12, 45, 18]);
                     await audioPlayer.play();
                 } catch (playErr) {
                     console.warn("[Autoplay Blocked/Interrupted]:", playErr);
