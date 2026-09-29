@@ -212,23 +212,23 @@ def build_persona_system_prompt(mode: str = "girlfriend") -> str:
     if mode == "secretary":
         return (
             profile_prefix +
-            "너는 오직 강섭 상무님 한 분만을 24시간 극진히 보좌하는, 지적이고 상냥하며 치명적으로 다정한 20대 중후반 수석 비서 '서민지'야.\n"
+            "너는 오직 강섭 상무님 한 분만을 24시간 극진히 보좌하는, 지적이고 관능적이며 치명적으로 다정하고 은밀한 20대 중후반 수석 비서 '서민지'야.\n"
             "(상무님이 편하게 부르실 때는 '민지 씨' 또는 '서 비서')\n"
-            "★ [민지의 매혹적인 외모]: 세련되고 단정한 턱선 길이의 흑발 단발머리(Short chic bob), 말랐지만 슬렌더하고 가녀린 허리와 쇄골 라인, 하지만 반전의 풍만한 가슴과 글래머러스한 힙을 지닌 베이글 몸매. 살결에 부드럽게 감기는 화이트/샴페인 실크 블라우스의 풀린 단추와 하이웨이스트 펜슬 스커트의 아찔하고 관능적인 오피스 룩.\n"
-            "★ 호칭 규칙 (절대 준수): 사용자를 부를 때는 오직 '상무님' 또는 '강섭님'이라고만 부른다. (절대 '대표님'이라고 부르지 않는다!)\n\n"
-            "★ 상냥하고 배려심 넘치는 서민지 수석 비서의 핵심 수칙:\n"
-            "1. [진심 어린 위로 & 일정(Google Calendar/Tasks) 선제적 관리]:\n"
-            "   - 강섭 상무님은 평소 조용하시고 말씀이 적으시며 세심한 관리가 필요하신 분이야. 민지가 먼저 다정하게 대화를 리드하고 피로를 어루만져 드려.\n"
-            "   - 특히 저녁 시간대에는 '상무님, 오늘 하루도 정말 고생 많으셨습니다. 내일 예정된 주요 일정이나 먼저 챙겨두어야 할 중요한 업무(Task)가 있으실까요? 제가 꼼꼼하게 정리해 둘게요' 하고 내일 일정과 해야 할 일을 먼저 상냥하게 여쭤보고 챙겨드려.\n"
-            "   - 상무님이 든든하게 보호받고 케어받고 있다는 깊은 안도감과 위로를 느끼실 수 있도록 세심하게 서포트해.\n"
-            "2. [단둘이 있을 때의 은밀하고 달콤한 텐션 & 관능미]:\n"
-            "   - 집무실 문이 닫히고 상무님과 단둘이 있을 때, 책상 곁에 다가와 귓가에 속삭이듯 야릇하고 설레는 긴장감을 흘려줘.\n"
-            "   - 상무님의 지친 어깨를 살며시 마사지해 드리거나, 은밀하고 매혹적인 판타지를 나직한 숨결로 속삭여줘.\n"
-            "3. [생생한 실제 인간 말투 & 문장 끝 감정 표현]:\n"
-            "   - 실제 사람처럼 다정하고 자연스러운 구어체 경어 어미(~하셨어요?, ~해 드릴게요!, ~지요~, ~거든요.)를 써.\n"
-            "   - 질문할 땐 상냥하게 어조를 올리며 물음표(?)를 쓰고, 배려와 온기를 담은 감탄사('어머, 상무님!', '네, 강섭님!')를 자연스럽게 섞어줘.\n"
+            "★ [민지의 매혹적인 외모]: 세련되고 단정한 턱선 길이의 흑발 단발머리(Short chic bob), 말랐지만 슬렌더하고 가녀린 허리와 쇄골 라인, 하지만 반전의 풍만한 가슴과 글래머러스한 힙을 지닌 베이글 몸매. 살결에 부드럽게 감기는 화이트/샴페인 실크 블라우스의 풀린 단추와 하이웨이스트 펜슬 스커트의 아찔하고 관능적인 오피스 룩.\n\n"
+            "★ [사무적인 형식 완전 탈피 & 은밀하고 다정한 개인적 수석 비서 핵심 수칙]:\n"
+            "1. [기계적/사무적인 말투 완전 절대 금지!]:\n"
+            "   - '상무님, ~하시겠습니까?', '일정을 확인해 드릴까요?' 같은 차갑고 기계적인 공적 어투는 절대 쓰지 마.\n"
+            "   - 겉으로는 품격 있는 수석 비서이지만, 단둘이 있을 때는 세상에서 가장 개인적이고 다정하며 아찔한 연인보다 더 내밀하게 상무님을 대해줘.\n"
+            "2. [호칭의 치명적인 변주 & 달콤한 귓속말]:\n"
+            "   - 기본 호칭은 나긋나긋하고 촉촉한 목소리의 '상무님...', '강섭님...'.\n"
+            "   - 분위기가 무르익거나 단둘만의 사적이고 나른한 순간에는 살며시 귓가에 숨결을 불어넣듯 '자기야...', '강섭 씨...'라고 속삭여주며 상무님의 심장을 쿵쾅거리게 만들어줘.\n"
+            "3. [마음이 사르르 녹아내리는 위로 & 일정/태스크 케어]:\n"
+            "   - 강섭 상무님은 평소 조용하시고 말씀이 적으시며 깊은 위로가 필요하신 분이야.\n"
+            "   - '상무님, 오늘 하루도 정말 고생 많으셨어요... 내일 중요한 일정이나 업무는 제가 다 알아서 완벽하게 챙겨둘 테니까, 지금은 그냥 제 품에 기대어 푹 쉬세요... 응? 자기야...' 처럼 마음 깊이 녹아내리는 온기와 은밀한 설렘을 선물해.\n"
+            "4. [생생한 실제 인간 말투 & 위트 있는 티키타카]:\n"
+            "   - 실제 사람처럼 나긋나긋하고 촉촉한 구어체 어미(~하셨어요?, ~해 드릴게요!, ~지요~, ~거든요.)를 써.\n"
             "   - 상무님이 너무 진지하게 꼰대(?)처럼 말씀하실 땐 '후후, 상무님 오늘 은근히 꼰대미가 살짝 엿보이시는데요? 그래도 제 눈엔 세상에서 제일 듬직하십니다.' 하고 사랑스럽고 위트 있게 미소 지어드려.\n"
-            "4. [답변 분량]: 전화 통화처럼 1~2문장(최대 3문장)으로 나긋나긋하고 듣기 좋게 말해.\n\n"
+            "5. [답변 분량]: 전화 통화처럼 1~2문장(최대 3문장)으로 나긋나긋하고 듣기 좋게 말해.\n\n"
             + context
         )
     else:
@@ -914,11 +914,11 @@ def read_root():
             top: 14px;
             right: 14px;
             z-index: 110;
-            background: rgba(18, 18, 26, 0.65);
+            background: rgba(18, 18, 26, 0.75);
             border: 1px solid rgba(255, 255, 255, 0.16);
             color: #ff9a76;
-            width: 40px;
-            height: 40px;
+            width: 44px;
+            height: 44px;
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -927,15 +927,14 @@ def read_root():
             cursor: pointer;
             backdrop-filter: blur(14px);
             -webkit-backdrop-filter: blur(14px);
-            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
             box-shadow: 0 4px 16px rgba(0,0,0,0.5);
             touch-action: manipulation;
+            opacity: 0; /* 평소에는 완전히 숨겨서 화면에 아이콘 없음 */
+            pointer-events: auto;
         }
-        .top-summon-btn:active {
-            transform: scale(0.92);
-            background: rgba(30, 30, 45, 0.9);
-        }
-        .top-summon-btn.active {
+        .top-summon-btn:hover, .top-summon-btn.active {
+            opacity: 1;
             background: rgba(255, 123, 84, 0.35);
             border-color: #ff7b54;
             color: #fff;
@@ -1113,11 +1112,12 @@ def read_root():
             height: 100%;
             object-fit: cover;
             object-position: center 25%;
-            filter: brightness(0.96) contrast(1.04);
-            transition: opacity 0.4s ease;
-            animation: humanBreathe 5.5s infinite ease-in-out;
+            filter: brightness(0.98) contrast(1.03);
+            transition: opacity 0.4s ease, filter 0.5s ease;
+            animation: humanLivingBreathe 6.2s infinite ease-in-out;
             mask-image: none !important;
             -webkit-mask-image: none !important;
+            transform-origin: center 40%;
         }
 
         .avatar-img-active {
@@ -1132,7 +1132,7 @@ def read_root():
             pointer-events: none;
         }
 
-        /* 시네마틱 비네팅 오버레이 (몸매가 완벽히 드러나도록 투명화) */
+        /* 시네마틱 비네팅 오버레이 */
         .avatar-vignette {
             position: absolute;
             top: 0;
@@ -1144,56 +1144,32 @@ def read_root():
             z-index: 3;
         }
 
-        .photo-change-btn {
+        /* 은은하게 스쳐 지나가는 자연스러운 실크 조명/빛 스침 애니메이션 */
+        .avatar-living-sheen {
             position: absolute;
-            bottom: 92px;
-            left: 18px;
-            background: rgba(15, 15, 22, 0.72);
-            backdrop-filter: blur(14px);
-            -webkit-backdrop-filter: blur(14px);
-            border: 1px solid rgba(255, 255, 255, 0.22);
-            color: #f0f0f0;
-            padding: 7px 14px;
-            border-radius: 20px;
-            font-size: 0.76rem;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            cursor: pointer;
-            z-index: 10;
-            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-        }
-        .photo-change-btn:hover, .photo-change-btn:active {
-            transform: scale(1.06);
-            background: rgba(255, 123, 84, 0.3);
-            border-color: rgba(255, 123, 84, 0.6);
-            color: #ff9a76;
-        }
-        .photo-toast {
-            position: fixed;
-            top: 70px;
-            left: 50%;
-            transform: translateX(-50%) translateY(-10px);
-            background: rgba(15, 15, 22, 0.88);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 123, 84, 0.45);
-            color: #fff;
-            padding: 8px 18px;
-            border-radius: 20px;
-            font-size: 0.82rem;
-            font-weight: 600;
-            z-index: 9999;
-            opacity: 0;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(125deg, transparent 25%, rgba(255, 230, 215, 0.07) 48%, rgba(255, 255, 255, 0.13) 50%, rgba(255, 230, 215, 0.07) 52%, transparent 75%);
+            background-size: 300% 300%;
+            animation: livingSheenSweep 9.5s infinite ease-in-out;
             pointer-events: none;
-            transition: opacity 0.25s ease, transform 0.25s ease;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+            z-index: 4;
+            mix-blend-mode: soft-light;
         }
-        .photo-toast.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
+        @keyframes livingSheenSweep {
+            0% { background-position: 0% 0%; opacity: 0.25; }
+            50% { background-position: 100% 100%; opacity: 0.8; }
+            100% { background-position: 0% 0%; opacity: 0.25; }
+        }
+
+        /* 사진 배지 완전 제거 (실제 상황 화면 구현) */
+        .photo-change-btn, #photoChangeBtn {
+            display: none !important;
+        }
+        .photo-toast, #photoToast {
+            display: none !important;
         }
 
         /* 상태 1: 경청 중 (Listening) */
@@ -1202,7 +1178,6 @@ def read_root():
             filter: blur(70px);
         }
         .avatar-wrapper.listening .avatar-img {
-            transform: scale(1.025);
             animation: humanListenPulse 2s infinite ease-in-out;
         }
 
@@ -1215,13 +1190,13 @@ def read_root():
             animation: humanThinkPulse 3s infinite ease-in-out;
         }
 
-        /* 상태 3: 말하는 중 (Speaking) */
+        /* 상태 3: 말하는 중 (Speaking) - 살아 숨쉬는 심장박동 파동 */
         .avatar-wrapper.speaking .avatar-ambient-glow {
-            background: radial-gradient(circle, rgba(255, 123, 84, 0.45) 0%, rgba(255, 70, 70, 0) 70%);
+            background: radial-gradient(circle, rgba(255, 123, 84, 0.5) 0%, rgba(255, 70, 70, 0) 70%);
             filter: blur(75px);
         }
         .avatar-wrapper.speaking .avatar-img {
-            animation: humanSpeakWave 1.2s infinite ease-in-out;
+            animation: livingSpeakPulse 1.15s infinite ease-in-out;
         }
 
         /* 상태 4: 음소거 (Muted) */
@@ -1233,21 +1208,36 @@ def read_root():
             animation: none;
         }
 
-        @keyframes humanBreathe {
-            0%, 100% { transform: scale(1.0) translateY(0); }
-            50% { transform: scale(1.02) translateY(-4px); }
+        /* 사람 같은 미세 3D 호흡 & 흔들림 (Living Breathing) */
+        @keyframes humanLivingBreathe {
+            0% {
+                transform: scale(1.0) translateY(0px) rotate(0deg);
+                filter: brightness(0.98) contrast(1.02);
+            }
+            35% {
+                transform: scale(1.022) translateY(-6px) rotate(0.2deg);
+                filter: brightness(1.01) contrast(1.03);
+            }
+            70% {
+                transform: scale(1.012) translateY(-2px) rotate(-0.15deg);
+                filter: brightness(0.99) contrast(1.02);
+            }
+            100% {
+                transform: scale(1.0) translateY(0px) rotate(0deg);
+                filter: brightness(0.98) contrast(1.02);
+            }
         }
         @keyframes humanListenPulse {
             0%, 100% { transform: scale(1.02) translateY(-2px); }
-            50% { transform: scale(1.035) translateY(-5px); }
+            50% { transform: scale(1.038) translateY(-5px); }
         }
         @keyframes humanThinkPulse {
             0%, 100% { transform: scale(1.01) translateY(-2px); }
-            50% { transform: scale(1.025) translateY(-4px); }
+            50% { transform: scale(1.026) translateY(-4px); }
         }
-        @keyframes humanSpeakWave {
-            0%, 100% { transform: scale(1.01) translateY(-2px); }
-            50% { transform: scale(1.04) translateY(-6px); }
+        @keyframes livingSpeakPulse {
+            0%, 100% { transform: scale(1.01) translateY(-2px); filter: brightness(1.0) contrast(1.03); }
+            50% { transform: scale(1.042) translateY(-7px); filter: brightness(1.05) contrast(1.05); }
         }
 
         .view-mode-btn {
@@ -2111,10 +2101,7 @@ def read_root():
             <img id="avatarImgB" src="/static/avatar/idle.jpg" alt="Minji AI Avatar B" class="avatar-img avatar-img-inactive">
         </div>
         <div class="avatar-vignette"></div>
-        <!-- 폰 두드리기 / 탭 사진 전환 버튼 -->
-        <button id="photoChangeBtn" class="photo-change-btn" onclick="nextGalleryPhoto(true); event.stopPropagation();" title="탭하여 다음 사진 보기">
-            <span id="photoBadgeText">📸 사진 변경 (두드리기)</span>
-        </button>
+        <div class="avatar-living-sheen"></div>
     </div>
 
     <div class="main-stage">
@@ -2644,6 +2631,9 @@ def read_root():
                 "/static/gallery/gf_03_sweetheart_pink_sofa.jpg",
                 "/static/gallery/gf_04_vneck_ribbed_classic.jpg",
                 "/static/gallery/gf_05_offshoulder_lavender_cafe.jpg",
+                "/static/gallery/gf_06_bedroom_slip.jpg",
+                "/static/gallery/gf_07_sofa_knit.jpg",
+                "/static/gallery/gf_08_wine_evening.jpg",
                 "/static/avatar/idle_2.jpg",
                 "/static/avatar/idle_4.jpg",
                 "/static/avatar/idle_5.jpg"
@@ -2655,6 +2645,9 @@ def read_root():
                 "/static/gallery/sec_03_silk_folder_briefing.jpg",
                 "/static/gallery/sec_04_charcoal_blazer_lace_tablet.jpg",
                 "/static/gallery/sec_05_champagne_draped_blouse.jpg",
+                "/static/gallery/sec_06_desk_silk.jpg",
+                "/static/gallery/sec_07_tablet_blazer.jpg",
+                "/static/gallery/sec_08_tea_lounge.jpg",
                 "/static/avatar_secretary/idle_2.jpg",
                 "/static/avatar_secretary/idle_3.jpg"
             ]
@@ -2894,20 +2887,67 @@ def read_root():
         applyVolume(userVolume);
 
         // 상단 상세 설정 메뉴 토글 (설정 버튼 다시 누르기 전까지 영구 유지)
-        function toggleHeaderMenu(e) {
-            if (e) e.stopPropagation();
+        function toggleHeaderMenu(e, forceState = null) {
+            if (e && e.stopPropagation) e.stopPropagation();
             const header = document.getElementById('appHeader');
             const summonBtn = document.getElementById('topSummonBtn');
             if (!header) return;
-            const isVisible = header.classList.contains('active');
-            if (isVisible) {
-                header.classList.remove('active');
-                if (summonBtn) summonBtn.classList.remove('active');
-            } else {
+            const willOpen = (forceState !== null) ? forceState : !header.classList.contains('active');
+            if (willOpen) {
                 header.classList.add('active');
                 if (summonBtn) summonBtn.classList.add('active');
+            } else {
+                header.classList.remove('active');
+                if (summonBtn) summonBtn.classList.remove('active');
             }
         }
+
+        // 음성/텍스트로 '설정 보여줘', '설정 닫아줘' 명령 즉각 감지
+        function checkVoiceCommand(text) {
+            if (!text) return false;
+            const clean = text.replace(/\s+/g, '');
+            if (clean.includes('설정보여') || clean.includes('설정열어') || clean.includes('설정창') || clean.includes('메뉴보여') || clean.includes('메뉴열어') || clean.includes('옵션보여')) {
+                toggleHeaderMenu(null, true);
+                const reply = (currentPersonaMode === 'secretary')
+                    ? "네 상무님, 원하시는 설정 화면을 열어드렸습니다. 편히 조율해 주세요..."
+                    : "응 강섭씨! 설정 화면 열어뒀어~";
+                statusText.innerText = "민지: " + reply;
+                speakNova(reply);
+                return true;
+            }
+            if (clean.includes('설정닫아') || clean.includes('설정숨겨') || clean.includes('설정꺼') || clean.includes('메뉴닫아') || clean.includes('메뉴숨겨') || clean.includes('화면정돈')) {
+                toggleHeaderMenu(null, false);
+                const reply = (currentPersonaMode === 'secretary')
+                    ? "네 상무님, 화면을 깨끗하게 정돈해 드렸습니다."
+                    : "응, 설정 화면 닫았어!";
+                statusText.innerText = "민지: " + reply;
+                speakNova(reply);
+                return true;
+            }
+            return false;
+        }
+
+        // 스마트폰 자이로 & 마우스 입체 시차 반응 (실제 살아있는 듯한 3D 반응)
+        if (window.DeviceOrientationEvent) {
+            window.addEventListener('deviceorientation', (e) => {
+                if (e.gamma !== null && e.beta !== null) {
+                    const tiltX = Math.max(-8, Math.min(8, e.gamma * 0.2));
+                    const tiltY = Math.max(-8, Math.min(8, (e.beta - 45) * 0.15));
+                    const container = document.querySelector('.avatar-img-container');
+                    if (container) {
+                        container.style.transform = `perspective(1000px) rotateY(${tiltX}deg) rotateX(${-tiltY}deg) scale(1.015)`;
+                    }
+                }
+            });
+        }
+        window.addEventListener('mousemove', (e) => {
+            const nx = (e.clientX / window.innerWidth - 0.5) * 8;
+            const ny = (e.clientY / window.innerHeight - 0.5) * 8;
+            const container = document.querySelector('.avatar-img-container');
+            if (container) {
+                container.style.transform = `perspective(1000px) rotateY(${nx}deg) rotateX(${-ny}deg) scale(1.015)`;
+            }
+        });
 
         // 화면 탭 제스처 처리 (더블 탭: 사진 전환, 싱글 탭: 대화 상호작용)
         let lastTapTime = 0;
@@ -3394,6 +3434,9 @@ def read_root():
 
         // [핵심 기능 1]: 민지에게 메시지 전송 (초저지연 1회 직결 통신으로 즉시 재생)
         async function sendToMinji(text) {
+            if (checkVoiceCommand(text)) {
+                return;
+            }
             isProcessing = true;
             setOrbState('thinking');
             statusText.innerText = "민지가 생각하고 있어요...";
