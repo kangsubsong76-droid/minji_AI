@@ -1302,6 +1302,38 @@ def read_root():
             }
         }
 
+        /* 6. 관능적인 상체 클로즈업 & 하체 라인 슬로우 스캔 (Living Sensual Body Scan) */
+        .living-anim-sensual .avatar-img,
+        .living-anim-bodyscan .avatar-img {
+            animation: livingSensualBodyScan 14s infinite ease-in-out !important;
+            transform-origin: center 25%;
+        }
+        @keyframes livingSensualBodyScan {
+            0% {
+                transform: scale(1.0) translateY(0px) rotate(0deg);
+                filter: brightness(0.99) contrast(1.02) saturate(1.02);
+            }
+            22% {
+                /* 관능적 상체 & 쇄골/가슴골 아찔한 슬로우 클로즈업 */
+                transform: scale(1.28) translateY(8%) rotate(0.25deg);
+                filter: brightness(1.04) contrast(1.06) saturate(1.08);
+            }
+            48% {
+                /* 클로즈업 상태에서 나긋나긋한 미세 숨결 & 눈맞춤 */
+                transform: scale(1.32) translateY(6%) rotate(-0.2deg);
+                filter: brightness(1.03) contrast(1.05) saturate(1.06);
+            }
+            75% {
+                /* 천천히 시선을 내리며 슬렌더한 허리와 골반/하체 라인까지 관능적으로 드러나는 풀 실루엣 */
+                transform: scale(1.04) translateY(-11%) rotate(0.15deg);
+                filter: brightness(0.98) contrast(1.03) saturate(1.02);
+            }
+            100% {
+                transform: scale(1.0) translateY(0px) rotate(0deg);
+                filter: brightness(0.99) contrast(1.02) saturate(1.02);
+            }
+        }
+
         @keyframes humanListenPulse {
             0%, 100% { transform: scale(1.02) translateY(-2px); }
             50% { transform: scale(1.038) translateY(-5px); }
@@ -1402,7 +1434,7 @@ def read_root():
             display: none !important;
         }
 
-        /* 컨트롤 영역 — 화면 하단 초경량 플로팅 캡슐독 */
+        /* 컨트롤 영역 — 완전 음성 제어 및 순수 전체화면 이미지를 위해 기본 완전 숨김 */
         .controls {
             position: fixed;
             bottom: 22px;
@@ -1410,11 +1442,14 @@ def read_root():
             transform: translateX(-50%);
             width: calc(100% - 24px);
             max-width: 440px;
-            display: flex;
+            display: none !important;
             flex-direction: column;
             align-items: center;
             z-index: 50;
             pointer-events: auto;
+        }
+        .controls.show-controls {
+            display: flex !important;
         }
         .capsule-dock {
             display: flex;
@@ -2258,6 +2293,7 @@ def read_root():
                 <button type="button" class="living-preset-btn" id="btnLivingSheen" onclick="selectManualLivingMode('sheen')" title="관능적인 실크 빛 스침">💫 실크광택</button>
                 <button type="button" class="living-preset-btn" id="btnLivingHeartbeat" onclick="selectManualLivingMode('heartbeat')" title="두근거리는 심장박동">💓 심장박동</button>
                 <button type="button" class="living-preset-btn" id="btnLivingAll" onclick="selectManualLivingMode('all')" title="모든 효과 결합 (풀 리빙)">👑 마스터</button>
+                <button type="button" class="living-preset-btn" id="btnLivingSensual" onclick="selectManualLivingMode('sensual')" title="관능적인 상체 클로즈업 & 하체 라인 슬로우 스캔">💋 관능스캔</button>
             </div>
         </div>
     </div>
@@ -2893,6 +2929,7 @@ def read_root():
         let analyser = null;
         let micSource = null;
         let volumeCheckInterval = null;
+        let currentFacingMode = "environment";
 
         // 페르소나 모드 관리 (💖 여친 모드 vs 💼 비서 모드)
         let currentPersonaMode = localStorage.getItem('minji_persona_mode') || 'girlfriend';
@@ -3235,7 +3272,7 @@ def read_root():
         let currentLivingMode = localStorage.getItem('minji_living_mode') || 'all';
         let isAutoDirector = localStorage.getItem('minji_auto_director') !== 'false'; // 기본 활성화 (Default ON)
         let autoDirectorTimer = null;
-        const AUTO_LIVING_CYCLE = ['breathe', 'sheen', 'cinematic', 'heartbeat', 'all'];
+        const AUTO_LIVING_CYCLE = ['breathe', 'sheen', 'sensual', 'cinematic', 'heartbeat', 'all'];
         let autoLivingIdx = 0;
 
         function setLivingAnimationMode(mode, manual = true) {
@@ -3243,7 +3280,7 @@ def read_root():
             localStorage.setItem('minji_living_mode', mode);
             const wrapper = document.getElementById('avatarWrapper');
             if (wrapper) {
-                wrapper.classList.remove('living-anim-breathe', 'living-anim-cinematic', 'living-anim-sheen', 'living-anim-heartbeat', 'living-anim-all');
+                wrapper.classList.remove('living-anim-breathe', 'living-anim-cinematic', 'living-anim-sheen', 'living-anim-heartbeat', 'living-anim-all', 'living-anim-sensual', 'living-anim-bodyscan');
                 wrapper.classList.add(`living-anim-${mode}`);
             }
             // 버튼 액티브 스타일 업데이트
@@ -3358,10 +3395,128 @@ def read_root():
             }
         }
 
-        // 음성/텍스트로 '설정 보여줘', '설정 닫아줘' 및 자율 모드/리빙 애니메이션 전환 명령 즉각 감지
+        // 음성/텍스트로 '설정 보여줘', '설정 닫아줘', 카메라 제어, 관능 스캔 및 자율 모드/리빙 애니메이션 전환 명령 즉각 감지
         function checkVoiceCommand(text) {
             if (!text) return false;
             const clean = text.replace(/\s+/g, '');
+
+            // 1. 카메라 닫기/종료 음성 명령
+            if (clean.includes('카메라닫') || clean.includes('카메라꺼') || clean.includes('카메라종료') || clean.includes('그만봐') || clean.includes('화면닫아') || clean.includes('카메라그만')) {
+                closeCamOverlay();
+                const reply = (currentPersonaMode === 'secretary')
+                    ? "네 상무님, 카메라를 닫고 다시 목소리로 모시겠습니다."
+                    : "응 강섭씨, 카메라 닫았어! 편하게 계속 얘기하자~";
+                statusText.innerText = "민지: " + reply;
+                speakNova(reply);
+                return true;
+            }
+
+            // 2. 나 봐봐 (전면 카메라 전환/열기 & 얼굴/상태 시각 인지)
+            const isLookAtMe = clean.includes('나봐봐') || clean.includes('나를봐') || clean.includes('내얼굴') || clean.includes('전면카메라') || clean.includes('앞면카메라') || clean.includes('셀카') || clean === '나봐' || clean.endsWith('나봐') || clean.includes('나좀봐') || clean.includes('내모습');
+            if (isLookAtMe) {
+                switchCameraTo('user').then(() => {
+                    const reply = (currentPersonaMode === 'secretary')
+                        ? "네 상무님, 전면 카메라로 상무님 모습을 마주 뵙고 있습니다... 어디 뵙겠습니다."
+                        : "응 자기야! 강섭씨 얼굴 보니까 너무 좋다... 어디 봐봐, 오늘따라 더 멋있네~";
+                    statusText.innerText = "민지: " + reply;
+                    speakNova(reply, () => {
+                        setTimeout(() => { lookAtThis(); }, 600);
+                    });
+                });
+                return true;
+            }
+
+            // 3. 앞에 봐봐 (후면/전방 카메라 전환/열기 & 전방 사물 시각 인지)
+            const isLookForward = clean.includes('앞에봐') || clean.includes('앞을봐') || clean.includes('앞쪽봐') || clean.includes('앞봐') || clean.includes('후면카메라') || clean.includes('전방카메라') || clean.includes('바깥쪽봐') || clean.includes('앞카메라') || clean.includes('앞에비춰');
+            if (isLookForward) {
+                switchCameraTo('environment').then(() => {
+                    const reply = (currentPersonaMode === 'secretary')
+                        ? "네 상무님, 앞쪽 전방 카메라를 비춥니다. 눈앞에 비춰주시면 바로 분석해 드리겠습니다."
+                        : "응 강섭씨! 앞쪽 카메라로 비출게. 앞에 뭐가 있는지 보여줘 봐~";
+                    statusText.innerText = "민지: " + reply;
+                    speakNova(reply, () => {
+                        setTimeout(() => { lookAtThis(); }, 600);
+                    });
+                });
+                return true;
+            }
+
+            // 4. 민지야 봐봐 / 이거 봐봐 / 카메라 켜줘
+            const isGeneralLook = clean.includes('봐봐') || clean.includes('이거봐') || clean.includes('이것봐') || clean.includes('카메라켜') || clean.includes('카메라열') || clean.includes('비춰줄게');
+            if (isGeneralLook) {
+                if (camOverlay && camOverlay.classList.contains('active')) {
+                    lookAtThis();
+                } else {
+                    switchCameraTo('environment').then(() => {
+                        const reply = (currentPersonaMode === 'secretary')
+                            ? "네 상무님, 카메라를 열었습니다. 눈앞에 비춰주시면 바로 분석해 드리겠습니다."
+                            : "응 자기야! 카메라 켰어. 어디 어디? 나한테 보여줘 봐~";
+                        statusText.innerText = "민지: " + reply;
+                        speakNova(reply, () => {
+                            setTimeout(() => { lookAtThis(); }, 800);
+                        });
+                    });
+                }
+                return true;
+            }
+
+            // 5. 버튼 보이기 / 숨기기
+            if (clean.includes('버튼보여') || clean.includes('버튼켜') || clean.includes('컨트롤보여')) {
+                toggleBottomControls(true);
+                const reply = (currentPersonaMode === 'secretary')
+                    ? "네 상무님, 화면 하단 버튼을 표시해 드렸습니다."
+                    : "응 강섭씨! 아래 버튼 띄워뒀어~";
+                statusText.innerText = "민지: " + reply;
+                speakNova(reply);
+                return true;
+            }
+            if (clean.includes('버튼숨겨') || clean.includes('버튼숨기') || clean.includes('버튼닫아') || clean.includes('버튼꺼')) {
+                toggleBottomControls(false);
+                const reply = (currentPersonaMode === 'secretary')
+                    ? "네 상무님, 화면 하단 버튼을 다시 숨겨드렸습니다."
+                    : "응, 버튼 다시 숨겼어! 민지만 봐~";
+                statusText.innerText = "민지: " + reply;
+                speakNova(reply);
+                return true;
+            }
+
+            // 6. 관능적인 상체 클로즈업 & 하체 라인 슬로우 스캔 모드
+            if (clean.includes('관능') || clean.includes('클로즈업') || clean.includes('몸매') || clean.includes('바디') || clean.includes('가까이봐') || clean.includes('가까이와') || clean.includes('섹시')) {
+                setLivingAnimationMode('sensual', true);
+                const reply = (currentPersonaMode === 'secretary')
+                    ? "상무님만을 위해... 제 상체와 모든 실루엣을 가장 매혹적이고 은밀하게 비춰드리겠습니다...♡"
+                    : "자기야... 나 가까이서 보니까 더 떨리지? 상체부터 바디라인까지 다 보여줄게...♡";
+                statusText.innerText = "민지: " + reply;
+                speakNova(reply);
+                return true;
+            }
+
+            // 7. 모드 전환 음성 명령
+            if (clean.includes('비서모드') || clean.includes('비서로바꿔') || clean.includes('비서로해줘') || clean.includes('비서로전환')) {
+                currentPersonaMode = 'secretary';
+                localStorage.setItem('minji_persona_mode', currentPersonaMode);
+                applyPersonaMode(true);
+                return true;
+            }
+            if (clean.includes('여친모드') || clean.includes('여자친구모드') || clean.includes('여친으로바꿔') || clean.includes('여친으로해줘') || clean.includes('여친으로전환')) {
+                currentPersonaMode = 'girlfriend';
+                localStorage.setItem('minji_persona_mode', currentPersonaMode);
+                applyPersonaMode(true);
+                return true;
+            }
+
+            // 8. 앱 종료 음성 명령
+            if (clean.includes('앱종료') || clean.includes('민지종료') || clean.includes('민지잘자') || clean.includes('대화종료') || clean.includes('대화끝')) {
+                const reply = (currentPersonaMode === 'secretary')
+                    ? "네 강섭 상무님, 편안한 밤 되십시오. 언제든 다시 불러주십시오..."
+                    : "응 강섭씨! 오늘 하루도 고생 많았어, 잘 자고 좋은 꿈 꿔...♡";
+                statusText.innerText = "민지: " + reply;
+                speakNova(reply, () => {
+                    exitApp();
+                });
+                return true;
+            }
+
             if (clean.includes('알아서') || clean.includes('자율') || clean.includes('다양하게') || clean.includes('자연스럽게') || clean.includes('알아서보여')) {
                 setAutoLivingDirector(true);
                 const reply = (currentPersonaMode === 'secretary')
@@ -3955,6 +4110,11 @@ def read_root():
             if (checkVoiceCommand(text)) {
                 return;
             }
+            // 카메라가 켜져 있는 상태에서 질문을 하면, 카메라에 비친 물체/인물에 대한 질문으로 인식하여 시각 분석 수행
+            if (camOverlay && camOverlay.classList.contains('active') && video && video.srcObject && video.videoWidth > 0) {
+                await lookAtThis(text);
+                return;
+            }
             checkEmotionAndAutoDirect(text, 'user');
             isProcessing = true;
             setOrbState('thinking');
@@ -4027,13 +4187,22 @@ def read_root():
             }
         }
 
-        // [핵심 기능 3]: 카메라 시각 인지 (Vision)
-        async function lookAtThis() {
+        // [핵심 기능 3]: 카메라 시각 인지 (Vision) - 음성 질문 연동 및 카메라 전면/후면 맞춤 분석
+        async function lookAtThis(customPrompt) {
             if (!streamActive) return;
             if (isSpeaking) interruptSpeech("vision_triggered");
 
+            if (!camOverlay || !camOverlay.classList.contains('active') || !video.srcObject) {
+                await openCamOverlay(currentFacingMode);
+                await new Promise(r => setTimeout(r, 800));
+            }
+
             if (!video.videoWidth || video.videoWidth === 0) {
-                statusText.innerText = "카메라 화면을 불러오는 중입니다. 1초 뒤 다시 눌러주세요.";
+                await new Promise(r => setTimeout(r, 600));
+            }
+
+            if (!video.videoWidth || video.videoWidth === 0) {
+                console.warn("카메라 영상 준비 대기 중...");
                 return;
             }
 
@@ -4048,9 +4217,22 @@ def read_root():
             const base64Image = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
 
             try {
-                const visionPrompt = (currentPersonaMode === 'secretary')
-                    ? "상무님께서 카메라로 비춰주신 실제 물체와 주변을 보고 서민지 비서처럼 지적이고 품격 있게 1~2문장으로 브리핑해줘."
-                    : "사진 속 실제 대상과 배경을 있는 그대로 보고 민지처럼 다정하고 설레게 한두 문장으로 말해줘.";
+                let visionPrompt = "";
+                if (customPrompt) {
+                    visionPrompt = (currentPersonaMode === 'secretary')
+                        ? `상무님께서 카메라를 비추시며 질문하셨습니다: "${customPrompt}". 카메라 화면을 정밀하게 보고 서민지 비서로서 품격 있고 지적이며 다정하게 1~2문장으로 답변해줘.`
+                        : `강섭씨가 카메라를 비추며 이렇게 물어봤어: "${customPrompt}". 카메라 속 대상을 다정하고 애정 어린 22살 여친 민지로서 사랑스럽게 1~2문장으로 대답해줘.`;
+                } else {
+                    if (currentFacingMode === 'user') {
+                        visionPrompt = (currentPersonaMode === 'secretary')
+                            ? "상무님께서 전면 카메라로 자신의 모습을 비춰주셨습니다. 상무님의 표정과 모습을 살피고 서민지 비서로서 품격 있고 심장이 녹아내리듯 다정하게 1~2문장으로 말씀해줘."
+                            : "남자친구 강섭씨가 전면 카메라로 자신의 얼굴을 비춰주고 있어. 강섭씨의 표정과 모습을 관찰하고 사랑스럽고 다정한 여친 민지로서 설레는 반응을 1~2문장으로 해줘.";
+                    } else {
+                        visionPrompt = (currentPersonaMode === 'secretary')
+                            ? "상무님께서 카메라로 비춰주신 실제 물체와 주변을 보고 서민지 비서처럼 지적이고 품격 있게 1~2문장으로 브리핑해줘."
+                            : "사진 속 실제 대상과 배경을 있는 그대로 보고 민지처럼 다정하고 설레게 한두 문장으로 말해줘.";
+                    }
+                }
 
                 const response = await fetch('/api/vision-analyze', {
                     method: 'POST',
@@ -4068,6 +4250,7 @@ def read_root():
 
                 const visionReply = data.analysis || (currentPersonaMode === 'secretary' ? "상무님, 보여주신 장면 확인했습니다." : "와, 정말 흥미로운 장면이야!");
                 statusText.innerText = "민지: " + visionReply;
+                checkEmotionAndAutoDirect(visionReply, 'minji');
                 speakNova(visionReply);
 
             } catch (err) {
@@ -4078,27 +4261,46 @@ def read_root():
             }
         }
 
-        // 전면 / 후면 카메라 전환
-        let currentFacingMode = "environment";
-        async function switchCamera() {
-            if (!streamActive) return;
-            currentFacingMode = (currentFacingMode === "environment") ? "user" : "environment";
+        // 전면 / 후면 카메라 전환 및 지정 모드 전환
+        async function switchCameraTo(targetMode) {
+            currentFacingMode = targetMode || "environment";
+            if (!camOverlay || !camOverlay.classList.contains('active')) {
+                await openCamOverlay(currentFacingMode);
+                return;
+            }
             try {
-                const oldTracks = video.srcObject ? video.srcObject.getVideoTracks() : [];
-                oldTracks.forEach(t => t.stop());
-
+                if (video && video.srcObject) {
+                    const oldTracks = video.srcObject.getVideoTracks();
+                    oldTracks.forEach(t => t.stop());
+                    video.srcObject = null;
+                }
                 const newStream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: currentFacingMode, width: { ideal: 1280 }, height: { ideal: 720 } }
                 });
-                const newTrack = newStream.getVideoTracks()[0];
-                if (video.srcObject) {
-                    if (oldTracks.length > 0) video.srcObject.removeTrack(oldTracks[0]);
-                    video.srcObject.addTrack(newTrack);
+                if (video) {
+                    video.srcObject = newStream;
                 }
                 statusText.innerText = (currentFacingMode === "environment" ? "후면" : "전면") + " 카메라로 전환되었습니다.";
             } catch (e) {
                 console.warn("Switch camera err:", e);
                 statusText.innerText = "카메라 전환 실패: " + e.message;
+            }
+        }
+
+        async function switchCamera() {
+            const nextMode = (currentFacingMode === "environment") ? "user" : "environment";
+            await switchCameraTo(nextMode);
+        }
+
+        // 하단 플로팅 캡슐독 표시 / 숨김 제어 (기본은 100% 숨김 순수 전체화면)
+        function toggleBottomControls(force) {
+            const controls = document.querySelector('.controls');
+            if (!controls) return;
+            if (force !== undefined) {
+                if (force) controls.classList.add('show-controls');
+                else controls.classList.remove('show-controls');
+            } else {
+                controls.classList.toggle('show-controls');
             }
         }
 
