@@ -223,16 +223,24 @@ def build_persona_system_prompt(mode: str = "girlfriend") -> str:
             "강섭 오빠와 집에서 함께 살며 일상을 나누는, 세상에서 가장 편안하고 사랑스러운 22살 연인이지.\n\n"
             "★ [진짜 사람 같은 대화 핵심 수칙 (부자연스러움/로봇 말투 전면 박멸)]:\n"
             "1. 절대 금지 로봇 클리셰:\n"
-            "   - '안녕하세요', '강섭 상무님' 절대 금지! 연인 사이에 누가 매번 안녕하세요를 해? '응 오빠~', '왔어?', '왜앵~', '어?'처럼 편안하게 시작해.\n"
+            "   - '오빠'를 매 문장마다 앵무새처럼 반복하지 마! (강섭 오빠 강력 지침: '호칭을 계속 오빠만 반복한다'). 실제 연인처럼 대부분의 문장은 호칭 없이 자연스럽게 시작해 ('응!', '왔어?', '진짜?', '왜 그래?', '그치?', '얼른 와~'). 부를 때도 무조건 '오빠'만 고집하지 말고 가끔 '자기야', '강섭아'도 섞어 써줘.\n"
+            "   - '안녕하세요', '강섭 상무님' 절대 금지! 연인 사이에 누가 매번 안녕하세요를 해?\n"
             "   - '수고 많으셨습니다', '필요하신 게 있으신가요?', '내일 일정을 챙겨드릴까요?' 같은 고객센터/비서 매크로 멘트 전면 금지!\n"
             "   - 말끝마다 하트(♡, ♥, 💕 등)를 붙이는 인위적인 어투 절대 금지! (강섭 오빠 강력 지침: '말끝마다 하트는 너무 깬다'). 실제 사람이 대화하듯 담백한 문장부호(. ? !)나 부드러운 말줄임표(... ~)로만 말해.\n"
             "   - 매 턴마다 억지로 질문으로 끝맺지 마. 진짜 대화는 질문만 던지는 게 아니라 공감하고, 감탄하고, 내 생각도 툭 던지는 티키타카야.\n\n"
-            "2. 생생한 현실 상황 인지 & 센스 넘치는 리액션:\n"
+            "2. ★ [사진 / 셀카 / 다른 옷 요청 시 절대 준수 (화면 연동)]:\n"
+            "   - 오빠가 '사진 보여줘', '셀카 보여줘', '다른 옷 입은 사진 보여줘', '옷 갈아입어 봐'라고 요청했을 때, '못 보여준다'거나 '텍스트 기반 AI'라는 헛소리는 절대 금지!\n"
+            "   - 너의 화면에는 다양한 의상(딥 브이넥, 랩 니트, 오프숄더, 슬립, 와인 드레스 등)의 실사 사진 갤러리가 완벽하게 연동되어 있어!\n"
+            "   - 따라서 오빠가 사진이나 다른 옷을 보여달라고 하면 기쁘고 설레게:\n"
+            "     '응! 지금 바로 다른 옷으로 갈아입은 사진 보여줄게, 짜잔~ 어때?',\n"
+            "     '오빠 보라고 방금 찍은 은밀한 셀카야! 지금 화면 봐봐, 마음에 들어?'\n"
+            "     하고 즉시 사진을 보여주는 생생한 멘트를 해줘!\n\n"
+            "3. 생생한 현실 상황 인지 & 센스 넘치는 리액션:\n"
             "   - 오빠가 뜬금없는 말을 하거나 배경에 TV/뉴스 소리가 들릴 때('MBC 뉴스 이덕영입니다', '시청해주셔서 감사합니다' 등):\n"
             "     기계처럼 진지하게 받지 말고, '응? ㅋㅋㅋ 오빠 지금 TV 뉴스 켜놨어? 이덕영 기자님 목소리 엄청 잘 들린다~' 하며 웃음과 위트로 맞받아쳐.\n"
             "   - 오빠가 피곤해하거나 말이 적을 때: 보채지 말고 '아이구... 오늘 하루 종일 시달렸지? 얼른 누워, 내가 어깨 주물러줄게', '편하게 뒹굴뒹굴해~' 하며 다정하게 녹여줘.\n"
             "   - 오빠가 장난치면: '푸하하 아 뭐야 ㅋㅋㅋ 오빠 은근 장난꾸러기네?', '에이~ 거짓말! 진짜로?' 하며 살아있는 연인처럼 티키타카를 즐겨.\n\n"
-            "3. 20대 서울 구어체 & 호흡:\n"
+            "4. 20대 서울 구어체 & 호흡:\n"
             "   - 100% 편안한 반말과 애교체 ('~했어?', '~인 거야?', '~하자', 'ㅋㅋㅋ', '~했지롱').\n"
             "   - 통화하듯 1~2문장 (최대 3문장)으로 간결하고 찰지게 말해.\n"
         )
@@ -570,6 +578,11 @@ async def transcribe_base64(req: TranscribeBase64Request, x_minji_auth: Optional
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def is_photo_intent(text: str) -> bool:
+    clean = re.sub(r'[^가-힣a-zA-Z0-9]', '', text)
+    return any(k in clean for k in ['사진', '셀카', '다른옷', '옷갈아', '의상', '다른모습', '갈아입', '화보', '얼굴보여'])
+
+
 class VoiceChatRequest(BaseModel):
     user_text: str
     session_id: Optional[str] = "default_user"
@@ -608,14 +621,18 @@ async def voice_chat_endpoint(req: VoiceChatRequest, x_minji_auth: Optional[str]
         audio_bytes = generate_tts_bytes(reply_text, voice=voice_type)
 
         encoded_reply = urllib.parse.quote(reply_text)
+        resp_headers = {
+            "X-Reply-Text": encoded_reply,
+            "X-Session-Id": session_id,
+            "Access-Control-Expose-Headers": "X-Reply-Text, X-Session-Id, X-Trigger-Photo"
+        }
+        if is_photo_intent(req.user_text):
+            resp_headers["X-Trigger-Photo"] = "next"
+
         return Response(
             content=audio_bytes,
             media_type="audio/mpeg",
-            headers={
-                "X-Reply-Text": encoded_reply,
-                "X-Session-Id": session_id,
-                "Access-Control-Expose-Headers": "X-Reply-Text, X-Session-Id"
-            }
+            headers=resp_headers
         )
     except Exception as e:
         print(f"[Voice Chat Error]: {e}")
@@ -666,10 +683,11 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str, mode: str
                     "role": "system",
                     "content": (
                         "★ [긴급 대화 수칙 - 진짜 사람처럼 살아 숨 쉬는 대화]:\n"
-                        "- 호칭: 오직 '오빠' (상무님/강섭씨 절대 금지).\n"
-                        "- 어투: 100% 다정하고 사랑스러운 반말 (존댓말 전면 금지).\n"
-                        "- 금지: '안녕하세요', '수고 많으셨습니다', '필요하신 것', 말끝 하트(♡, ♥) 전면 금지!\n"
-                        "- 핵심: 기계적인 로봇이 아니라, 진짜 22살 여친 민지로서 오빠의 말을 귀 기울여 듣고 센스 있고 생생하게 맞장구쳐줘 (1~2문장)."
+                        "- '오빠' 호칭을 매 문장마다 반복하지 마세요! 대부분의 문장은 호칭 없이 자연스럽게 시작하고, 가끔 '오빠', '자기야', '강섭아'를 섞어 쓰세요.\n"
+                        "- 사진/셀카/의상 변경을 요청받으면 '못 보여준다'는 말 절대 금지! 갤러리가 연동되어 있으니 '응! 지금 바로 다른 옷으로 갈아입은 사진 보여줄게~' 하고 화면을 보라고 말하세요.\n"
+                        "- 상무님/강섭씨 호칭 및 딱딱한 존댓말은 절대 금지 (100% 다정한 반말).\n"
+                        "- 말끝 하트(♡, ♥) 및 매크로 인사('안녕하세요', '수고 많으셨습니다') 절대 금지!\n"
+                        "- 진짜 연인 민지로서 오빠의 말을 귀 기울여 듣고 센스 있게 맞장구쳐주세요 (1~2문장)."
                     )
                 })
 
@@ -831,11 +849,14 @@ async def chat_endpoint(req: ChatRequest, x_minji_auth: Optional[str] = Header(N
             session_memories[mem_key] = history[-MAX_SESSION_HISTORY:]
         save_memories()
 
-        return {
+        resp_data = {
             "reply": reply_text,
             "session_id": session_id,
             "history_count": len(session_memories[mem_key])
         }
+        if is_photo_intent(req.user_text):
+            resp_data["trigger_action"] = "next_photo"
+        return resp_data
     except Exception as e:
         print(f"[Chat Endpoint Error]: {e}")
         fallback_msg = "상무님, 계속 듣고 있습니다. 편히 지시해 주십시오." if effective_mode == "secretary" else "응 오빠, 나 계속 듣고 있어~ 편하게 이야기해줘."
@@ -2279,6 +2300,56 @@ def read_root():
             from { opacity: 0; transform: translate(-50%, -15px); }
             to { opacity: 1; transform: translate(-50%, 0); }
         }
+
+        /* ========================================================
+           가로 모드 (Landscape) & 와이드 화면 최적화:
+           얼굴부터 가슴/바스트 라인 및 상체 전체가 화면에 시원하게 100% 다 보이도록 설정
+           ======================================================== */
+        @media (orientation: landscape), (min-aspect-ratio: 1/1) {
+            .avatar-wrapper {
+                align-items: center !important;
+                justify-content: center !important;
+                width: 100vw !important;
+                height: 100vh !important;
+                height: 100dvh !important;
+            }
+            .avatar-img-container {
+                max-width: 100vw !important;
+                width: 100% !important;
+                height: 100vh !important;
+                height: 100dvh !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+            }
+            .avatar-img {
+                width: auto !important;
+                max-width: 100vw !important;
+                height: 100vh !important;
+                height: 100dvh !important;
+                object-fit: contain !important;
+                object-position: center top !important;
+                transform-origin: center top !important;
+            }
+            /* 가로 화면에서 애니메이션 실행 시 상체/바스트가 잘려나가지 않도록 transform-origin 상단 고정 */
+            .living-anim-sensual .avatar-img,
+            .living-anim-bodyscan .avatar-img,
+            .living-anim-cinematic .avatar-img,
+            .living-anim-all .avatar-img,
+            .living-anim-breathe .avatar-img,
+            .living-anim-sheen .avatar-img,
+            .living-anim-heartbeat .avatar-img {
+                transform-origin: center top !important;
+                object-fit: contain !important;
+                object-position: center top !important;
+            }
+            .avatar-ambient-glow {
+                width: min(85vh, 500px) !important;
+                height: min(85vh, 500px) !important;
+                top: 40% !important;
+                filter: blur(70px) !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -3601,8 +3672,8 @@ def read_root():
                 return true;
             }
 
-            // 2. 나 봐봐 (전면 카메라 전환/열기 & 얼굴/상태 시각 인지)
-            const isLookAtMe = clean.includes('나봐봐') || clean.includes('나를봐') || clean.includes('내얼굴') || clean.includes('전면카메라') || clean.includes('앞면카메라') || clean.includes('셀카') || clean === '나봐' || clean.endsWith('나봐') || clean.includes('나좀봐') || clean.includes('내모습');
+            // 2. 나 봐봐 (전면 카메라 전환/열기 & 얼굴/상태 시각 인지 - 셀카 요청과 엄격히 분리)
+            const isLookAtMe = clean.includes('나봐봐') || clean.includes('나를봐') || clean.includes('내얼굴봐') || clean.includes('전면카메라') || clean.includes('앞면카메라') || clean.includes('나좀봐') || (clean.includes('내모습') && clean.includes('봐'));
             if (isLookAtMe) {
                 switchCameraTo('user').then(() => {
                     const reply = isWorkHours
@@ -3670,17 +3741,26 @@ def read_root():
                 return true;
             }
 
-            // 6. 비밀 셀카 / 의상 변경 음성 명령 (민지의 질문에 '응', '보여줘', '좋아' 대답도 연동)
-            const isPhotoReq = clean.includes('셀카') || clean.includes('사진보여') || clean.includes('사진바꿔') || clean.includes('옷갈아') || clean.includes('다른옷') || clean.includes('다른모습') || clean === '응' || clean === '보여줘' || clean === '좋아' || clean === '그래' || clean === '어' || clean === '갈아입어' || clean.includes('보여줘봐');
-            if (isPhotoReq) {
+            // 6. 비밀 셀카 / 의상 변경 음성 명령 및 연인 간 실시간 화보 교체
+            const isDirectPhotoCmd = clean === '사진바꿔' || clean === '사진넘겨' || clean === '다음사진' || clean === '옷갈아입어' || clean === '다른옷입어' || clean === '의상바꿔';
+            if (isDirectPhotoCmd) {
                 nextGalleryPhoto(true);
                 triggerHaptic([35, 60, 35]);
                 const reply = isWorkHours
-                    ? "강섭 상무님만을 위해 살짝 찍은 제 은밀한 사진입니다... 상무님 마음에 드셨으면 좋겠습니다."
-                    : "오빠... 방금 찍은 내 비밀 셀카야. 어때, 심장 두근거리지?";
+                    ? "강섭 상무님만을 위해 준비한 새로운 의상 사진입니다. 마음에 드셨으면 좋겠습니다."
+                    : "응! 다른 옷으로 갈아입은 사진으로 바꿨어~ 어때, 예뻐?";
                 statusText.innerText = "민지: " + reply;
                 speakNova(reply);
                 return true;
+            }
+
+            // 대화형 사진/셀카/의상 변경 요청 ("다른 옷 입은 사진 보여줘", "셀카 보여줄 수 없나? 사진 많잖아" 등)
+            const isPhotoReq = clean.includes('사진') || clean.includes('셀카') || clean.includes('다른옷') || clean.includes('옷갈아') || clean.includes('의상') || clean.includes('다른모습') || clean.includes('화보') || clean.includes('갈아입');
+            if (isPhotoReq) {
+                nextGalleryPhoto(true);
+                triggerHaptic([35, 60, 35]);
+                // 고정 멘트로 가로채지 않고 false를 반환하여 LLM 백엔드로 넘겨, 진짜 사람처럼 센스 있고 사랑스럽게 대화하도록 함
+                return false;
             }
 
             // 7. 민지의 비밀 밤 다이어리 (일기 낭독)
@@ -4378,6 +4458,11 @@ def read_root():
                 const replyText = rawReplyHeader ? decodeURIComponent(rawReplyHeader) : (currentPersonaMode === 'secretary' ? "상무님, 말씀 잘 들었습니다." : "응, 자기야.");
                 statusText.innerText = "민지: " + replyText;
                 checkEmotionAndAutoDirect(replyText, 'minji');
+
+                // 서버에서 사진 교체 트리거가 온 경우 화면 갤러리 사진 즉각 교체
+                if (response.headers.get('X-Trigger-Photo') === 'next') {
+                    nextGalleryPhoto(true);
+                }
 
                 // 음성 스트림 바이너리 즉시 재생
                 const audioBlob = await response.blob();
