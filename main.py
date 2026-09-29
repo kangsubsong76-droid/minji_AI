@@ -1368,8 +1368,12 @@ def read_root():
             border-color: #ff7b54;
         }
 
+        /* 극단적 현실감: 텍스트/자막 기본 완전 숨김 (오직 민지 모습만 100% 몰입) */
         .status-container {
-            display: flex;
+            display: none !important;
+        }
+        .status-container.show-subtitles {
+            display: flex !important;
             flex-direction: column;
             align-items: center;
             gap: 4px;
@@ -2210,6 +2214,9 @@ def read_root():
                 </button>
                 <button class="view-mode-btn" id="viewModeBtn" onclick="toggleViewMode()" title="오라클↔아바타 모드" style="padding:4px 8px; font-size:0.75rem; border-radius:10px; display:flex; align-items:center; gap:3px;">
                     <span id="viewModeIcon">🔮</span><span style="font-size:0.7rem;">화면 전환</span>
+                </button>
+                <button class="view-mode-btn" id="subtitleToggleBtn" onclick="toggleSubtitles()" title="자막/텍스트 켜기/끄기" style="padding:4px 8px; font-size:0.75rem; border-radius:10px; display:flex; align-items:center; gap:3px;">
+                    <span>💬</span><span id="subtitleToggleLabel" style="font-size:0.7rem;">자막 켜기</span>
                 </button>
                 <button class="btn-exit" onclick="exitApp()" title="앱 완전 종료" style="padding:4px 8px; font-size:0.75rem; border-radius:10px;">
                     <span>⏻</span>
@@ -3149,6 +3156,29 @@ def read_root():
             applyPersonaMode(true);
         }
         applyPersonaMode(false);
+
+        // 자막/텍스트 표시 토글 (기본값: false - 민지 모습에 100% 몰입하기 위해 자막 기본 숨김)
+        let showSubtitles = localStorage.getItem('minji_show_subtitles') === 'true';
+        function applySubtitleVisibility() {
+            const container = document.getElementById('statusContainer');
+            const btnLabel = document.getElementById('subtitleToggleLabel');
+            if (container) {
+                if (showSubtitles) {
+                    container.classList.add('show-subtitles');
+                } else {
+                    container.classList.remove('show-subtitles');
+                }
+            }
+            if (btnLabel) {
+                btnLabel.innerText = showSubtitles ? '자막 끄기' : '자막 켜기';
+            }
+        }
+        function toggleSubtitles() {
+            showSubtitles = !showSubtitles;
+            localStorage.setItem('minji_show_subtitles', showSubtitles ? 'true' : 'false');
+            applySubtitleVisibility();
+        }
+        applySubtitleVisibility();
 
         // 음성 볼륨 제어 (기본 120%, 최대 200% 증폭 부스트)
         let userVolume = parseFloat(localStorage.getItem('minji_volume') || '120');
