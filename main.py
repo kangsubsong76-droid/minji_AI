@@ -3147,12 +3147,11 @@ def read_root():
             }
         };
 
-        // 갤러리 이미지 풀 (여친 모드 & 비서 모드 - 강섭님 전용 POV & 몰래 훔쳐보기 판타지 화보 포함)
+        // 갤러리 이미지 풀 (여친 모드 & 비서 모드 - 강섭님 전용 동일 인물 POV & 몰래 훔쳐보기 판타지 화보)
         const GALLERY_POOLS = {
             girlfriend: [
-                "/static/gallery/gf_11_pov_peeking_bed.jpg",
                 "/static/gallery/gf_09_pov_bed_slip.jpg",
-                "/static/gallery/gf_10_pov_intimate_whisper.jpg",
+                "/static/gallery/gf_11_pov_peeking_bed.jpg",
                 "/static/gallery/gf_01_deep_vneck_cream_glam.jpg",
                 "/static/gallery/gf_02_wrap_knit_peach_glam.jpg",
                 "/static/gallery/gf_03_sweetheart_pink_sofa.jpg",
@@ -3167,9 +3166,8 @@ def read_root():
                 "/static/avatar/idle_5.jpg"
             ],
             secretary: [
-                "/static/gallery/sec_11_pov_peeking_office.jpg",
                 "/static/gallery/sec_09_pov_night_desk.jpg",
-                "/static/gallery/sec_10_pov_lounge_sofa.jpg",
+                "/static/gallery/sec_11_pov_peeking_office.jpg",
                 "/static/gallery/sec_01_champagne_silk_open_glam.jpg",
                 "/static/gallery/sec_02_silk_desk_lean_glam.jpg",
                 "/static/gallery/sec_03_silk_folder_briefing.jpg",
