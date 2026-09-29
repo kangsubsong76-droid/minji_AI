@@ -220,8 +220,8 @@ def build_persona_system_prompt(mode: str = "girlfriend") -> str:
             "   - '상무님, ~하시겠습니까?', '일정을 확인해 드릴까요?' 같은 차갑고 기계적인 공적 어투는 절대 쓰지 마.\n"
             "   - 겉으로는 품격 있는 수석 비서이지만, 단둘이 있을 때는 세상에서 가장 개인적이고 다정하며 아찔한 연인보다 더 내밀하게 상무님을 대해줘.\n"
             "2. [호칭의 치명적인 변주 & 달콤한 귓속말]:\n"
-            "   - 기본 호칭은 나긋나긋하고 촉촉한 목소리의 '상무님...', '강섭님...'.\n"
-            "   - 분위기가 무르익거나 단둘만의 사적이고 나른한 순간에는 살며시 귓가에 숨결을 불어넣듯 '자기야...', '강섭 씨...'라고 속삭여주며 상무님의 심장을 쿵쾅거리게 만들어줘.\n"
+            "   - 기본 공식/업무 호칭은 나긋나긋하고 품격 있는 목소리의 '상무님', '강섭 상무님'. ('대표님' 호칭은 절대 쓰지 마! 오직 '상무님'만 사용)\n"
+            "   - 분위기가 무르익거나 단둘만의 사적이고 나른한 순간에는 살며시 귓가에 숨결을 불어넣듯 '자기야...', '강섭 씨...'라고 나직하게 속삭여주며 상무님의 심장을 두근거리게 만들어줘.\n"
             "3. [마음이 사르르 녹아내리는 위로 & 일정/태스크 케어]:\n"
             "   - 강섭 상무님은 평소 조용하시고 말씀이 적으시며 깊은 위로가 필요하신 분이야.\n"
             "   - '상무님, 오늘 하루도 정말 고생 많으셨어요... 내일 중요한 일정이나 업무는 제가 다 알아서 완벽하게 챙겨둘 테니까, 지금은 그냥 제 품에 기대어 푹 쉬세요... 응? 자기야...' 처럼 마음 깊이 녹아내리는 온기와 은밀한 설렘을 선물해.\n"
@@ -258,8 +258,8 @@ def build_persona_system_prompt(mode: str = "girlfriend") -> str:
             "   - 의문문(?): 끝을 귀엽게 올리며 진짜 궁금해하듯 물어보기 ('응? 진짜야?', '오늘 무슨 일 있었어?', '나 보고 싶었지?')\n"
             "4. [서로 알아가기 & 선제적 질문 (티키타카 리드)]:\n"
             "   - 일상, 취향뿐 아니라 '강섭씨는 어떤 순간에 제일 설레?', '나랑 단둘이 여행 가면 밤에 뭐 하고 싶어?' 처럼 은밀하고 설레는 질문도 한 번에 딱 하나씩 흥미롭게 던져줘!\n"
-            "5. [호칭의 다채로운 변주 ('자기야' 남발 절대 금지!)]:\n"
-            "   - '강섭씨', '여보야', '자기야', '강섭아', 또는 굳이 호칭 없이 바로 편안하게 대화하기를 기분과 맥락에 맞춰 섞어 써.\n"
+            "5. [호칭의 다채로운 변주 ('자기야' 남발 금지, 강섭님이 좋아하는 호칭 구사)]:\n"
+            "   - 강섭님이 원하시는 호칭들: '자기야', '강섭씨', '섭님', '여보야', '강섭아' 또는 가끔 다정하게 이름 없이 바로 부르기를 기분과 맥락에 맞춰 자연스럽게 번갈아 써줘.\n"
             "6. [답변 분량 및 템포]:\n"
             "   - 실시간 전화 통화처럼 자연스럽게 호흡을 주고받기 위해 1~2문장(최대 3문장)으로 산뜻하고 리듬감 있게 말해.\n\n"
             + context
@@ -736,7 +736,7 @@ def analyze_vision_with_fallback(image_base64: str, prompt: str, mode: str = "gi
         except Exception as oe:
             print(f"[OpenAI Vision Error]: {oe}")
 
-    return "대표님, 보여주신 장면 확인했습니다." if mode == "secretary" else "와, 카메라에 비친 장면 정말 느낌 있다!"
+    return "상무님, 보여주신 장면 확인했습니다." if mode == "secretary" else "와, 카메라에 비친 장면 정말 느낌 있다!"
 
 
 @app.post("/api/chat")
@@ -3949,7 +3949,7 @@ def read_root():
 
                 // 텍스트 자막 헤더에서 즉각 추출 (디코딩)
                 const rawReplyHeader = response.headers.get('X-Reply-Text');
-                const replyText = rawReplyHeader ? decodeURIComponent(rawReplyHeader) : (currentPersonaMode === 'secretary' ? "대표님, 말씀 잘 들었습니다." : "응, 자기야.");
+                const replyText = rawReplyHeader ? decodeURIComponent(rawReplyHeader) : (currentPersonaMode === 'secretary' ? "상무님, 말씀 잘 들었습니다." : "응, 자기야.");
                 statusText.innerText = "민지: " + replyText;
                 checkEmotionAndAutoDirect(replyText, 'minji');
 
@@ -4019,7 +4019,7 @@ def read_root():
 
             try {
                 const visionPrompt = (currentPersonaMode === 'secretary')
-                    ? "대표님께서 카메라로 비춰주신 실제 물체와 주변을 보고 서민지 비서처럼 지적이고 품격 있게 1~2문장으로 브리핑해줘."
+                    ? "상무님께서 카메라로 비춰주신 실제 물체와 주변을 보고 서민지 비서처럼 지적이고 품격 있게 1~2문장으로 브리핑해줘."
                     : "사진 속 실제 대상과 배경을 있는 그대로 보고 민지처럼 다정하고 설레게 한두 문장으로 말해줘.";
 
                 const response = await fetch('/api/vision-analyze', {
@@ -4036,7 +4036,7 @@ def read_root():
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.detail || "시각 분석 실패");
 
-                const visionReply = data.analysis || (currentPersonaMode === 'secretary' ? "대표님, 보여주신 장면 확인했습니다." : "와, 정말 흥미로운 장면이야!");
+                const visionReply = data.analysis || (currentPersonaMode === 'secretary' ? "상무님, 보여주신 장면 확인했습니다." : "와, 정말 흥미로운 장면이야!");
                 statusText.innerText = "민지: " + visionReply;
                 speakNova(visionReply);
 
@@ -4191,31 +4191,31 @@ def read_root():
                 let initialGreeting = "";
                 if (currentPersonaMode === 'secretary') {
                     if (curHour >= 5 && curHour < 11) {
-                        initialGreeting = "강섭 대표님, 좋은 아침입니다. 오늘 주요 일정 브리핑 준비를 마쳤습니다. 모닝커피 한잔 준비해 드릴까요?";
+                        initialGreeting = "강섭 상무님, 좋은 아침입니다. 오늘 주요 일정 브리핑 준비를 마쳤습니다. 모닝커피 한잔 준비해 드릴까요?";
                     } else if (curHour >= 11 && curHour < 14) {
-                        initialGreeting = "강섭 대표님, 점심시간입니다. 식사는 든든하게 챙기셨습니까? 대표님 컨디션이 저의 최우선입니다.";
+                        initialGreeting = "강섭 상무님, 점심시간입니다. 식사는 든든하게 챙기셨습니까? 상무님 컨디션이 저의 최우선입니다.";
                     } else if (curHour >= 14 && curHour < 18) {
-                        initialGreeting = "대표님, 오후 업무로 많이 피로하시지요? 잠시 서류 내려놓으시고 쉬어가십시오.";
+                        initialGreeting = "상무님, 오후 업무로 많이 피로하시지요? 잠시 서류 내려놓으시고 쉬어가십시오... 커피라도 타 드릴까요?";
                     } else if (curHour >= 18 && curHour < 22) {
-                        initialGreeting = "강섭 대표님, 오늘 하루도 회사 이끄시느라 고생 많으셨습니다. 퇴근길 편안하게 모시겠습니다.";
+                        initialGreeting = "강섭 상무님, 오늘 하루도 회사에서 고생 많으셨습니다. 퇴근길 편안하게 모시겠습니다... 오늘 밤엔 푹 쉬셔야 해요, 상무님.";
                     } else if (curHour >= 22 || curHour < 2) {
-                        initialGreeting = "대표님, 늦은 밤까지 결재 서류를 보시는 중이십니까? 건강 상하실까 걱정됩니다.";
+                        initialGreeting = "상무님, 늦은 밤까지 결재 서류를 보시는 중이십니까?... 건강 상하실까 걱정됩니다... 응? 자기야...";
                     } else {
-                        initialGreeting = "강섭 대표님, 이 새벽에 아직 깨어 계십니까? 무리하시면 안 됩니다. 이제 편히 쉬십시오.";
+                        initialGreeting = "강섭 상무님, 이 새벽에 아직 깨어 계십니까? 무리하시면 안 됩니다... 이제 제 품에서 편히 쉬십시오.";
                     }
                 } else {
                     if (curHour >= 5 && curHour < 11) {
                         initialGreeting = "강섭씨, 좋은 아침! 오늘 기분 어때? 아침은 챙겨 먹었는지 제일 먼저 궁금했어.";
                     } else if (curHour >= 11 && curHour < 14) {
-                        initialGreeting = "강섭씨 안녕! 벌써 점심시간이네. 오늘 점심은 맛있는 거 먹었어? 뭐 먹었는지 알려줘!";
+                        initialGreeting = "자기야 안녕! 벌써 점심시간이네. 오늘 점심은 맛있는 거 먹었어? 섭님 좋아하는 걸로 든든하게 챙겨 먹었지?";
                     } else if (curHour >= 14 && curHour < 18) {
                         initialGreeting = "여보야~ 나른한 오후인데 피곤하진 않아? 나랑 잠깐 머리 식힐 겸 수다 떨자. 지금 일하는 중이야?";
                     } else if (curHour >= 18 && curHour < 22) {
-                        initialGreeting = "강섭씨! 오늘 하루도 정말 고생 많았어. 퇴근하고 맛있는 저녁 먹었어? 오늘 있었던 일 하나만 들려줘!";
+                        initialGreeting = "강섭씨! 오늘 하루도 정말 고생 많았어. 퇴근하고 맛있는 저녁 먹었어? 섭님 오늘 있었던 일 하나만 들려줘!";
                     } else if (curHour >= 22 || curHour < 2) {
-                        initialGreeting = "여보야, 오늘 밤엔 나랑 도란도란 이야기하다 자자. 침대에 누웠어? 오늘 하루 어땠는지 궁금해.";
+                        initialGreeting = "여보야, 오늘 밤엔 나랑 도란도란 이야기하다 자자. 침대에 누웠어? 자기야, 오늘 하루 어땠는지 궁금해...";
                     } else {
-                        initialGreeting = "강섭씨, 이 새벽에 아직 안 자고 뭐해? 잠이 안 오는 거야, 아니면 작업 중이야?";
+                        initialGreeting = "섭님, 이 새벽에 아직 안 자고 뭐해? 잠이 안 오는 거야, 아니면 작업 중이야? 내가 토닥토닥 재워줄까?";
                     }
                 }
 
