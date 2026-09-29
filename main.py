@@ -1,6 +1,7 @@
 import os
 import io
 import base64
+import subprocess
 from typing import Dict, List, Optional
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, Response
@@ -214,7 +215,7 @@ class VisionRequest(BaseModel):
 
 class TTSRequest(BaseModel):
     text: str
-    voice: Optional[str] = "luna"  # 기본 보이스: 루나 (맑고 부드러운 힐링 여친톤)
+    voice: Optional[str] = "dahye"  # 기본 보이스: 다혜 (단아하고 나긋나긋한 여성미)
 
 class ResetMemoryRequest(BaseModel):
     session_id: Optional[str] = "default_user"
@@ -311,33 +312,58 @@ def normalize_speech_text(text: str) -> str:
     return normalized
 
 
+def pitch_shift_audio(audio_bytes: bytes, pitch_ratio: float = 1.08) -> bytes:
+    """ffmpeg asetrate/atempo를 사용해 템포 변형 없이 목소리 톤(피치)을 화사하고 가늘게 변환"""
+    try:
+        sample_rate = 44100
+        new_rate = int(sample_rate * pitch_ratio)
+        atempo = 1.0 / pitch_ratio
+        cmd = [
+            "ffmpeg", "-y", "-i", "pipe:0",
+            "-af", f"asetrate={new_rate},atempo={atempo}",
+            "-f", "mp3", "pipe:1"
+        ]
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = proc.communicate(input=audio_bytes)
+        if proc.returncode == 0 and out and len(out) > 100:
+            return out
+        else:
+            print(f"[pitch_shift_audio Error]: {err.decode('utf-8', errors='ignore')}")
+    except Exception as e:
+        print(f"[pitch_shift_audio Exception]: {e}")
+    return audio_bytes
+
+
 ELEVEN_VOICE_MAP = {
-    # ★ 사용자 최애 보이스 (루나, 다혜, 노바, 제시카만 유지 / 나머지 완전 삭제)
-    "luna": ("Ss1VfT7ri4lqnvTDWII0", 0.50, 0.85, 0.06, "eleven_flash_v2_5"),          # 1. 루나: 부드럽고 맑은 여친 (베스트 1픽)
-    "dahye": ("zXNMXSB7uul4lbmpaVAn", 0.52, 0.82, 0.06, "eleven_flash_v2_5"),         # 2. 다혜: 단아하고 나긋나긋한 여성미 (베스트 2픽)
-    "jessica": ("cgSgspJ2msm6clMCkdW9", 0.44, 0.85, 0.14, "eleven_multilingual_v2"),    # 3. 제시카: 문장 높낮이 자연스러운 억양 보완 (multilingual v2)
-    "eleven_girlfriend": ("Ss1VfT7ri4lqnvTDWII0", 0.50, 0.85, 0.06, "eleven_flash_v2_5"),
-    "eleven_secretary": ("zXNMXSB7uul4lbmpaVAn", 0.52, 0.82, 0.06, "eleven_flash_v2_5"),
+    # ★ 사용자 최애 보이스: 다혜 & 다혜2 (나머지 완전 삭제)
+    # 다혜: eleven_multilingual_v2 + 0.46/0.85/0.12 (문장 높낮이/어미 어색함 완벽 보완한 고품질 억양)
+    "dahye": ("zXNMXSB7uul4lbmpaVAn", 0.46, 0.85, 0.12, "eleven_multilingual_v2"),
+    # 다혜2: eleven_multilingual_v2 + 0.40/0.86/0.22 + ffmpeg 피치 시프트(+8%)로 살짝 가늘고 귀여운 애교 여친톤
+    "dahye2": ("zXNMXSB7uul4lbmpaVAn", 0.40, 0.86, 0.22, "eleven_multilingual_v2"),
+    "eleven_girlfriend": ("zXNMXSB7uul4lbmpaVAn", 0.46, 0.85, 0.12, "eleven_multilingual_v2"),
+    "eleven_secretary": ("zXNMXSB7uul4lbmpaVAn", 0.46, 0.85, 0.12, "eleven_multilingual_v2"),
 }
 
-def generate_tts_bytes(text: str, voice: str = "luna") -> bytes:
-    """ElevenLabs 및 OpenAI 초저지연 음성 생성기"""
+def generate_tts_bytes(text: str, voice: str = "dahye") -> bytes:
+    """ElevenLabs 및 초저지연 음성 생성기"""
     cleaned_text = normalize_speech_text(text)
-    v_key = (voice or "luna").lower()
+    v_key = (voice or "dahye").lower()
+    if v_key not in ELEVEN_VOICE_MAP and "eleven" not in v_key:
+        v_key = "dahye"
 
-    # 1. ElevenLabs 등록 보이스 매핑 (루나, 다혜, 제시카)
-    if elevenlabs_key and (v_key in ELEVEN_VOICE_MAP or "eleven" in v_key):
-        voice_info = ELEVEN_VOICE_MAP.get(v_key, ELEVEN_VOICE_MAP["luna"])
+    # 1. ElevenLabs 등록 보이스 매핑 (다혜, 다혜2)
+    if elevenlabs_key:
+        voice_info = ELEVEN_VOICE_MAP.get(v_key, ELEVEN_VOICE_MAP["dahye"])
         voice_id, stab, sim, sty, model_cand = voice_info
 
         settings = {
             "stability": stab,
             "similarity_boost": sim,
             "style": sty,
-            "use_speaker_boost": False  # 남성 흉성 울림 100% 차단
+            "use_speaker_boost": False  # 남성 흉성 울림 차단
         }
 
-        for model_to_try in [model_cand, "eleven_flash_v2_5", "eleven_multilingual_v2"]:
+        for model_to_try in [model_cand, "eleven_multilingual_v2", "eleven_flash_v2_5"]:
             try:
                 tts_url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?optimize_streaming_latency=3"
                 tts_payload = json.dumps({
@@ -355,21 +381,23 @@ def generate_tts_bytes(text: str, voice: str = "luna") -> bytes:
                     },
                     method="POST"
                 )
-                with urllib.request.urlopen(tts_req, timeout=6) as resp:
+                with urllib.request.urlopen(tts_req, timeout=8) as resp:
                     audio_data = resp.read()
                     if audio_data and len(audio_data) > 100:
+                        if v_key == "dahye2":
+                            audio_data = pitch_shift_audio(audio_data, 1.08)
                         return audio_data
             except Exception as el_err:
                 print(f"[ElevenLabs {model_to_try} Error]: {el_err}")
 
-    # 2. OpenAI 노바 (Nova) - 사용자가 요청한 '살짝 느리게(speed=0.95)' 편안한 대화 속도로 생성
+    # 2. OpenAI 백업 폴백 (비상시)
     if openai_client:
         try:
             response = openai_client.audio.speech.create(
                 model="tts-1",
                 voice="nova",
                 input=cleaned_text,
-                speed=0.95
+                speed=1.0
             )
             if response and response.content:
                 return response.content
@@ -431,7 +459,7 @@ class VoiceChatRequest(BaseModel):
     user_text: str
     session_id: Optional[str] = "default_user"
     mode: Optional[str] = "girlfriend"
-    voice: Optional[str] = "eleven_girlfriend"
+    voice: Optional[str] = "dahye"
 
 
 @app.post("/api/voice-chat")
@@ -457,7 +485,7 @@ async def voice_chat_endpoint(req: VoiceChatRequest):
             session_memories[session_id] = history[-MAX_SESSION_HISTORY:]
 
         # 2. 초저지연 TTS 음성 즉시 생성
-        voice_type = req.voice or ("eleven_girlfriend" if mode == "girlfriend" else "eleven_secretary")
+        voice_type = req.voice or "dahye"
         audio_bytes = generate_tts_bytes(reply_text, voice=voice_type)
 
         encoded_reply = urllib.parse.quote(reply_text)
@@ -474,7 +502,7 @@ async def voice_chat_endpoint(req: VoiceChatRequest):
         print(f"[Voice Chat Error]: {e}")
         fallback_msg = "대표님, 계속 듣고 있습니다." if mode == "secretary" else "응, 자기야 계속 듣고 있어."
         encoded_reply = urllib.parse.quote(fallback_msg)
-        fallback_bytes = generate_tts_bytes(fallback_msg, voice=req.voice or "coral")
+        fallback_bytes = generate_tts_bytes(fallback_msg, voice=req.voice or "dahye")
         return Response(
             content=fallback_bytes,
             media_type="audio/mpeg",
@@ -1872,10 +1900,8 @@ def read_root():
         <div style="display:flex; align-items:center; justify-content:space-between; width:100%; gap:10px; box-sizing:border-box;">
             <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:0;">
                 <select id="voiceSelect" onchange="onVoiceDropdownChange(this.value)" style="flex:1; min-width:0; background:#1c1c24; color:#ff9a76; border:1px solid #ff7b54; border-radius:12px; padding:6px 10px; font-size:0.8rem; font-weight:500; outline:none; cursor:pointer; box-sizing:border-box; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">
-                    <option value="luna" selected>🌙 Luna (루나 · 부드럽고 맑은 여친 - 베스트)</option>
-                    <option value="dahye">✨ Dahye (다혜 · 단아하고 나긋나긋한 여성미 - 베스트)</option>
-                    <option value="nova">⚡ Nova (노바 · 자연스럽고 편안한 대화톤 - 베스트)</option>
-                    <option value="jessica">🍭 Jessica (제시카 · 자연스러운 높낮이 억양 - 베스트)</option>
+                    <option value="dahye" selected>✨ Dahye (다혜 · 단아하고 나긋나긋한 여성미 - 1픽)</option>
+                    <option value="dahye2">🎀 Dahye 2 (다혜2 · 살짝 가늘고 귀여운 애교톤 - 2픽)</option>
                 </select>
                 <button type="button" onclick="openVoiceAuditionModal(event)" title="목소리 샘플 듣고 고르기"
                     style="background:linear-gradient(135deg, rgba(255,123,84,0.3), rgba(255,107,107,0.25)); border:1px solid #ff7b54; color:#ff9a76; border-radius:12px; padding:6px 12px; font-size:0.78rem; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:4px; white-space:nowrap; flex-shrink:0;">
@@ -2507,7 +2533,7 @@ def read_root():
                 if (title) title.innerText = 'Minji AI · 서민지 비서';
                 const savedSecVoice = localStorage.getItem('minji_custom_voice');
                 if (voiceSelect) {
-                    voiceSelect.value = (savedSecVoice && ['luna', 'dahye', 'nova', 'jessica'].includes(savedSecVoice)) ? savedSecVoice : 'dahye';
+                    voiceSelect.value = (savedSecVoice && ['dahye', 'dahye2'].includes(savedSecVoice)) ? savedSecVoice : 'dahye';
                 }
             } else {
                 if (icon) icon.innerText = '💖';
@@ -2527,7 +2553,7 @@ def read_root():
                 if (title) title.innerText = 'Minji AI · 베이글 여친';
                 const savedGfVoice = localStorage.getItem('minji_custom_voice');
                 if (voiceSelect) {
-                    voiceSelect.value = (savedGfVoice && ['luna', 'dahye', 'nova', 'jessica'].includes(savedGfVoice)) ? savedGfVoice : 'luna';
+                    voiceSelect.value = (savedGfVoice && ['dahye', 'dahye2'].includes(savedGfVoice)) ? savedGfVoice : 'dahye';
                 }
             }
 
@@ -2826,7 +2852,7 @@ def read_root():
                 }
 
                 const voiceSelect = document.getElementById('voiceSelect');
-                const chosenVoice = voiceSelect ? voiceSelect.value : (currentPersonaMode === 'secretary' ? 'dahye' : 'luna');
+                const chosenVoice = voiceSelect ? voiceSelect.value : 'dahye';
 
                 const response = await fetch('/api/tts', {
                     method: 'POST',
@@ -2841,8 +2867,8 @@ def read_root():
 
                 const blob = await response.blob();
                 audioPlayer.src = URL.createObjectURL(blob);
-                // 노바는 요청에 맞게 살짝 느리고 편안한 0.96배속, 그 외 보이스는 1.02배속
-                audioPlayer.playbackRate = (chosenVoice === 'nova') ? 0.96 : ((currentPersonaMode === 'girlfriend') ? 1.02 : 1.0);
+                // 다혜2는 살짝 가늘고 귀여운 느낌을 위해 1.04배속, 다혜는 정돈되고 자연스러운 1.0배속
+                audioPlayer.playbackRate = (chosenVoice === 'dahye2') ? 1.04 : 1.0;
                 applyVolume(userVolume);
                 
                 audioPlayer.onended = () => {
@@ -3077,7 +3103,7 @@ def read_root():
             statusText.innerText = "민지가 생각하고 있어요...";
 
             try {
-                const chosenVoice = voiceSelect ? voiceSelect.value : (currentPersonaMode === 'secretary' ? 'dahye' : 'luna');
+                const chosenVoice = voiceSelect ? voiceSelect.value : 'dahye';
                 const response = await fetch('/api/voice-chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -3107,6 +3133,8 @@ def read_root():
                 setOrbState('speaking');
 
                 audioPlayer.src = audioUrl;
+                audioPlayer.playbackRate = (chosenVoice === 'dahye2') ? 1.04 : 1.0;
+                applyVolume(userVolume);
                 audioPlayer.onended = () => {
                     isSpeaking = false;
                     setOrbState(isMicMuted ? 'muted' : 'idle');
@@ -3392,36 +3420,20 @@ def read_root():
         // ==========================================
         const VOICE_LIST = [
             {
-                id: 'luna',
-                name: 'Luna (루나)',
-                speedTag: '⚡ 초저지연 Flash (0.45s)',
-                toneTag: '🌙 추천 · 부드럽고 맑은 힐링 여친',
-                quote: '“자기야, 오늘 하루도 정말 수고 많았어. 나 많이 보고 싶었지? 오늘 밤엔 나랑 오래 통화하자!”',
-                sample: '/static/audio/samples/luna.mp3'
-            },
-            {
                 id: 'dahye',
                 name: 'Dahye (다혜)',
-                speedTag: '⚡ 초저지연 Flash (0.45s)',
-                toneTag: '✨ 추천 · 단아하고 나긋나긋한 여성미',
+                speedTag: '✨ 고품질 자연스러운 억양 (Multilingual v2)',
+                toneTag: '🌸 1픽 베스트 · 단아하고 나긋나긋한 여성미',
                 quote: '“자기야, 오늘 하루도 정말 수고 많았어. 나 많이 보고 싶었지? 오늘 밤엔 나랑 오래 통화하자!”',
                 sample: '/static/audio/samples/dahye.mp3'
             },
             {
-                id: 'nova',
-                name: 'Nova (노바)',
-                speedTag: '🍃 편안한 속도 (0.95x)',
-                toneTag: '⚡ 추천 · 다정하고 자연스러운 대화톤',
+                id: 'dahye2',
+                name: 'Dahye 2 (다혜2)',
+                speedTag: '✨ 살짝 가늘고 상큼한 톤 (+8% 피치)',
+                toneTag: '🎀 2픽 추천 · 가늘고 귀여운 애교 여친톤',
                 quote: '“자기야, 오늘 하루도 정말 수고 많았어. 나 많이 보고 싶었지? 오늘 밤엔 나랑 오래 통화하자!”',
-                sample: '/static/audio/samples/nova.mp3'
-            },
-            {
-                id: 'jessica',
-                name: 'Jessica (제시카)',
-                speedTag: '🎭 감성 억양 (Multilingual v2)',
-                toneTag: '🍭 추천 · 자연스러운 높낮이와 생동감',
-                quote: '“자기야, 오늘 하루도 정말 수고 많았어. 나 많이 보고 싶었지? 오늘 밤엔 나랑 오래 통화하자!”',
-                sample: '/static/audio/samples/jessica.mp3'
+                sample: '/static/audio/samples/dahye2.mp3'
             }
         ];
 
@@ -3501,7 +3513,7 @@ def read_root():
             const listEl = document.getElementById('voiceAuditionList');
             if (!listEl) return;
             const vSelect = document.getElementById('voiceSelect');
-            const currentVoice = (vSelect ? vSelect.value : (localStorage.getItem('minji_custom_voice') || 'luna')).toLowerCase();
+            const currentVoice = (vSelect ? vSelect.value : (localStorage.getItem('minji_custom_voice') || 'dahye')).toLowerCase();
 
             listEl.innerHTML = VOICE_LIST.map(v => {
                 const isSelected = (v.id === currentVoice);
@@ -3557,10 +3569,15 @@ def read_root():
         window.renderAuditionList = renderAuditionList;
         window.showVoiceToast = showVoiceToast;
 
-        // 초기 목소리 설정 복원
+        // 초기 목소리 설정 복원 (오직 dahye, dahye2만 허용, 이전 luna/nova/jessica 캐시는 자동으로 dahye로 리셋)
         const initSavedVoice = localStorage.getItem('minji_custom_voice');
-        if (initSavedVoice && voiceSelect) {
-            voiceSelect.value = initSavedVoice;
+        if (voiceSelect) {
+            if (initSavedVoice && ['dahye', 'dahye2'].includes(initSavedVoice)) {
+                voiceSelect.value = initSavedVoice;
+            } else {
+                voiceSelect.value = 'dahye';
+                localStorage.setItem('minji_custom_voice', 'dahye');
+            }
         }
     </script>
 </body>
