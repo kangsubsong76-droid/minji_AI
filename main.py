@@ -373,9 +373,10 @@ def normalize_speech_text(text: str) -> str:
 def is_daytime() -> bool:
     """평일 09:00 ~ 18:00 근무 시간 여부 판별 (한국 시각 KST 기준)"""
     try:
-        now = datetime.datetime.now(zoneinfo.ZoneInfo("Asia/Seoul"))
+        kst = timezone(timedelta(hours=9))
+        now = datetime.now(kst)
     except Exception:
-        now = datetime.datetime.now()
+        now = datetime.now()
     return now.weekday() < 5 and 9 <= now.hour < 18
 
 
