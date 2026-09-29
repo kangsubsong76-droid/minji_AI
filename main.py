@@ -39,7 +39,7 @@ openai_client = OpenAI(api_key=openai_key) if openai_key else None
 anthropic_client = anthropic.Anthropic(api_key=anthropic_key) if anthropic_key else None
 
 elevenlabs_key = os.getenv("ELEVENLABS_API_KEY", "")
-elevenlabs_voice_id = os.getenv("ELEVENLABS_VOICE_ID", "")
+elevenlabs_voice_id = os.getenv("ELEVENLABS_VOICE_ID", "PyETHgpGKCClcvneEjgw")
 
 import urllib.request
 import json
@@ -54,7 +54,7 @@ def ensure_roh_voice_clone(api_key: Optional[str] = None) -> Optional[str]:
         return elevenlabs_voice_id
 
     try:
-        # 1. ElevenLabs 계정에 이미 생성된 노윤서 클론이 있는지 검색
+        # 1. ElevenLabs 계정에 이미 생성된 순수 노윤서 클론이 있는지 검색
         req = urllib.request.Request(
             "https://api.elevenlabs.io/v1/voices",
             headers={"xi-api-key": key}
@@ -63,7 +63,11 @@ def ensure_roh_voice_clone(api_key: Optional[str] = None) -> Optional[str]:
             data = json.loads(resp.read().decode())
             for v in data.get("voices", []):
                 name = v.get("name", "").lower()
-                if "노윤서" in name or "roh" in name or "minji" in name:
+                if "pure" in name or "순수" in name or v.get("voice_id") == "PyETHgpGKCClcvneEjgw":
+                    elevenlabs_voice_id = v.get("voice_id")
+                    print(f"[ElevenLabs] 순수 노윤서 솔로 보이스 발견: {elevenlabs_voice_id}")
+                    return elevenlabs_voice_id
+                elif "노윤서" in name or "roh" in name or "minji" in name:
                     elevenlabs_voice_id = v.get("voice_id")
                     print(f"[ElevenLabs] 기존 노윤서 클론 보이스 발견: {elevenlabs_voice_id}")
                     return elevenlabs_voice_id
@@ -366,15 +370,15 @@ def normalize_speech_text(text: str) -> str:
     return t
 
 
-def pitch_shift_audio(audio_bytes: bytes, pitch_ratio: float = 1.08) -> bytes:
-    """ffmpeg asetrate/atempo를 사용해 템포 변형 없이 목소리 톤(피치)을 화사하고 가늘게 변환"""
+def pitch_shift_audio(audio_bytes: bytes, pitch_ratio: float = 1.18, speed_boost: float = 1.05) -> bytes:
+    """ffmpeg DSP: 아줌마/중년 흉성 울림을 100% 컷하고, 가늘고 앳되며 귀여운 여동생/여친 톤으로 드라마틱하게 전환"""
     try:
         sample_rate = 44100
         new_rate = int(sample_rate * pitch_ratio)
-        atempo = 1.0 / pitch_ratio
+        atempo = (1.0 / pitch_ratio) * speed_boost
         cmd = [
             "ffmpeg", "-y", "-i", "pipe:0",
-            "-af", f"asetrate={new_rate},atempo={atempo}",
+            "-af", f"asetrate={new_rate},atempo={atempo},aresample=44100,highpass=f=140,equalizer=f=3200:t=q:w=1.2:g=2.8",
             "-f", "mp3", "pipe:1"
         ]
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -389,25 +393,25 @@ def pitch_shift_audio(audio_bytes: bytes, pitch_ratio: float = 1.08) -> bytes:
 
 
 ELEVEN_VOICE_MAP = {
-    # ★ 20대 초반 맑고 감미로운 여친 & 비서 목소리 라인업 (아줌마/중년 내레이터 전면 퇴출)
-    # 1. 노윤서 (Roh Yoon-seo): 20대 초반 여배우 고유 육성 클론 (맑고 앳된 서울 억양의 최애 톤) -> 기본 DEFAULT!
-    "roh": ("3O5O1l8nQtZUboIsdgXN", 0.42, 0.85, 0.35, "eleven_multilingual_v2"),
-    "minji": ("3O5O1l8nQtZUboIsdgXN", 0.42, 0.85, 0.35, "eleven_multilingual_v2"),
+    # ★ 20대 초반 맑고 감미로운 여친 & 여동생 애교톤 보이스 라인업
+    # 1. 노윤서 순수 솔로 (Roh Yoon-seo Pure Solo): 남성 목소리 100% 차단된 순수 단독 육성 클론 -> DEFAULT!
+    "roh": ("PyETHgpGKCClcvneEjgw", 0.38, 0.88, 0.35, "eleven_multilingual_v2"),
+    "minji": ("PyETHgpGKCClcvneEjgw", 0.38, 0.88, 0.35, "eleven_multilingual_v2"),
     # 2. 루나 (Luna): 20대 청순 발랄 나긋나긋한 감미로운 톤
-    "luna": ("Ss1VfT7ri4lqnvTDWII0", 0.45, 0.85, 0.30, "eleven_multilingual_v2"),
-    # 3. 루니타 (Lunita): 20대 부드럽고 달콤한 톤
-    "lunita": ("kZJ3sOVD7WvNyF75aJZW", 0.45, 0.85, 0.30, "eleven_multilingual_v2"),
-    # 4. 제인 (Jane): 20대 차분하고 단아한 비서 톤
-    "jane": ("ajfBUI2mmJMjvf2H6Yw7", 0.48, 0.85, 0.25, "eleven_multilingual_v2"),
-    # 하위 호환 매핑: 이전 캐시로 dahye 호출 시 자동으로 20대 노윤서 클론으로 연결
-    "dahye": ("3O5O1l8nQtZUboIsdgXN", 0.42, 0.85, 0.35, "eleven_multilingual_v2"),
-    "dahye2": ("Ss1VfT7ri4lqnvTDWII0", 0.45, 0.85, 0.30, "eleven_multilingual_v2"),
-    "eleven_girlfriend": ("3O5O1l8nQtZUboIsdgXN", 0.42, 0.85, 0.35, "eleven_multilingual_v2"),
-    "eleven_secretary": ("3O5O1l8nQtZUboIsdgXN", 0.42, 0.85, 0.35, "eleven_multilingual_v2"),
+    "luna": ("Ss1VfT7ri4lqnvTDWII0", 0.40, 0.88, 0.35, "eleven_multilingual_v2"),
+    # 3. 루니타 (Lunita): 20대 부드럽고 달콤한 속삭임 톤
+    "lunita": ("kZJ3sOVD7WvNyF75aJZW", 0.40, 0.88, 0.35, "eleven_multilingual_v2"),
+    # 4. 제인 (Jane): 20대 차분하고 단아한 엘리트 톤
+    "jane": ("ajfBUI2mmJMjvf2H6Yw7", 0.42, 0.88, 0.30, "eleven_multilingual_v2"),
+    # 하위 호환 매핑: 이전 캐시로 호출 시 자동으로 순수 노윤서 솔로 보이스로 직결
+    "dahye": ("PyETHgpGKCClcvneEjgw", 0.38, 0.88, 0.35, "eleven_multilingual_v2"),
+    "dahye2": ("Ss1VfT7ri4lqnvTDWII0", 0.40, 0.88, 0.35, "eleven_multilingual_v2"),
+    "eleven_girlfriend": ("PyETHgpGKCClcvneEjgw", 0.38, 0.88, 0.35, "eleven_multilingual_v2"),
+    "eleven_secretary": ("PyETHgpGKCClcvneEjgw", 0.38, 0.88, 0.35, "eleven_multilingual_v2"),
 }
 
 def generate_tts_bytes(text: str, voice: str = "roh") -> bytes:
-    """ElevenLabs 및 초저지연 음성 생성기 (20대 여성 음색)"""
+    """ElevenLabs 및 초저지연 음성 생성기 (귀여운 여동생/여친 피치 시프트 적용)"""
     cleaned_text = normalize_speech_text(text)
     v_key = (voice or "roh").lower()
     if v_key not in ELEVEN_VOICE_MAP and "eleven" not in v_key:
@@ -422,7 +426,7 @@ def generate_tts_bytes(text: str, voice: str = "roh") -> bytes:
             "stability": stab,
             "similarity_boost": sim,
             "style": sty,
-            "use_speaker_boost": False  # 남성 흉성 울림 차단
+            "use_speaker_boost": False  # 남성/중년 흉성 울림 차단
         }
 
         for model_to_try in [model_cand, "eleven_multilingual_v2", "eleven_flash_v2_5"]:
@@ -446,8 +450,8 @@ def generate_tts_bytes(text: str, voice: str = "roh") -> bytes:
                 with urllib.request.urlopen(tts_req, timeout=8) as resp:
                     audio_data = resp.read()
                     if audio_data and len(audio_data) > 100:
-                        if v_key == "dahye2":
-                            audio_data = pitch_shift_audio(audio_data, 1.08)
+                        # ★ 모든 음성에 +18% 피치 시프트 & 저음 흉성 필터링 적용 -> 가늘고 귀여운 여동생 애교톤 완성
+                        audio_data = pitch_shift_audio(audio_data, pitch_ratio=1.18, speed_boost=1.05)
                         return audio_data
             except Exception as el_err:
                 print(f"[ElevenLabs {model_to_try} Error]: {el_err}")
@@ -939,16 +943,19 @@ def read_root():
             top: 14px;
             left: 50%;
             transform: translateX(-50%) translateY(-180%);
-            width: min(95vw, 760px);
-            max-width: 760px;
+            width: min(94vw, 480px);
+            max-width: 480px;
+            max-height: 85vh;
+            max-height: 85dvh;
+            overflow-y: auto;
             display: flex;
             flex-direction: column;
             gap: 12px;
-            padding: 14px 20px;
+            padding: 16px 18px;
             z-index: 50000 !important;
             backdrop-filter: blur(28px);
             -webkit-backdrop-filter: blur(28px);
-            background: rgba(14, 14, 22, 0.96);
+            background: rgba(14, 14, 22, 0.97);
             border-radius: 20px;
             border: 1px solid rgba(255, 123, 84, 0.45);
             box-shadow: 0 16px 48px rgba(0, 0, 0, 0.95), 0 0 28px rgba(255, 123, 84, 0.25);
@@ -956,7 +963,9 @@ def read_root():
             opacity: 0;
             pointer-events: none;
             box-sizing: border-box;
+            scrollbar-width: none;
         }
+        .header::-webkit-scrollbar { display: none; }
         .header.active {
             transform: translateX(-50%) translateY(0);
             opacity: 1 !important;
@@ -2219,30 +2228,6 @@ def read_root():
         </div>
     </div>
 
-    <!-- ===== 🎧 목소리 오디션 스튜디오 모달 ===== -->
-    <div id="voiceAuditionModal" class="voice-modal-overlay" style="display:none;" onclick="handleAuditionOverlayClick(event)">
-        <div class="voice-modal-card" onclick="event.stopPropagation()">
-            <div class="voice-modal-header">
-                <div class="voice-modal-title-wrap">
-                    <div class="voice-modal-title">🎧 민지 목소리 오디션 스튜디오</div>
-                    <div class="voice-modal-subtitle">각 목소리 샘플을 직접 들어보고 가장 마음에 드는 음성을 골라보세요.</div>
-                </div>
-                <button type="button" class="voice-modal-close" onclick="closeVoiceAuditionModal()" title="닫기">✕</button>
-            </div>
-            
-            <div class="voice-modal-body" id="voiceAuditionList">
-                <!-- JS dynamically renders cards with play & apply buttons -->
-            </div>
-
-            <div class="voice-modal-footer">
-                <div style="font-size:0.75rem; color:#888;">
-                    ⚡ <strong>초저지연 Flash</strong>: 0.4초대 초고속 응답 & 남성 흉성 100% 제거
-                </div>
-                <button type="button" class="voice-modal-done-btn" onclick="closeVoiceAuditionModal()">완료</button>
-            </div>
-        </div>
-    </div>
-
     <!-- ===== 패스워드 & Face ID 보안 게이트 ===== -->
     <div class="pw-gate" id="pwGate">
         <div class="pw-logo">민지</div>
@@ -2291,73 +2276,59 @@ def read_root():
     </button>
 
     <div class="header" id="appHeader">
-        <!-- 1행: 타이틀 + 모드 선택 + 액션 버튼들 -->
-        <div style="display:flex; justify-content:space-between; align-items:center; width:100%; gap:8px; box-sizing:border-box;">
-            <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
-                <div class="header-title" id="appHeaderTitle" style="font-size:0.95rem; font-weight:700; color:#ff7b54; letter-spacing:0.5px; white-space:nowrap;">민지</div>
-                <!-- 모드 선택 토글 (여친 ↔ 비서) -->
-                <button id="modeSelectBtn" onclick="togglePersonaMode()" title="여친 ↔ 비서 모드 전환"
-                    style="background:rgba(255,123,84,0.18); border:1px solid rgba(255,123,84,0.45); color:#ff9a76;
-                           border-radius:14px; padding:4px 10px; font-size:0.75rem; cursor:pointer; white-space:nowrap;
-                           display:flex; align-items:center; gap:4px; font-weight:600; flex-shrink:0;">
-                    <span id="modeSelectIcon">💖</span>
-                    <span id="modeSelectText">여친 모드</span>
-                </button>
+        <!-- 1행: 상단 바 (민지 AI 타이틀 + 설정 닫기 버튼) -->
+        <div style="display:flex; justify-content:space-between; align-items:center; width:100%; padding-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.08); box-sizing:border-box;">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span class="header-title" id="appHeaderTitle" style="font-size:1.0rem; font-weight:800; color:#ff7b54; letter-spacing:0.5px;">민지 AI</span>
+                <span style="font-size:0.7rem; color:#888; background:rgba(255,255,255,0.06); padding:2px 8px; border-radius:8px;">자연스러운 일체형</span>
             </div>
-            <div style="display:flex; gap:6px; align-items:center; flex-shrink:0;">
-                <button class="view-mode-btn" onclick="resetMemory()" title="기억 초기화" style="padding:4px 8px; font-size:0.75rem; border-radius:10px; display:flex; align-items:center; gap:3px;">
-                    <span>🔄</span><span style="font-size:0.7rem;">기억 리셋</span>
-                </button>
-                <button class="view-mode-btn" id="viewModeBtn" onclick="toggleViewMode()" title="오라클↔아바타 모드" style="padding:4px 8px; font-size:0.75rem; border-radius:10px; display:flex; align-items:center; gap:3px;">
-                    <span id="viewModeIcon">🔮</span><span style="font-size:0.7rem;">화면 전환</span>
-                </button>
-                <button class="view-mode-btn" id="subtitleToggleBtn" onclick="toggleSubtitles()" title="자막/텍스트 켜기/끄기" style="padding:4px 8px; font-size:0.75rem; border-radius:10px; display:flex; align-items:center; gap:3px;">
-                    <span>💬</span><span id="subtitleToggleLabel" style="font-size:0.7rem;">자막 켜기</span>
-                </button>
-                <button class="btn-exit" onclick="exitApp()" title="앱 완전 종료" style="padding:4px 8px; font-size:0.75rem; border-radius:10px;">
-                    <span>⏻</span>
-                </button>
-                <button class="btn-ghost" onclick="toggleHeaderMenu(event)" title="설정 닫기" style="padding:4px 8px; font-size:0.75rem; border-radius:10px; border:1px solid rgba(255,255,255,0.15); color:#aaa; cursor:pointer;">
-                    <span>✕</span>
-                </button>
-            </div>
+            <button class="btn-ghost" onclick="toggleHeaderMenu(event)" title="설정 닫기" style="padding:5px 12px; font-size:0.82rem; border-radius:12px; border:1px solid rgba(255,255,255,0.18); color:#ddd; cursor:pointer; background:rgba(255,255,255,0.05);">
+                <span>✕ 닫기</span>
+            </button>
         </div>
-        <!-- 2행: 음성 선택 + 🎧 샘플 듣기 버튼 + 볼륨 슬라이더 -->
-        <div style="display:flex; align-items:center; justify-content:space-between; width:100%; gap:10px; box-sizing:border-box;">
-            <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:0;">
-                <select id="voiceSelect" onchange="onVoiceDropdownChange(this.value)" style="flex:1; min-width:0; background:#1c1c24; color:#ff9a76; border:1px solid #ff7b54; border-radius:12px; padding:6px 10px; font-size:0.8rem; font-weight:500; outline:none; cursor:pointer; box-sizing:border-box; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">
-                    <option value="roh" selected>✨ 민지 (노윤서 클론 · 20대 초반 맑고 달콤한 음색 - 1픽)</option>
-                    <option value="luna">🌸 루나 (Luna · 20대 청순 발랄 나긋나긋한 톤 - 2픽)</option>
-                    <option value="lunita">🎀 루니타 (Lunita · 20대 부드럽고 달콤한 톤)</option>
-                    <option value="jane">☕ 제인 (Jane · 20대 차분하고 단아한 비서 톤)</option>
+
+        <!-- 2행: 음성 톤 선택 & 볼륨 조절 -->
+        <div style="display:flex; flex-direction:column; gap:6px; width:100%; box-sizing:border-box;">
+            <div style="font-size:0.75rem; color:#aaa; text-align:left; font-weight:600;">🎙️ 목소리 음색 & 볼륨:</div>
+            <div style="display:flex; gap:8px; align-items:center; width:100%; box-sizing:border-box;">
+                <select id="voiceSelect" onchange="onVoiceDropdownChange(this.value)" style="flex:1; min-width:0; background:#181824; color:#ff9a76; border:1px solid rgba(255,123,84,0.4); border-radius:12px; padding:8px 10px; font-size:0.82rem; font-weight:600; outline:none; cursor:pointer; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">
+                    <option value="roh" selected>✨ 민지 (20대 가늘고 귀여운 여동생/여친 애교톤)</option>
+                    <option value="luna">🌸 루나 (청순하고 맑은 20대 감미로운 톤)</option>
+                    <option value="lunita">🎀 루니타 (부드럽고 달콤한 속삭임 톤)</option>
+                    <option value="jane">☕ 제인 (단아하고 차분한 엘리트 비서 톤)</option>
                 </select>
-                <button type="button" onclick="openVoiceAuditionModal(event)" title="목소리 샘플 듣고 고르기"
-                    style="background:linear-gradient(135deg, rgba(255,123,84,0.3), rgba(255,107,107,0.25)); border:1px solid #ff7b54; color:#ff9a76; border-radius:12px; padding:6px 12px; font-size:0.78rem; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:4px; white-space:nowrap; flex-shrink:0;">
-                    <span>🎧</span><span>오디션 샘플 듣기</span>
-                </button>
-            </div>
-            <div style="flex-shrink:0; width:145px; display:flex; align-items:center; gap:6px; background:rgba(20,20,30,0.65); padding:6px 10px; border-radius:12px; border:1px solid rgba(255,255,255,0.1); box-sizing:border-box;">
-                <span style="font-size:0.8rem; flex-shrink:0;">🔊</span>
-                <input type="range" id="volumeSlider" min="0" max="200" value="120"
-                    oninput="applyVolume(this.value)"
-                    style="flex:1; accent-color:#ff7b54; cursor:pointer; height:4px; margin:0;">
-                <span id="volumeLabel" style="font-size:0.72rem; color:#ff9a76; min-width:32px; text-align:right; font-weight:600; flex-shrink:0;">120%</span>
+                <div style="display:flex; align-items:center; gap:6px; background:#181824; padding:6px 10px; border-radius:12px; border:1px solid rgba(255,255,255,0.1); flex-shrink:0;">
+                    <span style="font-size:0.8rem;">🔊</span>
+                    <input type="range" id="volumeSlider" min="0" max="200" value="120" oninput="applyVolume(this.value)" style="width:68px; accent-color:#ff7b54; cursor:pointer; height:4px;">
+                    <span id="volumeLabel" style="font-size:0.72rem; color:#ff9a76; min-width:28px;">120%</span>
+                </div>
             </div>
         </div>
-        <!-- 3행: 60fps GPU 리빙 애니메이션 모드 프리셋 선택기 -->
-        <div style="display:flex; align-items:center; justify-content:space-between; width:100%; gap:8px; box-sizing:border-box; margin-top:2px;">
-            <div style="font-size:0.75rem; color:#ff9a76; font-weight:600; white-space:nowrap; display:flex; align-items:center; gap:4px;">
-                <span>🎬 리빙 효과:</span>
+
+        <!-- 3행: 60fps GPU 리빙 애니메이션 모드 (반응형 2행 그리드, 절대 삐져나가지 않음) -->
+        <div style="display:flex; flex-direction:column; gap:6px; width:100%; box-sizing:border-box;">
+            <div style="font-size:0.75rem; color:#aaa; text-align:left; font-weight:600;">🎬 모션 효과:</div>
+            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; width:100%; box-sizing:border-box;">
+                <button type="button" class="living-preset-btn active" id="btnLivingAuto" onclick="selectManualLivingMode('auto')" style="padding:8px 4px; font-size:0.75rem; text-align:center;">✨ 자율 연출</button>
+                <button type="button" class="living-preset-btn" id="btnLivingSensual" onclick="selectManualLivingMode('sensual')" style="padding:8px 4px; font-size:0.75rem; border-color:#ff7b54; color:#ff9a76; font-weight:700; text-align:center;">💋 상체 클로즈업</button>
+                <button type="button" class="living-preset-btn" id="btnLivingBreathe" onclick="selectManualLivingMode('breathe')" style="padding:8px 4px; font-size:0.75rem; text-align:center;">🌿 숨결 모션</button>
+                <button type="button" class="living-preset-btn" id="btnLivingCinematic" onclick="selectManualLivingMode('cinematic')" style="padding:8px 4px; font-size:0.75rem; text-align:center;">🎬 시네마틱</button>
+                <button type="button" class="living-preset-btn" id="btnLivingSheen" onclick="selectManualLivingMode('sheen')" style="padding:8px 4px; font-size:0.75rem; text-align:center;">💫 실크광택</button>
+                <button type="button" class="living-preset-btn" id="btnLivingAll" onclick="selectManualLivingMode('all')" style="padding:8px 4px; font-size:0.75rem; text-align:center;">👑 풀 리빙</button>
             </div>
-            <div style="display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-end;">
-                <button type="button" class="living-preset-btn active" id="btnLivingAuto" onclick="toggleAutoDirector()" title="민지가 대화와 감정선에 맞춰 자율 연출">✨ 자율 연출</button>
-                <button type="button" class="living-preset-btn" id="btnLivingBreathe" onclick="selectManualLivingMode('breathe')" title="자연스러운 생체 숨결">🌿 숨결</button>
-                <button type="button" class="living-preset-btn" id="btnLivingCinematic" onclick="selectManualLivingMode('cinematic')" title="영화 같은 슬로우 줌 & 드리프트">🎬 시네마틱</button>
-                <button type="button" class="living-preset-btn" id="btnLivingSheen" onclick="selectManualLivingMode('sheen')" title="관능적인 실크 빛 스침">💫 실크광택</button>
-                <button type="button" class="living-preset-btn" id="btnLivingHeartbeat" onclick="selectManualLivingMode('heartbeat')" title="두근거리는 심장박동">💓 심장박동</button>
-                <button type="button" class="living-preset-btn" id="btnLivingAll" onclick="selectManualLivingMode('all')" title="모든 효과 결합 (풀 리빙)">👑 마스터</button>
-                <button type="button" class="living-preset-btn" id="btnLivingSensual" onclick="selectManualLivingMode('sensual')" title="관능적인 상체 클로즈업 & 하체 라인 슬로우 스캔">💋 관능스캔</button>
-            </div>
+        </div>
+
+        <!-- 4행: 화면 제어 & 앱 종료 (강조된 종료 버튼) -->
+        <div style="display:flex; gap:8px; align-items:center; width:100%; margin-top:2px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.08); box-sizing:border-box;">
+            <button class="view-mode-btn" onclick="enterNativeFullscreen()" title="주소창 없는 전체화면" style="flex:1; padding:9px 6px; font-size:0.78rem; border-radius:12px; background:rgba(255,123,84,0.15); border:1px solid rgba(255,123,84,0.4); color:#ff9a76; font-weight:600; cursor:pointer;">
+                <span>📺 주소창 숨김 (전체화면)</span>
+            </button>
+            <button class="view-mode-btn" onclick="resetMemory()" title="기억 초기화" style="padding:9px 12px; font-size:0.78rem; border-radius:12px; cursor:pointer; flex-shrink:0;">
+                <span>🔄 기억 리셋</span>
+            </button>
+            <button class="btn-exit" onclick="exitApp()" title="앱 완전 종료" style="padding:9px 16px; font-size:0.82rem; font-weight:700; border-radius:12px; background:linear-gradient(135deg, #d32f2f, #b71c1c); border:1px solid #ff5252; color:#fff; cursor:pointer; box-shadow:0 4px 12px rgba(211,47,47,0.4); display:flex; align-items:center; gap:5px; flex-shrink:0;">
+                <span>⏻</span><span>앱 종료</span>
+            </button>
         </div>
     </div>
 
@@ -3986,7 +3957,7 @@ def read_root():
                 }
 
                 const voiceSelect = document.getElementById('voiceSelect');
-                const chosenVoice = voiceSelect ? voiceSelect.value : 'dahye';
+                const chosenVoice = voiceSelect ? voiceSelect.value : 'roh';
 
                 const response = await fetch('/api/tts', {
                     method: 'POST',
