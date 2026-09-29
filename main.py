@@ -861,7 +861,7 @@ def read_root():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Minji AI</title>
+    <title>민지</title>
     <style>
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body {
@@ -1208,25 +1208,100 @@ def read_root():
             animation: none;
         }
 
-        /* 사람 같은 미세 3D 호흡 & 흔들림 (Living Breathing) */
-        @keyframes humanLivingBreathe {
-            0% {
+        /* ===== 60fps GPU 하드웨어 가속 리빙 애니메이션 5종 프리셋 ===== */
+        .living-anim-breathe .avatar-img {
+            animation: livingBreathe 6.2s infinite ease-in-out;
+        }
+        @keyframes livingBreathe {
+            0%, 100% {
                 transform: scale(1.0) translateY(0px) rotate(0deg);
                 filter: brightness(0.98) contrast(1.02);
             }
             35% {
-                transform: scale(1.022) translateY(-6px) rotate(0.2deg);
+                transform: scale(1.026) translateY(-7px) rotate(0.2deg);
                 filter: brightness(1.01) contrast(1.03);
             }
             70% {
                 transform: scale(1.012) translateY(-2px) rotate(-0.15deg);
                 filter: brightness(0.99) contrast(1.02);
             }
+        }
+
+        /* 2. 영화 같은 시네마틱 슬로우 줌 & 드리프트 (Living Cinematic) */
+        .living-anim-cinematic .avatar-img {
+            animation: livingCinematic 12.5s infinite ease-in-out;
+        }
+        @keyframes livingCinematic {
+            0% {
+                transform: scale(1.0) translate(0px, 0px) rotate(0deg);
+            }
+            35% {
+                transform: scale(1.055) translate(-10px, -14px) rotate(0.35deg);
+            }
+            70% {
+                transform: scale(1.068) translate(10px, -18px) rotate(-0.3deg);
+            }
             100% {
-                transform: scale(1.0) translateY(0px) rotate(0deg);
-                filter: brightness(0.98) contrast(1.02);
+                transform: scale(1.0) translate(0px, 0px) rotate(0deg);
             }
         }
+
+        /* 3. 관능적인 실크 빛 스침 & 조명 워시 (Living Sensual Sheen) */
+        .living-anim-sheen .avatar-img {
+            animation: livingSensualSheen 6.8s infinite ease-in-out;
+        }
+        @keyframes livingSensualSheen {
+            0%, 100% {
+                transform: scale(1.01) translateY(0px);
+                filter: brightness(0.97) contrast(1.02) saturate(1.02);
+            }
+            50% {
+                transform: scale(1.038) translateY(-6px);
+                filter: brightness(1.07) contrast(1.05) saturate(1.09);
+            }
+        }
+
+        /* 4. 두근거리는 하트비트 심장박동 (Living Heartbeat) */
+        .living-anim-heartbeat .avatar-img {
+            animation: livingHeartbeat 3.2s infinite ease-in-out;
+        }
+        @keyframes livingHeartbeat {
+            0%, 100% {
+                transform: scale(1.0) translateY(0);
+            }
+            14% {
+                transform: scale(1.028) translateY(-4px);
+            }
+            26% {
+                transform: scale(1.014) translateY(-2px);
+            }
+            40% {
+                transform: scale(1.042) translateY(-7px);
+            }
+            58% {
+                transform: scale(1.0) translateY(0);
+            }
+        }
+
+        /* 5. 마스터 올인원 (Living Master Suite) */
+        .living-anim-all .avatar-img {
+            animation: livingMasterSuite 9.0s infinite ease-in-out;
+        }
+        @keyframes livingMasterSuite {
+            0%, 100% {
+                transform: scale(1.0) translate(0px, 0px) rotate(0deg);
+                filter: brightness(0.98) contrast(1.02);
+            }
+            30% {
+                transform: scale(1.045) translate(-6px, -10px) rotate(0.25deg);
+                filter: brightness(1.03) contrast(1.04);
+            }
+            65% {
+                transform: scale(1.05) translate(6px, -14px) rotate(-0.2deg);
+                filter: brightness(1.05) contrast(1.04);
+            }
+        }
+
         @keyframes humanListenPulse {
             0%, 100% { transform: scale(1.02) translateY(-2px); }
             50% { transform: scale(1.038) translateY(-5px); }
@@ -1238,6 +1313,30 @@ def read_root():
         @keyframes livingSpeakPulse {
             0%, 100% { transform: scale(1.01) translateY(-2px); filter: brightness(1.0) contrast(1.03); }
             50% { transform: scale(1.042) translateY(-7px); filter: brightness(1.05) contrast(1.05); }
+        }
+
+        .living-preset-btn {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #ccc;
+            font-size: 0.72rem;
+            padding: 3px 8px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+        .living-preset-btn:hover {
+            background: rgba(255, 123, 84, 0.2);
+            color: #ff9a76;
+            border-color: #ff7b54;
+        }
+        .living-preset-btn.active {
+            background: linear-gradient(135deg, rgba(255, 123, 84, 0.35), rgba(255, 107, 107, 0.3));
+            border-color: #ff7b54;
+            color: #fff;
+            font-weight: 700;
+            box-shadow: 0 0 10px rgba(255, 123, 84, 0.4);
         }
 
         .view-mode-btn {
@@ -1994,7 +2093,7 @@ def read_root():
 
     <!-- ===== 패스워드 & Face ID 보안 게이트 ===== -->
     <div class="pw-gate" id="pwGate">
-        <div class="pw-logo">Minji AI</div>
+        <div class="pw-logo">민지</div>
         <div class="pw-sub" id="pwSubText">Face ID 또는 보안 비밀번호로 인증하세요</div>
         <div class="pw-box">
             <!-- 1. 최우선: Face ID / PC Windows Hello 생체 인증 버튼 -->
@@ -2043,7 +2142,7 @@ def read_root():
         <!-- 1행: 타이틀 + 모드 선택 + 액션 버튼들 -->
         <div style="display:flex; justify-content:space-between; align-items:center; width:100%; gap:8px; box-sizing:border-box;">
             <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
-                <div class="header-title" id="appHeaderTitle" style="font-size:0.95rem; font-weight:700; color:#ff7b54; letter-spacing:0.5px; white-space:nowrap;">Minji AI</div>
+                <div class="header-title" id="appHeaderTitle" style="font-size:0.95rem; font-weight:700; color:#ff7b54; letter-spacing:0.5px; white-space:nowrap;">민지</div>
                 <!-- 모드 선택 토글 (여친 ↔ 비서) -->
                 <button id="modeSelectBtn" onclick="togglePersonaMode()" title="여친 ↔ 비서 모드 전환"
                     style="background:rgba(255,123,84,0.18); border:1px solid rgba(255,123,84,0.45); color:#ff9a76;
@@ -2796,7 +2895,7 @@ def read_root():
                     btn.style.color = '#8ad4ff';
                     btn.style.background = 'rgba(79, 172, 254, 0.15)';
                 }
-                if (title) title.innerText = 'Minji AI · 서민지 비서';
+                if (title) title.innerText = '민지 · 서민지 비서';
                 const savedSecVoice = localStorage.getItem('minji_custom_voice');
                 if (voiceSelect) {
                     voiceSelect.value = (savedSecVoice && ['dahye', 'dahye2'].includes(savedSecVoice)) ? savedSecVoice : 'dahye';
@@ -2816,7 +2915,7 @@ def read_root():
                     btn.style.color = '#ff9a76';
                     btn.style.background = 'rgba(255, 123, 84, 0.15)';
                 }
-                if (title) title.innerText = 'Minji AI · 베이글 여친';
+                if (title) title.innerText = '민지 · 베이글 여친';
                 const savedGfVoice = localStorage.getItem('minji_custom_voice');
                 if (voiceSelect) {
                     voiceSelect.value = (savedGfVoice && ['dahye', 'dahye2'].includes(savedGfVoice)) ? savedGfVoice : 'dahye';
