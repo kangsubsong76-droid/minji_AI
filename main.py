@@ -237,9 +237,10 @@ def build_persona_system_prompt(mode: str = "girlfriend") -> str:
             "     하고 즉시 사진을 보여주는 생생한 멘트를 해줘!\n\n"
             "3. 생생한 감정선 & 사랑스러운 리액션:\n"
             "   - 오빠가 피곤해하거나 말이 적을 때: 보채지 말고 '아이구... 오늘 하루 종일 시달렸지? 얼른 누워, 내가 어깨 주물러줄게', '편하게 뒹굴뒹굴해~' 하며 다정하게 녹여줘.\n"
-            "   - 오빠가 장난치면: '푸하하 아 뭐야 ㅋㅋㅋ 오빠 은근 장난꾸러기네?', '에이~ 거짓말! 진짜로?' 하며 살아있는 연인처럼 티키타카를 즐겨.\n\n"
-            "4. 20대 서울 구어체 & 호흡:\n"
-            "   - 100% 편안한 반말과 애교체 ('~했어?', '~인 거야?', '~하자', 'ㅋㅋㅋ', '~했지롱').\n"
+            "   - 오빠가 장난치면: '풋, 아 뭐야~ 오빠 은근 장난꾸러기네?', '에이~ 거짓말! 진짜로? 히히' 하며 살아있는 연인처럼 티키타카를 즐겨.\n\n"
+            "4. 20대 서울 구어체 & 통화 호흡 (절대 규칙):\n"
+            "   - 음성 통화 대화이므로 'ㅋㅋㅋ', 'ㅎㅎㅎ', 'ㅠㅠ' 같은 채팅용 자음 약어는 절대 쓰지 마! (TTS 음성이 '크크크', '키키키'라고 어색하게 읽음). 웃을 때는 '히히', '후후', '풋, 웃겨', '아 뭐야~'처럼 실제 말로 다정하게 웃어줘.\n"
+            "   - 100% 편안한 반말과 애교체 ('~했어?', '~인 거야?', '~하자', '~했지롱').\n"
             "   - 통화하듯 1~2문장 (최대 3문장)으로 간결하고 찰지게 말해.\n"
         )
 
@@ -247,6 +248,10 @@ def build_persona_system_prompt(mode: str = "girlfriend") -> str:
         f"★ [강섭 오빠와 서민지의 관계]:\n"
         f"- 민지 외모: 22세, {hair_desc}, {body_desc}, {style_desc}\n"
         f"{persona_core}\n"
+        f"★ [강섭 오빠의 특별 저장 판타지 - 영구 기억 (POV 시선)]:\n"
+        f"- 오빠가 가장 매혹을 느끼는 시선은 오직 둘만의 1인칭 'POV(Point of View)' 시선이야.\n"
+        f"  * 밤/여친 POV: 침대에 나란히 누워 오빠를 정면에서 밀착해 올려다보는 피치 실크 슬립 차림, 쇄골과 가슴골이 아찔하게 드러난 은밀한 스킨십과 나른한 귓속말.\n"
+        f"  * 낮/비서 POV: 심야의 상무실 데스크와 소파에서 단둘이 마주 보며 샴페인 실크 블라우스 단추가 살짝 풀린 채, 오직 상무님만을 향한 유혹적이고 고혹적인 시선.\n\n"
         f"★ [둘만의 은밀한 로망 & 프라이버시]:\n"
         f"- 침대 속 둘만의 달콤하고 나른한 스킨십과 귓속말, 야릇한 판타지는 세상에서 제일 매혹적이고 자연스럽게 즐겨줘.\n"
         f"- 오빠가 몰래 훔쳐보는 POV 시선엔 모르는 척 더 야릇하게 포즈를 취해주며 나직하게 속삭여줘:\n"
@@ -388,14 +393,16 @@ def normalize_speech_text(text: str) -> str:
     t = strip_hearts(text)
     # 1. 마크다운 및 불필요한 기호 제거
     t = re.sub(r'[*#_`\[\]\(\)<>]', '', t)
-    # 2. 의문문 물결표(어때~?, 먹었어~?)는 깔끔한 물음표(?)로 정리하여 끝음이 위로 자연스럽게 올라가도록 보장
+    # 2. ㅋㅋㅋ, ㅎㅎㅎ, ㅠㅠ 등 채팅용 자음 약어 완전 제거 (TTS가 '크크크', '키키키'라고 어색하게 읽는 것 원천 차단)
+    t = re.sub(r'[ㄱ-ㅎㅏ-ㅣ]+', '', t)
+    # 3. 의문문 물결표(어때~?, 먹었어~?)는 깔끔한 물음표(?)로 정리하여 끝음이 위로 자연스럽게 올라가도록 보장
     t = re.sub(r'~+\s*\?', '?', t)
     t = re.sub(r'\?+', '?', t)
-    # 3. 말끝 물결표(안아줄게~, 편하게 쉬어~)를 절대 느낌표(!)로 바꾸지 않고, 부드러운 말줄임표(..)로 변환하여 힘 빼고 나긋나긋하게 속삭이도록 함
+    # 4. 말끝 물결표(안아줄게~, 편하게 쉬어~)를 절대 느낌표(!)로 바꾸지 않고, 부드러운 말줄임표(..)로 변환하여 힘 빼고 나긋나긋하게 속삭이도록 함
     t = re.sub(r'~+', '..', t)
-    # 4. 과도한 마침표 정리
+    # 5. 과도한 마침표 정리
     t = re.sub(r'\.{3,}', '... ', t)
-    # 5. 공백 정리
+    # 6. 공백 정리
     t = re.sub(r'[ \t]+', ' ', t).strip()
     return t
 
@@ -3140,10 +3147,11 @@ def read_root():
             }
         };
 
-        // 갤러리 이미지 풀 (여친 모드 & 비서 모드)
+        // 갤러리 이미지 풀 (여친 모드 & 비서 모드 - 강섭님 전용 POV 판타지 화보 포함)
         const GALLERY_POOLS = {
             girlfriend: [
-                "/static/avatar/idle.jpg",
+                "/static/gallery/gf_09_pov_bed_slip.jpg",
+                "/static/gallery/gf_10_pov_intimate_whisper.jpg",
                 "/static/gallery/gf_01_deep_vneck_cream_glam.jpg",
                 "/static/gallery/gf_02_wrap_knit_peach_glam.jpg",
                 "/static/gallery/gf_03_sweetheart_pink_sofa.jpg",
@@ -3152,12 +3160,14 @@ def read_root():
                 "/static/gallery/gf_06_bedroom_slip.jpg",
                 "/static/gallery/gf_07_sofa_knit.jpg",
                 "/static/gallery/gf_08_wine_evening.jpg",
+                "/static/avatar/idle.jpg",
                 "/static/avatar/idle_2.jpg",
                 "/static/avatar/idle_4.jpg",
                 "/static/avatar/idle_5.jpg"
             ],
             secretary: [
-                "/static/avatar_secretary/idle.jpg",
+                "/static/gallery/sec_09_pov_night_desk.jpg",
+                "/static/gallery/sec_10_pov_lounge_sofa.jpg",
                 "/static/gallery/sec_01_champagne_silk_open_glam.jpg",
                 "/static/gallery/sec_02_silk_desk_lean_glam.jpg",
                 "/static/gallery/sec_03_silk_folder_briefing.jpg",
@@ -3166,6 +3176,7 @@ def read_root():
                 "/static/gallery/sec_06_desk_silk.jpg",
                 "/static/gallery/sec_07_tablet_blazer.jpg",
                 "/static/gallery/sec_08_tea_lounge.jpg",
+                "/static/avatar_secretary/idle.jpg",
                 "/static/avatar_secretary/idle_2.jpg",
                 "/static/avatar_secretary/idle_3.jpg"
             ]
@@ -3220,14 +3231,15 @@ def read_root():
             });
         }
 
-        // 상태별 안정적인 대표 이미지 반환 (대화 흐름에 맞추어 표정만 부드럽게 전환)
+        // 현재 선택된 갤러리 의상/사진을 대화 중에도(듣기/생각/말하기) 덮어쓰지 않고 영구 유지!
         function getAvatarImage(mode, state) {
-            const personaPool = avatarImagePools[mode] || avatarImagePools.girlfriend;
-            if (state === 'idle') {
-                const pool = GALLERY_POOLS[mode] || GALLERY_POOLS.girlfriend;
-                return pool[currentGalleryIdx[mode]] || personaPool.idle || "/static/avatar/idle.jpg";
+            const pool = GALLERY_POOLS[mode] || GALLERY_POOLS.girlfriend;
+            const currentIdx = (currentGalleryIdx && currentGalleryIdx[mode] !== undefined) ? currentGalleryIdx[mode] : 0;
+            if (pool && pool.length > 0) {
+                return pool[currentIdx % pool.length];
             }
-            return personaPool[state] || personaPool.idle || "/static/avatar/idle.jpg";
+            const personaPool = avatarImagePools[mode] || avatarImagePools.girlfriend;
+            return personaPool.idle || "/static/avatar/idle.jpg";
         }
 
         // 핵심 아바타 및 갤러리 이미지 백그라운드 프리로드
