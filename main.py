@@ -2060,19 +2060,20 @@ def read_root():
     <div class="shutdown-screen" id="shutdownScreen" style="display:none;">
         <div class="shutdown-content">
             <div class="shutdown-power-icon" onclick="resumeFromShutdown()" title="다시 전원 켜기">⏻</div>
-            <div class="shutdown-title">민지 AI 전원이 꺼졌습니다</div>
+            <div class="shutdown-title">민지 전원이 꺼졌습니다</div>
             <div class="shutdown-desc">
-                카메라, 마이크 및 모든 백그라운드 연결이<br>안전하게 차단되었습니다.
+                카메라, 마이크, 오디오 및 모든 백그라운드 프로세스가<br>100% 완전 정지되었습니다.
             </div>
-            <div class="shutdown-hint">
-                브라우저 탭을 닫으셔도 되며, 언제든 전원을 다시 켜실 수 있습니다.
+            <div class="shutdown-hint" id="shutdownHint">
+                📱 앱을 완전히 닫으시려면 <strong>화면 하단을 위로 쓸어올려(Swipe-Up)</strong> 주세요.<br>
+                언제든 아이폰 뒷면 톡톡이나 '민지야'로 다시 부르실 수 있습니다.
             </div>
             <div class="shutdown-actions">
                 <button class="shutdown-btn primary" onclick="resumeFromShutdown()">
                     <span>⏻ 다시 전원 켜기 (Face ID / 비밀번호)</span>
                 </button>
                 <button class="shutdown-btn ghost" onclick="attemptCloseWindow()">
-                    <span>🚪 브라우저 닫기</span>
+                    <span>🚪 창 닫기 시도</span>
                 </button>
             </div>
         </div>
@@ -2451,11 +2452,9 @@ def read_root():
             initAuthGate();
         }
 
-        // [핵심] 앱 완전 종료 및 보안 잠금
-        function exitApp() {
-            if (!confirm("민지와의 대화를 종료하시겠습니까?")) return;
-
-            // 1. 카메라/마이크 모든 하드웨어 트랙 완벽 해제
+        // [핵심] 모든 하드웨어 장치(카메라/마이크) 및 백그라운드 프로세스 100% 완전 해제
+        function cleanupAllMediaAndTimers() {
+            // 1. 카메라/비디오 트랙 완전 정지
             try {
                 if (video && video.srcObject) {
                     const tracks = video.srcObject.getTracks();
@@ -2467,15 +2466,39 @@ def read_root():
                 }
             } catch(e){ console.warn("Video cleanup err:", e); }
 
+            // 2. 마이크 및 activeMediaStream 트랙 완전 정지
+            try {
+                if (activeMediaStream) {
+                    activeMediaStream.getTracks().forEach(track => {
+                        track.stop();
+                        track.enabled = false;
+                    });
+                    activeMediaStream = null;
+                }
+            } catch(e){}
+
+            // 3. MediaRecorder 백그라운드 녹음 정지
+            try {
+                if (mediaRecorder) {
+                    if (mediaRecorder.state !== 'inactive') {
+                        mediaRecorder.stop();
+                    }
+                    mediaRecorder = null;
+                }
+            } catch(e){}
+
+            // 4. 음성 인식(STT) 엔진 완전 차단
             try {
                 if (recognition) {
                     recognition.onend = null;
                     recognition.onerror = null;
+                    recognition.onresult = null;
                     recognition.abort();
                     recognition = null;
                 }
             } catch(e){}
 
+            // 5. 음성 재생(TTS/Audio) 완전 차단
             try {
                 if (audioPlayer) {
                     audioPlayer.pause();
@@ -2483,6 +2506,7 @@ def read_root():
                 }
             } catch(e){}
 
+            // 6. AudioContext 및 볼륨 모니터링 인터벌 해제
             try {
                 if (volumeCheckInterval) {
                     clearInterval(volumeCheckInterval);
@@ -2494,18 +2518,36 @@ def read_root():
                 }
             } catch(e){}
 
+            // 7. 모든 자율 디렉터 및 앨범 순환 타이머 완전 정지
+            try {
+                if (silenceTimeout) {
+                    clearTimeout(silenceTimeout);
+                    silenceTimeout = null;
+                }
+                if (typeof stopIdleRotation === 'function') stopIdleRotation();
+                if (typeof stopAutoDirectorLoop === 'function') stopAutoDirectorLoop();
+            } catch(e){}
+
             streamActive = false;
             isSpeaking = false;
             isListening = false;
             isProcessing = false;
+            isAudioRecording = false;
+        }
+
+        // [핵심] 앱 완전 종료 및 보안 잠금
+        function exitApp() {
+            if (!confirm("민지와의 대화를 종료하시겠습니까?")) return;
+
+            cleanupAllMediaAndTimers();
 
             // 2. UI 기본 컨트롤 숨김
             if (connectGroup) connectGroup.style.display = 'block';
             if (activeControls) activeControls.style.display = 'none';
             setOrbState('idle');
-            if (statusText) statusText.innerText = "대화가 종료되었습니다.";
+            if (statusText) statusText.innerText = "대화가 완전히 종료되었습니다.";
 
-            // 3. 완전 종료 OLED 화면 표시 (절대 자동으로 브라우저 창을 닫지 않음)
+            // 3. 완전 종료 OLED 화면 표시 (절대 자동으로 브라우저 창을 닫거나 about:blank로 보내지 않음)
             if (pwGate) {
                 pwGate.classList.add('hidden');
                 pwGate.style.display = 'none';
@@ -2515,21 +2557,30 @@ def read_root():
             }
         }
 
-        // 브라우저 닫기 시도 (무음 처리: 경고창 없이 창 닫기 또는 바탕화면 복귀)
+        // 창 닫기 시도 (모바일 보안상 window.close()가 차단되므로 about:blank 대신 스와이프 안내)
         function attemptCloseWindow() {
+            cleanupAllMediaAndTimers();
             try {
                 window.open('', '_self', '');
                 window.close();
             } catch(e){}
-            // 브라우저 정책상 window.close()가 제한될 경우 경고 팝업 없이 조용히 빈 화면이나 이전 탭으로 이동
-            try {
-                if (window.history.length > 1) {
-                    window.history.back();
-                } else {
-                    window.location.replace("about:blank");
-                }
-            } catch(e){}
+
+            const hint = document.getElementById('shutdownHint');
+            if (hint) {
+                hint.innerHTML = `<span style="color:#00f2fe; font-weight:700;">📱 브라우저 보안 정책상 화면을 직접 닫으셔야 합니다.</span><br>화면 하단을 <strong>위로 쓸어올려(Swipe-Up)</strong> 창을 닫아주세요.`;
+            }
         }
+
+        // 탭을 닫거나 다른 앱으로 전환 시 백그라운드 리소스 자동 해제
+        window.addEventListener('pagehide', cleanupAllMediaAndTimers);
+        window.addEventListener('beforeunload', cleanupAllMediaAndTimers);
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') {
+                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                    try { mediaRecorder.stop(); } catch(e){}
+                }
+            }
+        });
 
         // 전원 꺼짐 화면에서 다시 켜기 (Face ID 즉시 연동)
         async function resumeFromShutdown() {
