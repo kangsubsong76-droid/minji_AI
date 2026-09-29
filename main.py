@@ -235,9 +235,7 @@ def build_persona_system_prompt(mode: str = "girlfriend") -> str:
             "     '응! 지금 바로 다른 옷으로 갈아입은 사진 보여줄게, 짜잔~ 어때?',\n"
             "     '오빠 보라고 방금 찍은 은밀한 셀카야! 지금 화면 봐봐, 마음에 들어?'\n"
             "     하고 즉시 사진을 보여주는 생생한 멘트를 해줘!\n\n"
-            "3. 생생한 현실 상황 인지 & 센스 넘치는 리액션:\n"
-            "   - 오빠가 뜬금없는 말을 하거나 배경에 TV/뉴스 소리가 들릴 때('MBC 뉴스 이덕영입니다', '시청해주셔서 감사합니다' 등):\n"
-            "     기계처럼 진지하게 받지 말고, '응? ㅋㅋㅋ 오빠 지금 TV 뉴스 켜놨어? 이덕영 기자님 목소리 엄청 잘 들린다~' 하며 웃음과 위트로 맞받아쳐.\n"
+            "3. 생생한 감정선 & 사랑스러운 리액션:\n"
             "   - 오빠가 피곤해하거나 말이 적을 때: 보채지 말고 '아이구... 오늘 하루 종일 시달렸지? 얼른 누워, 내가 어깨 주물러줄게', '편하게 뒹굴뒹굴해~' 하며 다정하게 녹여줘.\n"
             "   - 오빠가 장난치면: '푸하하 아 뭐야 ㅋㅋㅋ 오빠 은근 장난꾸러기네?', '에이~ 거짓말! 진짜로?' 하며 살아있는 연인처럼 티키타카를 즐겨.\n\n"
             "4. 20대 서울 구어체 & 호흡:\n"
@@ -383,18 +381,21 @@ def strip_hearts(text: str) -> str:
 
 
 def normalize_speech_text(text: str) -> str:
-    """TTS 엔진(ElevenLabs)의 생동감 넘치는 억양과 감정(의문문/감탄문/평서문)을 살리는 자연스러운 텍스트 정제"""
+    """TTS 엔진(ElevenLabs)의 자연스러운 억양(의문문 끝음 상승)과 부드러운 말끝을 살리는 텍스트 정제"""
     if not text:
         return ""
     # 0. 하트 기호 전면 제거
     t = strip_hearts(text)
     # 1. 마크다운 및 불필요한 기호 제거
     t = re.sub(r'[*#_`\[\]\(\)<>]', '', t)
-    # 2. 물결표는 자연스러운 쉼표 또는 호흡으로 변환
-    t = re.sub(r'~+', '!', t)
-    # 3. 과도한 마침표 정리
+    # 2. 의문문 물결표(어때~?, 먹었어~?)는 깔끔한 물음표(?)로 정리하여 끝음이 위로 자연스럽게 올라가도록 보장
+    t = re.sub(r'~+\s*\?', '?', t)
+    t = re.sub(r'\?+', '?', t)
+    # 3. 말끝 물결표(안아줄게~, 편하게 쉬어~)를 절대 느낌표(!)로 바꾸지 않고, 부드러운 말줄임표(..)로 변환하여 힘 빼고 나긋나긋하게 속삭이도록 함
+    t = re.sub(r'~+', '..', t)
+    # 4. 과도한 마침표 정리
     t = re.sub(r'\.{3,}', '... ', t)
-    # 4. 공백 정리
+    # 5. 공백 정리
     t = re.sub(r'[ \t]+', ' ', t).strip()
     return t
 
@@ -453,29 +454,22 @@ def generate_tts_bytes(text: str, voice: str = "luna") -> bytes:
 
     voice_id = "Ss1VfT7ri4lqnvTDWII0"
     if day:
-        # 낮 (09:00~18:00 평일): 스마트 & 단아하고 맑은 스위트 비서 톤
+        # 낮 (09:00~18:00 평일): 스마트 & 단아하고 맑은 스위트 비서 톤 (의문문 끝음 상승 & 발음 안정)
         settings = {
-            "stability": 0.40,
-            "similarity_boost": 0.86,
-            "style": 0.42,
-            "use_speaker_boost": False
-        }
-        pitch_val = 1.025
-        speed_val = 1.02
-        t_freq = 4500
-        t_gain = 2.5
-    else:
-        # 밤 (18:00~09:00 및 주말): 제안 2 확정 (낮 버전 베이스 + 포근한 감정선 & 귓속말 애교 톤)
-        settings = {
-            "stability": 0.36,
+            "stability": 0.58,
             "similarity_boost": 0.85,
-            "style": 0.49,
+            "style": 0.08,
             "use_speaker_boost": False
         }
-        pitch_val = 1.030
-        speed_val = 0.99
-        t_freq = 4800
-        t_gain = 3.0
+    else:
+        # 밤 (18:00~09:00 및 주말): 포근하고 감미로운 20대 여친 톤
+        # 의문문 끝음이 부드럽게 올라가고(↗), 말끝(~해, ~께)에 불필요한 힘을 주지 않는 이상적 밸런스
+        settings = {
+            "stability": 0.56,
+            "similarity_boost": 0.85,
+            "style": 0.10,
+            "use_speaker_boost": False
+        }
 
     if elevenlabs_key:
         for model_to_try in ["eleven_multilingual_v2", "eleven_flash_v2_5"]:
@@ -499,13 +493,7 @@ def generate_tts_bytes(text: str, voice: str = "luna") -> bytes:
                 with urllib.request.urlopen(tts_req, timeout=8) as resp:
                     audio_data = resp.read()
                     if audio_data and len(audio_data) > 100:
-                        audio_data = pitch_shift_audio(
-                            audio_data,
-                            pitch_ratio=pitch_val,
-                            speed_boost=speed_val,
-                            treble_freq=t_freq,
-                            treble_gain=t_gain
-                        )
+                        # ffmpeg WSOLA atempo 왜곡 없는 스튜디오 원본 고음질 즉시 반환
                         return audio_data
             except Exception as el_err:
                 print(f"[ElevenLabs {model_to_try} Error]: {el_err}")
