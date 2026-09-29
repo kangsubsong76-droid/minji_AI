@@ -1,0 +1,25 @@
+{
+  "events": [
+    {
+      "id": "sample_1",
+      "title": "주간 전략 기획 회의",
+      "date": "2026-09-30",
+      "time": "10:30",
+      "note": "상무님 주재 본사 7층 대회의실"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "task_1",
+      "title": "주요 프로젝트 투자 검토안 서명",
+      "due_date": "2026-09-30",
+      "completed": false
+    },
+    {
+      "id": "task_2",
+      "title": "내일 비즈니스 미팅 브리핑 자료 준비",
+      "due_date": "2026-09-30",
+      "completed": false
+    }
+  ]
+}
