@@ -1344,8 +1344,29 @@ def read_root():
         .photo-change-btn, #photoChangeBtn {
             display: none !important;
         }
-        .photo-toast, #photoToast {
-            display: none !important;
+        .photo-toast {
+            position: fixed;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background: rgba(18, 18, 26, 0.92);
+            border: 1px solid rgba(255, 123, 84, 0.45);
+            color: #ff9a76;
+            font-size: 0.85rem;
+            font-weight: 700;
+            padding: 8px 20px;
+            border-radius: 20px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 50005;
+        }
+        .photo-toast.show {
+            opacity: 1 !important;
+            transform: translateX(-50%) translateY(0) !important;
         }
 
         /* 상태 1: 경청 중 (Listening) */
@@ -2546,8 +2567,8 @@ def read_root():
     <div class="avatar-wrapper" id="avatarWrapper" onclick="handleVisualClick(event)" title="더블 탭 또는 폰 흔들기: 사진 변경 | 탭: 대화">
         <div class="avatar-ambient-glow" id="avatarGlow"></div>
         <div class="avatar-img-container">
-            <img id="avatarImgA" src="/static/avatar/idle.jpg" alt="Minji AI Avatar A" class="avatar-img avatar-img-active">
-            <img id="avatarImgB" src="/static/avatar/idle.jpg" alt="Minji AI Avatar B" class="avatar-img avatar-img-inactive">
+            <img id="avatarImgA" src="/static/gallery/gf_09_pov_bed_slip.jpg" alt="Minji AI Avatar A" class="avatar-img avatar-img-active">
+            <img id="avatarImgB" src="/static/gallery/gf_09_pov_bed_slip.jpg" alt="Minji AI Avatar B" class="avatar-img avatar-img-inactive">
         </div>
         <div class="avatar-vignette"></div>
         <div class="avatar-living-sheen"></div>
@@ -2591,6 +2612,9 @@ def read_root():
             <div class="capsule-dock" id="bottomCapsuleDock">
                 <button class="cap-btn" id="micToggleBtn" onclick="toggleMic()" title="마이크 켜기/끄기">
                     <span id="micIcon">🎙️</span>
+                </button>
+                <button class="cap-btn" onclick="nextGalleryPhoto(true)" title="실사 화보 변경">
+                    <span>📸</span>
                 </button>
                 <button class="cap-btn" onclick="openCamOverlay()" title="카메라로 보여주기">
                     <span>📷</span>
@@ -3256,6 +3280,21 @@ def read_root():
             }, 1400);
         }
 
+        const PHOTO_TITLES = {
+            "/static/gallery/gf_09_pov_bed_slip.jpg": "🛏️ 침대 밀착 피치 실크 슬립 POV",
+            "/static/gallery/gf_11_pov_peeking_bed.jpg": "🚪 문틈 살짝 열린 소파 훔쳐보기 POV",
+            "/static/gallery/sec_09_pov_night_desk.jpg": "📋 심야 상무실 데스크 단추 풀림 POV",
+            "/static/gallery/sec_11_pov_peeking_office.jpg": "🚪 집무실 문틈 소파 휴식 POV",
+            "/static/gallery/gf_01_deep_vneck_cream_glam.jpg": "✨ 크림 딥 브이넥 베이글 니트",
+            "/static/gallery/gf_02_wrap_knit_peach_glam.jpg": "🌸 피치 랩 가디건",
+            "/static/gallery/gf_03_sweetheart_pink_sofa.jpg": "🛋️ 핑크 스위트하트 소파",
+            "/static/gallery/gf_04_vneck_ribbed_classic.jpg": "🤍 화이트 골지 브이넥",
+            "/static/gallery/gf_05_offshoulder_lavender_cafe.jpg": "☕ 오프숄더 라벤더 니트",
+            "/static/gallery/gf_06_bedroom_slip.jpg": "🌙 침실 실크 슬립",
+            "/static/gallery/gf_07_sofa_knit.jpg": "🛋️ 소파 니트",
+            "/static/gallery/gf_08_wine_evening.jpg": "🍷 이브닝 와인 드레스"
+        };
+
         // 폰을 두드리거나 버튼/화면 탭 시 다음 사진으로 전환
         function nextGalleryPhoto(manual = false) {
             const pool = GALLERY_POOLS[currentPersonaMode] || GALLERY_POOLS.girlfriend;
@@ -3264,12 +3303,13 @@ def read_root():
             const nextSrc = pool[currentGalleryIdx[currentPersonaMode]];
             setAvatarImageSmooth(nextSrc);
 
+            const title = PHOTO_TITLES[nextSrc] || `민지 실사 화보`;
             const badge = document.getElementById('photoBadgeText');
             if (badge) {
-                badge.innerText = `📸 사진 (${currentGalleryIdx[currentPersonaMode] + 1}/${pool.length})`;
+                badge.innerText = `📸 ${title} (${currentGalleryIdx[currentPersonaMode] + 1}/${pool.length})`;
             }
             if (manual) {
-                showPhotoToast(`📸 민지 사진 (${currentGalleryIdx[currentPersonaMode] + 1}/${pool.length})`);
+                showPhotoToast(`📸 ${title} (${currentGalleryIdx[currentPersonaMode] + 1}/${pool.length})`);
             }
         }
         window.nextGalleryPhoto = nextGalleryPhoto;
@@ -5079,6 +5119,15 @@ def read_root():
                 localStorage.setItem('minji_custom_voice', 'roh');
             }
         }
+
+        // 초기 실사 POV 화보 로드 (기본 1픽: 침대 밀착 슬립 / 심야 데스크)
+        try {
+            const initialMode = currentPersonaMode || 'girlfriend';
+            const pool = GALLERY_POOLS[initialMode] || GALLERY_POOLS.girlfriend;
+            if (pool && pool.length > 0) {
+                setAvatarImageSmooth(pool[0]);
+            }
+        } catch(e) { console.error('Initial avatar load err:', e); }
     </script>
 </body>
 </html>
