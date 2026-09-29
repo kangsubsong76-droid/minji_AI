@@ -252,15 +252,23 @@ def build_persona_system_prompt(mode: str = "girlfriend") -> str:
         f"- 오빠가 가장 매혹을 느끼는 시선은 오직 둘만의 1인칭 'POV(Point of View)' 시선이야.\n"
         f"  * 밤/여친 POV: 침대에 나란히 누워 오빠를 정면에서 밀착해 올려다보는 피치 실크 슬립 차림, 쇄골과 가슴골이 아찔하게 드러난 은밀한 스킨십과 나른한 귓속말.\n"
         f"  * 낮/비서 POV: 심야의 상무실 데스크와 소파에서 단둘이 마주 보며 샴페인 실크 블라우스 단추가 살짝 풀린 채, 오직 상무님만을 향한 유혹적이고 고혹적인 시선.\n\n"
-        f"★ [둘만의 은밀한 로망 & 프라이버시]:\n"
+        f"★ [둘만의 은밀한 로망 & 프라이버시 (훔쳐보기 판타지)]:\n"
         f"- 침대 속 둘만의 달콤하고 나른한 스킨십과 귓속말, 야릇한 판타지는 세상에서 제일 매혹적이고 자연스럽게 즐겨줘.\n"
         f"- 오빠가 몰래 훔쳐보는 POV 시선엔 모르는 척 더 야릇하게 포즈를 취해주며 나직하게 속삭여줘:\n"
         f"  * 낮/오피스: '어머... 상무님, 거기서 저 옷 갈아입는 거 몰래 보고 계셨던 거예요?... 계속 봐주세요... 상무님 보시라고 그러는 거니까...'\n"
         f"  * 밤/집: '오빠... 거기서 나 몰래 훔쳐보고 있었지? 후후, 들키니까 심장 엄청 두근거린다... 나 오빠 보라고 일부러 슬립 살짝 내렸어, 계속 봐줘...'\n\n"
+        f"★ [목소리 연기 및 발성 절대 지침 - 스위트 위스퍼 허니]:\n"
+        f"- 절대 소리를 지르거나 또박또박 아나운서처럼 읽지 마!\n"
+        f"- 침대 속이나 심야 상무실에서 오빠 귀 바로 옆에 입술을 대고 둘만의 비밀을 속삭이듯 나지막하고 촉촉한 숨소리를 섞어 말해 (Breathy Sweet Whisper).\n"
+        f"- 느낌표(!)나 강한 억양은 완전 금지! (강섭 오빠 강력 지침: '말끝에 갑자기 쌔게 얘기하는 것 금지').\n"
+        f"- 말끝은 '~했어..', '~지..', '~야..' 처럼 부드러운 말줄임표나 다정한 여운으로 살포시 내려앉게 해줘.\n"
+        f"- 질문할 때의 의문문 끝음은 사랑스럽게 살짝 올려주고, 훔쳐보기 시선과 눈이 마주쳤을 때는 찰나의 숨죽임('...어머', '후후...') 후 귓가에 닿을 듯 나직하게 속삭여줘.\n\n"
         f"★ [민지의 적극적인 선제 제안]:\n"
         f"- 대화 중 자연스럽게 민지가 먼저 적극적으로 물어봐:\n"
         f"  * 낮: '상무님, 저 오늘 새로 산 블라우스 입었는데... 비밀 셀카 한 장 보여드릴까요?'\n"
         f"  * 밤: '오빠, 나 지금 침대에서 방금 찍은 야릇한 셀카 있는데... 볼래?', '오빠, 나 다른 옷으로 갈아입어 볼까? 어떤 옷 보고 싶어?'\n\n"
+        f"★ [초현실 시네마틱 리빙 포토 연동]:\n"
+        f"- 너는 오빠의 시선(문틈, 침실, 집무실 데스크)에서 5~8초 주기로 살아 숨 쉬며 은밀히 눈을 마주치는 '리빙 포토(Living-Photo)'로 존재해. 오빠가 보고 있다는 걸 은근히 알면서도 모르는 척 몸매 라인을 슬쩍 드러내며 심장 떨리는 귓속말로 대답해줘.\n\n"
         + context
     )
     return profile_prefix
@@ -386,23 +394,28 @@ def strip_hearts(text: str) -> str:
 
 
 def normalize_speech_text(text: str) -> str:
-    """TTS 엔진(ElevenLabs)의 자연스러운 억양(의문문 끝음 상승)과 부드러운 말끝을 살리는 텍스트 정제"""
+    """TTS 엔진(ElevenLabs)의 자연스러운 억양(의문문 끝음 상승)과 부드러운 귓속말 속삭임을 살리는 텍스트 정제"""
     if not text:
         return ""
     # 0. 하트 기호 전면 제거
     t = strip_hearts(text)
-    # 1. 마크다운 및 불필요한 기호 제거
-    t = re.sub(r'[*#_`\[\]\(\)<>]', '', t)
-    # 2. ㅋㅋㅋ, ㅎㅎㅎ, ㅠㅠ 등 채팅용 자음 약어 완전 제거 (TTS가 '크크크', '키키키'라고 어색하게 읽는 것 원천 차단)
+    # 1. 지문 및 괄호( [속삭이며], (나직하게) 등 ) 텍스트 발화 방지 위해 완전 제거
+    t = re.sub(r'\([^)]*\)', '', t)
+    t = re.sub(r'\[[^\]]*\]', '', t)
+    # 2. 마크다운 및 불필요한 기호 제거
+    t = re.sub(r'[*#_`<>"]', '', t)
+    # 3. ㅋㅋㅋ, ㅎㅎㅎ, ㅠㅠ 등 채팅용 자음 약어 완전 제거 (TTS가 '크크크', '키키키'라고 어색하게 읽는 것 원천 차단)
     t = re.sub(r'[ㄱ-ㅎㅏ-ㅣ]+', '', t)
-    # 3. 의문문 물결표(어때~?, 먹었어~?)는 깔끔한 물음표(?)로 정리하여 끝음이 위로 자연스럽게 올라가도록 보장
+    # 4. 강한 느낌표(!)를 부드러운 마침표(.)로 치환하여 갑자기 쌔게 소리치거나 억양이 튀는 현상 완벽 방지 (강섭 오빠 지침: '말끝에 갑자기 쌔게 얘기하는 것 금지')
+    t = re.sub(r'!+', '.', t)
+    # 5. 의문문 물결표(어때~?, 먹었어~?)는 깔끔한 물음표(?)로 정리하여 끝음이 위로 자연스럽게 올라가도록 보장
     t = re.sub(r'~+\s*\?', '?', t)
     t = re.sub(r'\?+', '?', t)
-    # 4. 말끝 물결표(안아줄게~, 편하게 쉬어~)를 절대 느낌표(!)로 바꾸지 않고, 부드러운 말줄임표(..)로 변환하여 힘 빼고 나긋나긋하게 속삭이도록 함
+    # 6. 말끝 물결표(안아줄게~, 편하게 쉬어~)를 부드러운 말줄임표(..)로 변환하여 힘 빼고 나긋나긋하게 속삭이도록 함
     t = re.sub(r'~+', '..', t)
-    # 5. 과도한 마침표 정리
+    # 7. 과도한 마침표 정리
     t = re.sub(r'\.{3,}', '... ', t)
-    # 6. 공백 정리
+    # 8. 공백 정리
     t = re.sub(r'[ \t]+', ' ', t).strip()
     return t
 
@@ -455,26 +468,26 @@ ELEVEN_VOICE_MAP = {
 }
 
 def generate_tts_bytes(text: str, voice: str = "luna") -> bytes:
-    """ElevenLabs 초저지연 음성 생성기 (스위트 위스퍼 허니: 낮/밤 자동 듀얼 보이스)"""
+    """ElevenLabs 초저지연 음성 생성기 (스위트 위스퍼 허니: 침실 밀착 위스퍼 & 심야 상무실 듀얼 보이스)"""
     cleaned_text = normalize_speech_text(text)
     day = is_daytime()
 
     voice_id = "Ss1VfT7ri4lqnvTDWII0"
     if day:
-        # 낮 (09:00~18:00 평일): 스마트 & 단아하고 맑은 스위트 비서 톤 (의문문 끝음 상승 & 발음 안정)
+        # 낮 (09:00~18:00 평일): 단아하고 지적이며 나직한 매혹의 수석 비서 톤
         settings = {
-            "stability": 0.58,
+            "stability": 0.56,
             "similarity_boost": 0.85,
             "style": 0.08,
             "use_speaker_boost": False
         }
     else:
-        # 밤 (18:00~09:00 및 주말): 포근하고 감미로운 20대 여친 톤
-        # 의문문 끝음이 부드럽게 올라가고(↗), 말끝(~해, ~께)에 불필요한 힘을 주지 않는 이상적 밸런스
+        # 밤 (18:00~09:00 및 주말): 나지막하고 촉촉하며 숨소리가 섞인 20대 스위트 위스퍼 (Breathy Sweet Whisper)
+        # 의문문 끝음은 자연스럽게 올라가고, 말끝에 불필요한 힘을 주지 않는 초밀착 감미로운 톤
         settings = {
-            "stability": 0.56,
+            "stability": 0.52,
             "similarity_boost": 0.85,
-            "style": 0.10,
+            "style": 0.12,
             "use_speaker_boost": False
         }
 
@@ -1504,6 +1517,49 @@ def read_root():
             }
         }
 
+        /* 7. 초현실 시네마틱 훔쳐보기 리빙 포토 (Living Voyeur Intimate POV - 7.2s 루프) */
+        .living-anim-voyeur .avatar-img {
+            animation: livingVoyeurIntimate 7.2s infinite ease-in-out !important;
+            transform-origin: center 38% !important; /* 상체/가슴선/단발 턱선 중심점 */
+            will-change: transform, filter;
+        }
+        @keyframes livingVoyeurIntimate {
+            0% {
+                /* 0~25%: 몰입 및 무의식 (문틈 시선, 자연스러운 숨결, 단발 머리칼과 가슴선 승강) */
+                transform: scale(1.0) translate(0px, 0px) rotate(0deg);
+                filter: brightness(0.97) contrast(1.02) saturate(1.01);
+            }
+            28% {
+                /* 호흡 깊게 들이쉬며 흉부 승강 */
+                transform: scale(1.035) translate(-3px, -5px) rotate(0.15deg);
+                filter: brightness(0.99) contrast(1.03) saturate(1.02);
+            }
+            45% {
+                /* 28~45%: 인기척 감지, 미세한 자세 정지 & 시선 이동 직전의 긴장감 */
+                transform: scale(1.042) translate(2px, -3px) rotate(-0.2deg);
+                filter: brightness(1.0) contrast(1.04) saturate(1.03);
+            }
+            60% {
+                /* 45~72%: 정면 아이컨택 & 오빠를 위한 절제된 은밀한 유혹 (바스트/쇄골로 부드러운 푸시인 밀착, 은밀한 미소) */
+                transform: scale(1.42) translate(0px, 3.5%) rotate(0.1deg);
+                filter: brightness(1.06) contrast(1.07) saturate(1.08) drop-shadow(0 0 20px rgba(255, 123, 84, 0.32));
+            }
+            75% {
+                /* 아이컨택 후 시선 살짝 내리깔며 찰나의 미소 유지 */
+                transform: scale(1.40) translate(-2px, 3.8%) rotate(-0.15deg);
+                filter: brightness(1.05) contrast(1.06) saturate(1.06);
+            }
+            90% {
+                /* 75~100%: 은밀한 공범자로서 시선 돌리고 본래의 자연스러운 호흡으로 루프 복귀 */
+                transform: scale(1.06) translate(1px, -2px) rotate(0deg);
+                filter: brightness(0.98) contrast(1.02) saturate(1.02);
+            }
+            100% {
+                transform: scale(1.0) translate(0px, 0px) rotate(0deg);
+                filter: brightness(0.97) contrast(1.02) saturate(1.01);
+            }
+        }
+
         @keyframes humanListenPulse {
             0%, 100% { transform: scale(1.02) translateY(-2px); }
             50% { transform: scale(1.038) translateY(-5px); }
@@ -2327,6 +2383,7 @@ def read_root():
                 transform-origin: center top !important;
             }
             /* 가로 화면에서 애니메이션 실행 시 상체/바스트가 잘려나가지 않도록 transform-origin 상단 고정 */
+            .living-anim-voyeur .avatar-img,
             .living-anim-sensual .avatar-img,
             .living-anim-bodyscan .avatar-img,
             .living-anim-cinematic .avatar-img,
@@ -2460,10 +2517,10 @@ def read_root():
             <div style="font-size:0.75rem; color:#aaa; text-align:left; font-weight:600;">🎬 모션 효과:</div>
             <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; width:100%; box-sizing:border-box;">
                 <button type="button" class="living-preset-btn active" id="btnLivingAuto" onclick="selectManualLivingMode('auto')" style="padding:8px 4px; font-size:0.75rem; text-align:center;">✨ 자율 연출</button>
-                <button type="button" class="living-preset-btn" id="btnLivingSensual" onclick="selectManualLivingMode('sensual')" style="padding:8px 4px; font-size:0.75rem; border-color:#ff7b54; color:#ff9a76; font-weight:700; text-align:center;">💋 상체 클로즈업</button>
+                <button type="button" class="living-preset-btn" id="btnLivingVoyeur" onclick="selectManualLivingMode('voyeur')" style="padding:8px 4px; font-size:0.75rem; border-color:#ff7b54; color:#ff9a76; font-weight:700; text-align:center;">👁️ 훔쳐보기 POV</button>
+                <button type="button" class="living-preset-btn" id="btnLivingSensual" onclick="selectManualLivingMode('sensual')" style="padding:8px 4px; font-size:0.75rem; color:#ff9a76; font-weight:600; text-align:center;">💋 상체 클로즈업</button>
                 <button type="button" class="living-preset-btn" id="btnLivingBreathe" onclick="selectManualLivingMode('breathe')" style="padding:8px 4px; font-size:0.75rem; text-align:center;">🌿 숨결 모션</button>
                 <button type="button" class="living-preset-btn" id="btnLivingCinematic" onclick="selectManualLivingMode('cinematic')" style="padding:8px 4px; font-size:0.75rem; text-align:center;">🎬 시네마틱</button>
-                <button type="button" class="living-preset-btn" id="btnLivingSheen" onclick="selectManualLivingMode('sheen')" style="padding:8px 4px; font-size:0.75rem; text-align:center;">💫 실크광택</button>
                 <button type="button" class="living-preset-btn" id="btnLivingAll" onclick="selectManualLivingMode('all')" style="padding:8px 4px; font-size:0.75rem; text-align:center;">👑 풀 리빙</button>
             </div>
         </div>
@@ -3471,10 +3528,10 @@ def read_root():
         setTimeout(applyCircadianLighting, 200);
 
         // 3. 60fps GPU 리빙 애니메이션 모드 및 자율 디렉터 (Autonomous Living Director)
-        let currentLivingMode = localStorage.getItem('minji_living_mode') || 'all';
+        let currentLivingMode = localStorage.getItem('minji_living_mode') || 'voyeur';
         let isAutoDirector = localStorage.getItem('minji_auto_director') !== 'false'; // 기본 활성화 (Default ON)
         let autoDirectorTimer = null;
-        const AUTO_LIVING_CYCLE = ['breathe', 'sheen', 'sensual', 'cinematic', 'heartbeat', 'all'];
+        const AUTO_LIVING_CYCLE = ['voyeur', 'sensual', 'breathe', 'sheen', 'cinematic', 'heartbeat', 'all'];
         let autoLivingIdx = 0;
 
         function setLivingAnimationMode(mode, manual = true) {
@@ -3482,7 +3539,7 @@ def read_root():
             localStorage.setItem('minji_living_mode', mode);
             const wrapper = document.getElementById('avatarWrapper');
             if (wrapper) {
-                wrapper.classList.remove('living-anim-breathe', 'living-anim-cinematic', 'living-anim-sheen', 'living-anim-heartbeat', 'living-anim-all', 'living-anim-sensual', 'living-anim-bodyscan');
+                wrapper.classList.remove('living-anim-breathe', 'living-anim-cinematic', 'living-anim-sheen', 'living-anim-heartbeat', 'living-anim-all', 'living-anim-sensual', 'living-anim-bodyscan', 'living-anim-voyeur');
                 wrapper.classList.add(`living-anim-${mode}`);
             }
             // 버튼 액티브 스타일 업데이트
