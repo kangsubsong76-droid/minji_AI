@@ -436,17 +436,17 @@ def generate_tts_bytes(text: str, voice: str = "luna") -> bytes:
         t_freq = 4500
         t_gain = 2.5
     else:
-        # 밤 (18:00~09:00 및 주말): 밝고 사랑스러우며 말끝에 달콤한 애교 숨결이 감도는 여친 톤
+        # 밤 (18:00~09:00 및 주말): 스위트 위스퍼 허니 오리지널 (귓가에 사르르 녹아내리는 나른하고 달콤한 애교 밀착 톤)
         settings = {
-            "stability": 0.35,
-            "similarity_boost": 0.85,
-            "style": 0.46,
+            "stability": 0.30,
+            "similarity_boost": 0.82,
+            "style": 0.55,
             "use_speaker_boost": False
         }
-        pitch_val = 1.055
-        speed_val = 1.015
+        pitch_val = 1.035
+        speed_val = 0.99
         t_freq = 4800
-        t_gain = 3.0
+        t_gain = 3.3
 
     if elevenlabs_key:
         for model_to_try in ["eleven_multilingual_v2", "eleven_flash_v2_5"]:
