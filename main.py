@@ -3875,14 +3875,8 @@ def read_root():
                     for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
                     let average = sum / dataArray.length;
 
-                    // 1. 민지 발화 중 끼어들기 (Barge-in: 스피커 음향 자가 간섭 및 에코 방지)
-                    if (isSpeaking) {
-                        const elapsed = Date.now() - speechStartTime;
-                        if (elapsed > 1200 && average > 75) {
-                            interruptSpeech("loud_voice_detected (" + Math.round(average) + ")");
-                            return;
-                        }
-                    }
+                    // 1. 민지 발화 중 볼륨 기반 강제 인터럽트 제거 (TV 소리/주변 소음으로 인한 오작동 방지)
+                    // (오직 '잠깐만', '근데', '음', '있잖아' 등의 명시적 키워드나 화면 터치로만 인터럽트)
 
                     // 2. 대기/청취 중 사용자 음성 볼륨 실시간 시각화 (노트북 마이크 22 이상)
                     if (!isSpeaking && !isProcessing) {
@@ -4073,7 +4067,7 @@ def read_root():
                 };
 
                 recognition.onspeechstart = () => {
-                    if (isSpeaking) interruptSpeech("speech_start");
+                    // 단순 소음 감지만으로는 민지 발화를 중단하지 않음 (키워드 검증 대기)
                 };
 
                 let interimSpeechTimeout = null;
@@ -4091,12 +4085,37 @@ def read_root():
                     }
 
                     const currentSpeech = (finalText || interimText).trim();
-                    if (currentSpeech) {
-                        if (isSpeaking) interruptSpeech("speech_detected");
+                    if (!currentSpeech) return;
+
+                    // [핵심 1: 민지 발화 중(isSpeaking) 스마트 인터럽트]
+                    // 주변 TV 소리/잡음에는 절대 끊기지 않고, 사용자가 "잠깐만", "근데", "음", "있잖아", "잠시만", "스톱", "민지야" 등
+                    // 의도적인 인터럽트 키워드를 말하거나 6자 이상의 명확한 문장일 때만 민지가 멈추도록 느슨하고 정확하게 필터링!
+                    if (isSpeaking) {
+                        const interruptKeywords = [
+                            "잠깐", "잠깐만", "근데", "음", "있잖아", "잠시만", "스탑", "스톱",
+                            "멈춰", "그만", "민지야", "아니", "오빠", "들어봐", "잠시", "웨이트", "wait"
+                        ];
+                        const matched = interruptKeywords.some(kw => currentSpeech.includes(kw));
+                        const isClearSentence = currentSpeech.length >= 6;
+
+                        if (matched || isClearSentence) {
+                            interruptSpeech("user_keyword_interrupt (" + currentSpeech + ")");
+                            statusText.innerText = "나: " + currentSpeech;
+                        } else {
+                            // 주변 TV/백그라운드 잡음으로 판정 -> 민지 말 끊지 않고 그대로 유지!
+                            return;
+                        }
+                    } else {
                         statusText.innerText = "나: " + currentSpeech;
                     }
 
+                    // [핵심 2: 사용자 발화 인식 및 '생각 중...' 판정 느슨하게 완화]
+                    // 1글자짜리 단순 헛기침이나 미세 잡음("어", "응", "아") 단독은 민지가 성급하게 생각하지 않음
                     if (finalText.trim()) {
+                        const targetText = finalText.trim();
+                        if (targetText.length <= 1) {
+                            return;
+                        }
                         if (interimSpeechTimeout) clearTimeout(interimSpeechTimeout);
                         hasSpeechTranscribed = true;
                         if (mediaRecorder && mediaRecorder.state === 'recording') {
@@ -4105,9 +4124,13 @@ def read_root():
                         }
                         isListening = false;
                         try { recognition.stop(); } catch(e){}
-                        await sendToMinji(finalText.trim());
+                        await sendToMinji(targetText);
                     } else if (interimText.trim()) {
-                        // 노트북 크롬에서 isFinal 이벤트가 늦어질 경우 1.2초 후 중간 텍스트 자동 확정 발화
+                        const targetInterim = interimText.trim();
+                        if (targetInterim.length <= 1) {
+                            return;
+                        }
+                        // 중간 텍스트 자동 확정 대기 시간을 1.2초 -> 1.8초로 늘려, 사용자가 말하다가 잠시 숨을 고르거나 생각할 때 민지가 성급하게 말을 끊지 않도록 배려
                         if (interimSpeechTimeout) clearTimeout(interimSpeechTimeout);
                         interimSpeechTimeout = setTimeout(async () => {
                             if (interimText.trim() && !hasSpeechTranscribed && !isSpeaking && !isProcessing) {
@@ -4120,7 +4143,7 @@ def read_root():
                                 try { recognition.stop(); } catch(e){}
                                 await sendToMinji(interimText.trim());
                             }
-                        }, 1200);
+                        }, 1800);
                     }
                 };
 
