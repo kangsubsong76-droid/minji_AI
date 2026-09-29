@@ -370,15 +370,15 @@ def normalize_speech_text(text: str) -> str:
     return t
 
 
-def pitch_shift_audio(audio_bytes: bytes, pitch_ratio: float = 1.18, speed_boost: float = 1.05) -> bytes:
-    """ffmpeg DSP: 아줌마/중년 흉성 울림을 100% 컷하고, 가늘고 앳되며 귀여운 여동생/여친 톤으로 드라마틱하게 전환"""
+def pitch_shift_audio(audio_bytes: bytes, pitch_ratio: float = 1.035, speed_boost: float = 1.0) -> bytes:
+    """ffmpeg DSP: 아줌마 흉성과 어린이톤을 모두 배제한, 20대 초반 노윤서 특유의 발랄하면서도 깊이감 있고 세련된 여친 음색"""
     try:
         sample_rate = 44100
         new_rate = int(sample_rate * pitch_ratio)
         atempo = (1.0 / pitch_ratio) * speed_boost
         cmd = [
             "ffmpeg", "-y", "-i", "pipe:0",
-            "-af", f"asetrate={new_rate},atempo={atempo},aresample=44100,highpass=f=140,equalizer=f=3200:t=q:w=1.2:g=2.8",
+            "-af", f"asetrate={new_rate},atempo={atempo},aresample=44100,highpass=f=80,equalizer=f=320:t=q:w=1.5:g=-2.0,equalizer=f=4500:t=q:w=1.2:g=2.5",
             "-f", "mp3", "pipe:1"
         ]
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -393,21 +393,20 @@ def pitch_shift_audio(audio_bytes: bytes, pitch_ratio: float = 1.18, speed_boost
 
 
 ELEVEN_VOICE_MAP = {
-    # ★ 20대 초반 맑고 감미로운 여친 & 여동생 애교톤 보이스 라인업
-    # 1. 노윤서 순수 솔로 (Roh Yoon-seo Pure Solo): 남성 목소리 100% 차단된 순수 단독 육성 클론 -> DEFAULT!
-    "roh": ("PyETHgpGKCClcvneEjgw", 0.38, 0.88, 0.35, "eleven_multilingual_v2"),
-    "minji": ("PyETHgpGKCClcvneEjgw", 0.38, 0.88, 0.35, "eleven_multilingual_v2"),
+    # ★ 20대 초반 발랄하면서도 느낌 있는 노윤서 순수 육성 클론 (남성 목소리 100% 배제)
+    "roh": ("PyETHgpGKCClcvneEjgw", 0.45, 0.78, 0.32, "eleven_multilingual_v2"),
+    "minji": ("PyETHgpGKCClcvneEjgw", 0.45, 0.78, 0.32, "eleven_multilingual_v2"),
     # 2. 루나 (Luna): 20대 청순 발랄 나긋나긋한 감미로운 톤
     "luna": ("Ss1VfT7ri4lqnvTDWII0", 0.40, 0.88, 0.35, "eleven_multilingual_v2"),
     # 3. 루니타 (Lunita): 20대 부드럽고 달콤한 속삭임 톤
     "lunita": ("kZJ3sOVD7WvNyF75aJZW", 0.40, 0.88, 0.35, "eleven_multilingual_v2"),
     # 4. 제인 (Jane): 20대 차분하고 단아한 엘리트 톤
     "jane": ("ajfBUI2mmJMjvf2H6Yw7", 0.42, 0.88, 0.30, "eleven_multilingual_v2"),
-    # 하위 호환 매핑: 이전 캐시로 호출 시 자동으로 순수 노윤서 솔로 보이스로 직결
-    "dahye": ("PyETHgpGKCClcvneEjgw", 0.38, 0.88, 0.35, "eleven_multilingual_v2"),
+    # 하위 호환 매핑
+    "dahye": ("PyETHgpGKCClcvneEjgw", 0.45, 0.78, 0.32, "eleven_multilingual_v2"),
     "dahye2": ("Ss1VfT7ri4lqnvTDWII0", 0.40, 0.88, 0.35, "eleven_multilingual_v2"),
-    "eleven_girlfriend": ("PyETHgpGKCClcvneEjgw", 0.38, 0.88, 0.35, "eleven_multilingual_v2"),
-    "eleven_secretary": ("PyETHgpGKCClcvneEjgw", 0.38, 0.88, 0.35, "eleven_multilingual_v2"),
+    "eleven_girlfriend": ("PyETHgpGKCClcvneEjgw", 0.45, 0.78, 0.32, "eleven_multilingual_v2"),
+    "eleven_secretary": ("PyETHgpGKCClcvneEjgw", 0.45, 0.78, 0.32, "eleven_multilingual_v2"),
 }
 
 def generate_tts_bytes(text: str, voice: str = "roh") -> bytes:
@@ -528,7 +527,7 @@ class VoiceChatRequest(BaseModel):
     user_text: str
     session_id: Optional[str] = "default_user"
     mode: Optional[str] = "girlfriend"
-    voice: Optional[str] = "dahye"
+    voice: Optional[str] = "roh"
 
 
 @app.post("/api/voice-chat")
@@ -557,7 +556,7 @@ async def voice_chat_endpoint(req: VoiceChatRequest, x_minji_auth: Optional[str]
         save_memories()
 
         # 2. 초저지연 TTS 음성 즉시 생성
-        voice_type = req.voice or "dahye"
+        voice_type = req.voice or "roh"
         audio_bytes = generate_tts_bytes(reply_text, voice=voice_type)
 
         encoded_reply = urllib.parse.quote(reply_text)
@@ -572,9 +571,9 @@ async def voice_chat_endpoint(req: VoiceChatRequest, x_minji_auth: Optional[str]
         )
     except Exception as e:
         print(f"[Voice Chat Error]: {e}")
-        fallback_msg = "상무님, 계속 듣고 있습니다. 편히 말씀해 주십시오." if mode == "secretary" else "응, 강섭씨 계속 듣고 있어!"
+        fallback_msg = "상무님, 계속 듣고 있습니다. 편히 말씀해 주십시오." if mode == "secretary" else "응, 자기야 계속 듣고 있어!"
         encoded_reply = urllib.parse.quote(fallback_msg)
-        fallback_bytes = generate_tts_bytes(fallback_msg, voice=req.voice or "dahye")
+        fallback_bytes = generate_tts_bytes(fallback_msg, voice=req.voice or "roh")
         return Response(
             content=fallback_bytes,
             media_type="audio/mpeg",
@@ -2966,8 +2965,17 @@ def read_root():
         let volumeCheckInterval = null;
         let currentFacingMode = "environment";
 
-        // 페르소나 모드 관리 (💖 여친 모드 vs 💼 비서 모드)
-        let currentPersonaMode = localStorage.getItem('minji_persona_mode') || 'girlfriend';
+        // 페르소나 모드 관리: 시간대에 따른 100% 자동 전환 (평일 낮=단정한 비서, 저녁/밤/새벽/주말=친근하고 다정한 여친/여동생)
+        function getAutoPersonaMode() {
+            const now = new Date();
+            const day = now.getDay();
+            const hour = now.getHours();
+            if (day >= 1 && day <= 5 && hour >= 9 && hour < 18) {
+                return 'secretary';
+            }
+            return 'girlfriend';
+        }
+        let currentPersonaMode = getAutoPersonaMode();
 
         // 페르소나 모드별 전용 대표 아바타 (여친 모드 vs 비서 모드: 상태별 통일된 인물 표정 연동)
         const avatarImagePools = {
@@ -3776,6 +3784,11 @@ def read_root():
         // [핵심 기능 2]: 사용자 발화 중단 (Barge-in / Interrupt)
         function interruptSpeech(reason = "barge_in") {
             if (!isSpeaking) return;
+            // 배경 잡음/TV 소리로 첫마디 인사가 끊기는 현상 방지: 시작 후 1.8초 이내 마이크 인터럽트는 무시 (단, 화면 터치나 버튼 클릭은 즉각 인터럽트)
+            const isManualAction = (reason === "mic_toggle" || reason === "orb_clicked" || reason === "text_input");
+            if (!isManualAction && speechStartTime && (Date.now() - speechStartTime < 1800)) {
+                return;
+            }
             console.log("[Barge-in] Speech interrupted by user input: " + reason);
             audioPlayer.pause();
             audioPlayer.currentTime = 0;
@@ -4217,7 +4230,7 @@ def read_root():
             statusText.innerText = "민지가 생각하고 있어요...";
 
             try {
-                const chosenVoice = voiceSelect ? voiceSelect.value : 'dahye';
+                const chosenVoice = voiceSelect ? voiceSelect.value : 'roh';
                 const response = await fetch('/api/voice-chat', {
                     method: 'POST',
                     headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
@@ -4532,6 +4545,7 @@ def read_root():
                 statusText.innerText = "민지와 연결되었습니다!";
 
                 // 첫 인사: 모드(여친 vs 비서) 및 시간대에 맞는 맞춤형 첫 인사
+                currentPersonaMode = getAutoPersonaMode();
                 const curHour = new Date().getHours();
                 let initialGreeting = "";
                 if (currentPersonaMode === 'secretary') {
