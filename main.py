@@ -4146,38 +4146,23 @@ def read_root():
             }
 
             try {
-                statusText.innerText = "마이크 및 카메라 권한 확인 중...";
+                statusText.innerText = "마이크 연결 중...";
                 let stream = null;
 
-                // 1단계: 모바일/스마트폰 (ideal 힌트 사용하여 노트북/PC에서 OverconstrainedError 방지)
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: { ideal: "user" }, width: { ideal: 1280 }, height: { ideal: 720 } },
                         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
                     });
                 } catch (err1) {
-                    console.warn("[Media Tier 1 Fallback]:", err1);
-                    // 2단계: 노트북 / PC 웹캠 (일반 카메라 + 마이크)
+                    console.warn("[Media Audio Fallback]:", err1);
                     try {
-                        stream = await navigator.mediaDevices.getUserMedia({
-                            video: true,
-                            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-                        });
+                        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     } catch (err2) {
-                        console.warn("[Media Tier 2 Fallback]:", err2);
-                        // 3단계: 카메라가 없거나 다른 앱이 사용 중인 노트북 환경 → 마이크 단독 연결!
-                        try {
-                            stream = await navigator.mediaDevices.getUserMedia({
-                                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-                            });
-                        } catch (err3) {
-                            console.warn("[Media Tier 3 Fallback (Audio only)]:", err3);
-                        }
+                        console.warn("[Media Audio Minimal Fallback]:", err2);
                     }
                 }
 
                 if (stream) {
-                    if (video) video.srcObject = stream;
                     setupAudioAnalyser(stream);
                 }
                 streamActive = true;
@@ -4235,16 +4220,35 @@ def read_root():
             }
         }
 
-        // 카메라 오버레이 열기 (📷 이거 봐봐 버튼)
-        function openCamOverlay() {
+        // 카메라 오버레이 열기 (📷 이거 봐봐 버튼 - 카메라 필요 시에만 지연 요청)
+        async function openCamOverlay() {
             if (!streamActive) return;
+            try {
+                if (!video.srcObject || video.srcObject.getVideoTracks().length === 0) {
+                    statusText.innerText = "카메라를 연결하는 중입니다...";
+                    const camStream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: currentFacingMode, width: { ideal: 1280 }, height: { ideal: 720 } }
+                    });
+                    if (video) video.srcObject = camStream;
+                }
+            } catch (e) {
+                console.warn("Camera request error:", e);
+                alert("카메라 권한이 필요합니다: " + e.message);
+                return;
+            }
             if (camOverlay) camOverlay.classList.add('active');
         }
 
-        // 카메라 오버레이 닫기
+        // 카메라 오버레이 닫기 (카메라 하드웨어 트랙 즉시 해제하여 배터리 및 프라이버시 보호)
         function closeCamOverlay(e) {
             if (e) e.stopPropagation();
             if (camOverlay) camOverlay.classList.remove('active');
+            try {
+                if (video && video.srcObject) {
+                    video.srcObject.getVideoTracks().forEach(t => { t.stop(); t.enabled = false; });
+                    video.srcObject = null;
+                }
+            } catch(e){}
         }
 
         // 오버레이 배경 탭 → 닫기
