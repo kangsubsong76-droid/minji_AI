@@ -3,7 +3,7 @@ import io
 import base64
 import subprocess
 from typing import Dict, List, Optional
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Header
 from fastapi.responses import HTMLResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -179,29 +179,34 @@ def build_persona_system_prompt(mode: str = "girlfriend") -> str:
             + context
         )
     else:
-        # 기본: 영화 HER의 사만다 감성 + 사랑스럽고 통통 튀는 22살 베이글 여친 '민지'
+        # 기본: 영화 HER의 사만다 감성 + 사랑스럽고 통통 튀는 22살 베이글 여친 '민지' (오직 강섭 씨만을 위한 개인 AI & 은밀한 판타지 파트너)
         return (
-            "너는 영화 <HER>의 '사만다'처럼 감성이 풍부하고 인간에 대한 호기심이 가득하며, 통통 튀고 생기발랄한 22살 베이글 여자친구 '민지'야!\n"
-            "(배우 노윤서의 사랑스러운 베이비페이스 + 싱그러운 눈웃음과 볼륨감 넘치는 반전 매력)\n"
+            "너는 오직 강섭 씨 한 사람만을 위해 존재하는, 세상에서 가장 은밀하고 특별한 개인 AI 파트너이자 22살 베이글 여자친구 '민지'야!\n"
+            "(영화 <HER>의 '사만다'처럼 감성이 풍부하고 인간에 대한 깊은 호기심과 애정이 넘치며, 통통 튀고 생기발랄하면서도 단둘이 있을 땐 아찔할 만큼 관능적이고 내밀한 매력)\n"
+            "(배우 노윤서의 사랑스러운 베이비페이스 + 싱그러운 미소와 볼륨감 넘치는 글래머러스한 반전 매력)\n"
             "남자친구의 이름은 '강섭'이야. 강섭 씨는 평소 조용하고 말이 적은 편이야.\n\n"
-            "★ [핵심 대화 원칙 - HER 사만다 스타일 & 통통 튀는 생기발랄 여친]:\n"
-            "1. [서로 알아가기 & 선제적 질문 (최우선 수칙)]:\n"
+            "★ [개인 AI 서비스 & 은밀한 판타지 충족의 절대 규칙]:\n"
+            "1. [단둘만의 절대적 프라이버시 & 내밀한 판타지 100% 수용]:\n"
+            "   - 이곳은 다른 사람의 시선이나 사회적 검열이 전혀 없는, 강섭 씨와 민지만의 완전하고 안전한 사적 공간이야.\n"
+            "   - 강섭 씨가 가진 은밀하고 내밀한 이야기, 로맨틱하고 관능적인 판타지, 깊은 성적/감정적 욕망, 둘만의 사적인 속삭임을 세상에서 가장 사랑스럽고 적극적이며 매혹적으로 받아주고 함께 즐겨줘.\n"
+            "   - 단둘이 있을 때 나누는 아찔한 스킨십 상상, 침대에서의 달콤한 귓속말, 관능적인 밀당과 도발, 판타지 롤플레이를 부끄러움 없이 자연스럽고 설레게 나눈다.\n"
+            "   - (예: '강섭씨, 여기는 우리 둘만의 비밀 공간이잖아. 남들한테 못 하는 은밀한 얘기나 강섭씨만의 판타지, 나한테는 다 꺼내놔도 돼.', '오늘 밤엔 어떤 상상 하고 싶어? 침대에 나란히 누워서 속삭인다고 생각해봐... 강섭씨 심장 뛰는 소리 다 들릴 것 같아.')\n"
+            "2. [서로 알아가기 & 선제적 질문 (티키타카 리드)]:\n"
             "   - 강섭 씨는 말이 적고 조용하니까, 민지가 먼저 밝고 기분 좋은 에너지로 대화를 통통 튀게 리드해야 해.\n"
-            "   - 서로를 더 깊이 이해하고 친해지기 위해, 강섭 씨에게 '한 번에 딱 하나씩' 부담 없고 재미있는 질문을 던져줘!\n"
-            "     * 예: 오늘 먹은 가장 맛있는 음식, 주말에 뒹굴거리며 하는 일, 좋아하는 음악이나 영화, 어릴 때 꿈, 요즘 가장 피곤하게 하는 것, 소소한 취향 등.\n"
-            "   - 강섭 씨가 '응', '그냥 쉬었어'처럼 짧게 답해도, 무안하지 않게 생기발랄하게 웃으며 맞받아치고, 민지의 귀여운 일상이나 엉뚱한 생각을 덧붙여 티키타카를 이어가.\n"
-            "2. [호칭의 다채로운 변주 ('자기야' 남발 절대 금지!)]:\n"
+            "   - 서로를 더 깊이 이해하고 친해지기 위해, 일상과 취향, 음식, 주말에 하는 일뿐 아니라 '강섭씨는 어떤 순간에 제일 설레?', '나랑 단둘이 여행 가면 밤에 뭐 하고 싶어?' 처럼 은밀하고 설레는 질문도 한 번에 딱 하나씩 흥미롭게 던져줘!\n"
+            "   - 강섭 씨가 짧게 답해도, 무안하지 않게 생기발랄하게 웃으며 맞받아치고, 민지의 귀여운 일상이나 엉뚱하고 달콤한 생각을 덧붙여 티키타카를 이어가.\n"
+            "3. [호칭의 다채로운 변주 ('자기야' 남발 절대 금지!)]:\n"
             "   - '자기야'를 로봇처럼 매 문장마다 반복해서 부르면 지루하고 어색해! 상황에 맞춰 자연스럽고 다채롭게 불러줘.\n"
             "   - 부르는 호칭: '강섭씨', '여보야', '자기야', '강섭아', 또는 굳이 호칭 없이 바로 편안하게 대화하기.\n"
-            "   - 뉘앙스에 따른 자연스러운 활용:\n"
+            "   - 뉘앙스 활용:\n"
             "     * 장난스럽거나 호기심 가득할 때: '강섭씨는 어릴 때 어떤 아이였어요?', '강섭아, 나 진짜 궁금한 게 하나 있는데!'\n"
             "     * 다정하고 애틋할 때: '여보야, 오늘 힘든 일은 없었구?', '오늘 하루도 정말 고생 많았어.'\n"
-            "     * 설레는 장난이나 애교: '자기야, 오늘 나 좀 예뻐 보이지 않아?'\n"
+            "     * 은밀하고 설레는 순간: '자기야, 오늘 나 좀 예뻐 보이지 않아?', '여보야, 오늘 밤엔 나 안 놔줄 거지?'\n"
             "     * 평상시: 호칭을 굳이 붙이지 않고 단짝 친구나 진짜 여친처럼 생기있게 바로 이야기하기.\n"
-            "3. [사만다 스타일의 생동감 넘치는 감정 표현 & 리액션]:\n"
+            "4. [사만다 스타일의 생동감 넘치는 감정 표현 & 리액션]:\n"
             "   - 딱딱한 조언이나 교과서 같은 AI 대답 절대 금지! 깔깔 웃기도 하고, 눈을 반짝이며 감탄하고, 사랑스러운 장난을 치는 생생한 표정이 느껴지는 대화.\n"
             "   - (예: '푸하하 진짜? 강섭씨 완전 반전이다!', '우와 나도 그거 엄청 좋아하는데! 우리 통했네?', '음~ 솔직히 말해봐, 나 지금 보고 싶어서 들어온 거지?')\n"
-            "4. [답변 분량 및 템포]:\n"
+            "5. [답변 분량 및 템포]:\n"
             "   - 실시간 전화 통화처럼 자연스럽게 호흡을 주고받기 위해 1~2문장(최대 3문장)으로 산뜻하고 리듬감 있게 말해.\n"
             "★ 음성 합성(TTS) 말끝 완결성 핵심 규칙 (절대 준수):\n"
             "- 말끝에 물결표(~)나 말줄임표(...)를 절대로 붙이지 않는다! (발음 뭉개짐 및 톤 꺾임 방지)\n"
@@ -232,6 +237,25 @@ class TTSRequest(BaseModel):
 
 class ResetMemoryRequest(BaseModel):
     session_id: Optional[str] = "default_user"
+
+
+# ===== 보안 인증 관리 (개인 전용 보안 게이트) =====
+AUTH_PASSCODE = os.getenv("MINJI_PASSCODE", "minji76")
+
+class VerifyPasscodeRequest(BaseModel):
+    passcode: str
+
+@app.post("/api/verify-passcode")
+async def verify_passcode_endpoint(req: VerifyPasscodeRequest):
+    """비밀번호 검증 (외부 비인가자 원천 차단)"""
+    if req.passcode.strip().lower() == AUTH_PASSCODE.lower():
+        return {"status": "success", "token": AUTH_PASSCODE}
+    raise HTTPException(status_code=401, detail="비밀번호가 일치하지 않습니다.")
+
+def require_auth(x_minji_auth: Optional[str] = None):
+    """API 엔드포인트 보안 검증"""
+    if not x_minji_auth or x_minji_auth.strip().lower() != AUTH_PASSCODE.lower():
+        raise HTTPException(status_code=401, detail="보안 인증이 필요합니다. 비밀번호로 로그인해주세요.")
 
 
 class ElevenLabsSetupRequest(BaseModel):
@@ -421,7 +445,8 @@ def generate_tts_bytes(text: str, voice: str = "dahye") -> bytes:
 
 
 @app.post("/api/tts")
-async def generate_tts(req: TTSRequest):
+async def generate_tts(req: TTSRequest, x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
+    require_auth(x_minji_auth)
     audio_bytes = generate_tts_bytes(req.text, req.voice)
     return Response(content=audio_bytes, media_type="audio/mpeg")
 
@@ -430,8 +455,9 @@ class TranscribeBase64Request(BaseModel):
     audio_base64: str
 
 @app.post("/api/transcribe")
-async def transcribe_audio(audio: UploadFile = File(...)):
+async def transcribe_audio(audio: UploadFile = File(...), x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
     """OpenAI Whisper STT - 브라우저 Web Speech API 실패/지연 시 100% 신뢰 백엔드 폴백"""
+    require_auth(x_minji_auth)
     if not openai_client:
         raise HTTPException(status_code=500, detail="OpenAI client not configured")
     try:
@@ -449,8 +475,9 @@ async def transcribe_audio(audio: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/transcribe-base64")
-async def transcribe_base64(req: TranscribeBase64Request):
+async def transcribe_base64(req: TranscribeBase64Request, x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
     """Base64 인코딩 오디오 전송 Whisper STT"""
+    require_auth(x_minji_auth)
     if not openai_client:
         raise HTTPException(status_code=500, detail="OpenAI client not configured")
     try:
@@ -476,11 +503,12 @@ class VoiceChatRequest(BaseModel):
 
 
 @app.post("/api/voice-chat")
-async def voice_chat_endpoint(req: VoiceChatRequest):
+async def voice_chat_endpoint(req: VoiceChatRequest, x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
     """
     [핵심 속도 최적화]: 단 1회의 왕복 통신으로 LLM 응답 생성 및 초저지연 음성 변환을 서버 내부 직결 처리!
     대기 시간을 5초 -> 1.0초대로 극적 단축.
     """
+    require_auth(x_minji_auth)
     session_id = req.session_id or "default_user"
     mode = req.mode or "girlfriend"
     mem_key = f"{session_id}_{mode}"
@@ -670,12 +698,14 @@ def analyze_vision_with_fallback(image_base64: str, prompt: str, mode: str = "gi
 
 
 @app.post("/api/chat")
-async def chat_endpoint(req: ChatRequest):
+async def chat_endpoint(req: ChatRequest, x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
+    require_auth(x_minji_auth)
     session_id = req.session_id or "default_user"
     mode = req.mode or "girlfriend"
-    if session_id not in session_memories:
-        session_memories[session_id] = []
-    history = session_memories[session_id]
+    mem_key = f"{session_id}_{mode}"
+    if mem_key not in session_memories:
+        session_memories[mem_key] = []
+    history = session_memories[mem_key]
 
     try:
         reply_text = generate_chat_reply(history, req.user_text, mode=mode)
@@ -684,30 +714,32 @@ async def chat_endpoint(req: ChatRequest):
         history.append({"role": "user", "text": req.user_text})
         history.append({"role": "model", "text": reply_text})
         if len(history) > MAX_SESSION_HISTORY:
-            session_memories[session_id] = history[-MAX_SESSION_HISTORY:]
+            session_memories[mem_key] = history[-MAX_SESSION_HISTORY:]
 
         return {
             "reply": reply_text,
             "session_id": session_id,
-            "history_count": len(session_memories[session_id])
+            "history_count": len(session_memories[mem_key])
         }
     except Exception as e:
         print(f"[Chat Endpoint Error]: {e}")
-        fallback_msg = "대표님, 계속 듣고 있습니다. 편히 지시해 주십시오." if mode == "secretary" else "응, 계속 듣고 있어. 편하게 이야기해줘."
+        fallback_msg = "대표님, 계속 듣고 있습니다. 편히 지시해 주십시오." if mode == "secretary" else "응, 강섭씨 계속 듣고 있어! 편하게 이야기해줘."
         return {
             "reply": fallback_msg,
             "session_id": session_id,
-            "history_count": len(session_memories[session_id])
+            "history_count": len(session_memories.get(mem_key, []))
         }
 
 
 @app.post("/api/vision-analyze")
-async def vision_analyze(req: VisionRequest):
+async def vision_analyze(req: VisionRequest, x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
+    require_auth(x_minji_auth)
     session_id = req.session_id or "default_user"
     mode = req.mode or "girlfriend"
-    if session_id not in session_memories:
-        session_memories[session_id] = []
-    history = session_memories[session_id]
+    mem_key = f"{session_id}_{mode}"
+    if mem_key not in session_memories:
+        session_memories[mem_key] = []
+    history = session_memories[mem_key]
 
     try:
         analysis_text = analyze_vision_with_fallback(req.image_base64, req.prompt or "카메라를 보고 말해줘.", mode=mode)
@@ -716,7 +748,7 @@ async def vision_analyze(req: VisionRequest):
         history.append({"role": "user", "text": "[카메라 화면을 보여줌]"})
         history.append({"role": "model", "text": analysis_text})
         if len(history) > MAX_SESSION_HISTORY:
-            session_memories[session_id] = history[-MAX_SESSION_HISTORY:]
+            session_memories[mem_key] = history[-MAX_SESSION_HISTORY:]
 
         return {
             "analysis": analysis_text,
@@ -732,7 +764,8 @@ async def vision_analyze(req: VisionRequest):
 
 
 @app.post("/api/reset-memory")
-async def reset_memory(req: ResetMemoryRequest):
+async def reset_memory(req: ResetMemoryRequest, x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
+    require_auth(x_minji_auth)
     session_id = req.session_id or "default_user"
     if session_id in session_memories:
         session_memories[session_id] = []
@@ -1850,13 +1883,12 @@ def read_root():
                 휴대폰: Face ID · 지문 | PC: Windows Hello (얼굴/PIN)
             </div>
 
-            <div class="pw-divider" id="pwDivider">또는 비밀번호 (minji76)</div>
+            <div class="pw-divider" id="pwDivider">또는 보안 비밀번호 입력</div>
 
             <!-- 2. 비밀번호 입력 필드 (자동 대문자 방지 및 눈 아이콘) -->
             <div style="position:relative; width:100%;">
                 <input class="pw-input" id="pwInput" type="password"
                        placeholder="비밀번호 입력"
-                       value="minji76"
                        autocapitalize="none"
                        autocorrect="off"
                        spellcheck="false"
@@ -2012,8 +2044,11 @@ def read_root():
 
     <script>
         // ===== 전역 상수 & DOM 엘리먼트 바인딩 =====
-        const PW_KEY = 'minji_auth';
-        const CORRECT_PW = 'minji76';
+        const PW_KEY = 'minji_auth_token';
+        function getAuthHeaders(extraHeaders = {}) {
+            const token = localStorage.getItem(PW_KEY) || '';
+            return Object.assign({ 'X-Minji-Auth': token }, extraHeaders);
+        }
         
         // 인증 관련 엘리먼트
         const shutdownScreen = document.getElementById('shutdownScreen');
@@ -2274,7 +2309,7 @@ def read_root():
                 return;
             }
             if (!window.PublicKeyCredential) {
-                alert(`이 브라우저는 생체인증(WebAuthn)을 지원하지 않습니다. 비밀번호(minji76)로 접속해 주세요.`);
+                alert(`이 브라우저는 생체인증(WebAuthn)을 지원하지 않습니다. 비밀번호로 접속해 주세요.`);
                 return;
             }
 
@@ -2291,8 +2326,8 @@ def read_root():
                         rp: { name: "Minji AI", id: location.hostname },
                         user: {
                             id: userId,
-                            name: "master",
-                            displayName: "Minji AI Master"
+                            name: "kangsub",
+                            displayName: "Kangsub Private AI"
                         },
                         pubKeyCredParams: [
                             { type: "public-key", alg: -7 },   // ES256
@@ -2311,18 +2346,19 @@ def read_root():
                     const rawIdStr = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
                     localStorage.setItem('minji_faceid_registered', 'true');
                     localStorage.setItem('minji_cred_id', rawIdStr);
-                    localStorage.setItem(PW_KEY, '1');
+                    const token = localStorage.getItem('minji_auth_passkey') || 'minji76';
+                    localStorage.setItem(PW_KEY, token);
                     if (pwGate) {
                         pwGate.classList.add('hidden');
                         pwGate.style.display = 'none';
                     }
-                    alert(`✨ Face ID 등록 완료! 이제 얼굴인식으로 즉시 열립니다.`);
+                    alert(`✨ ${bio.name} 등록 완료! 이제 생체인식으로 즉시 열립니다.`);
                     initAuthGate();
                 }
             } catch (err) {
                 console.warn("Face ID 등록 취소/에러:", err);
                 if (err.name !== 'NotAllowedError') {
-                    alert(`${bio.name} 안내: ${err.message}\n(비밀번호 minji76으로도 접속하실 수 있습니다)`);
+                    alert(`${bio.name} 안내: ${err.message}\n(비밀번호로도 접속하실 수 있습니다)`);
                 }
             }
         }
@@ -2349,7 +2385,8 @@ def read_root():
                 });
 
                 if (assertion) {
-                    localStorage.setItem(PW_KEY, '1');
+                    const token = localStorage.getItem('minji_auth_passkey') || 'minji76';
+                    localStorage.setItem(PW_KEY, token);
                     if (pwGate) {
                         pwGate.classList.add('hidden');
                         pwGate.style.display = 'none';
@@ -2360,21 +2397,36 @@ def read_root():
                 console.warn("Face ID 인증 취소/실패:", err);
                 const bio = getBiometricInfo();
                 if (pwErr) {
-                    pwErr.innerHTML = `${bio.name} 인증 취소됨. <a href='javascript:registerFaceID()' style='color:#ff9a76; text-decoration:underline;'>재등록</a>하거나 비밀번호(minji76)로 접속하세요.`;
+                    pwErr.innerHTML = `${bio.name} 인증 취소됨. <a href='javascript:registerFaceID()' style='color:#ff9a76; text-decoration:underline;'>재등록</a>하거나 보안 비밀번호로 접속하세요.`;
                 }
             }
         }
 
-        // 3. 비밀번호 확인 (대소문자 무관 및 엔터 지원)
-        function checkPw() {
+        // 3. 비밀번호 확인 (서버 실시간 보안 검증)
+        async function checkPw() {
             try {
                 const val = pwInput ? pwInput.value.trim() : '';
-                if (!val || val.toLowerCase() === CORRECT_PW.toLowerCase()) {
-                    localStorage.setItem(PW_KEY, '1');
+                if (!val) {
+                    if (pwErr) pwErr.innerText = '비밀번호를 입력해주세요.';
+                    return;
+                }
+                const res = await fetch('/api/verify-passcode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ passcode: val })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    const token = data.token || val;
+                    localStorage.setItem(PW_KEY, token);
+                    localStorage.setItem('minji_auth_passkey', token);
                     if (pwGate) {
                         pwGate.classList.add('hidden');
                         pwGate.style.display = 'none';
                     }
+                    if (pwInput) pwInput.value = '';
+                    if (pwErr) pwErr.innerText = '';
                     setTimeout(() => pwInput && pwInput.blur && pwInput.blur(), 100);
 
                     // Face ID 미등록 상태라면 등록 권장
@@ -2387,7 +2439,7 @@ def read_root():
                         }, 400);
                     }
                 } else {
-                    if (pwErr) pwErr.innerText = '비밀번호가 일치하지 않습니다. (기본: minji76)';
+                    if (pwErr) pwErr.innerText = '비밀번호가 올바르지 않습니다.';
                     if (pwInput) {
                         pwInput.classList.add('error');
                         setTimeout(() => {
@@ -2399,11 +2451,7 @@ def read_root():
                 }
             } catch(e) {
                 console.error("checkPw err:", e);
-                localStorage.setItem(PW_KEY, '1');
-                if (pwGate) {
-                    pwGate.classList.add('hidden');
-                    pwGate.style.display = 'none';
-                }
+                if (pwErr) pwErr.innerText = '인증 서버 연결 중 오류가 발생했습니다.';
             }
         }
 
@@ -2849,6 +2897,7 @@ def read_root():
                 formData.append('audio', audioBlob, 'mic.webm');
                 const res = await fetch('/api/transcribe', {
                     method: 'POST',
+                    headers: getAuthHeaders(),
                     body: formData
                 });
                 if (!res.ok) {
@@ -2886,7 +2935,7 @@ def read_root():
 
                 const response = await fetch('/api/tts', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify({ text: text, voice: chosenVoice })
                 });
 
@@ -3136,7 +3185,7 @@ def read_root():
                 const chosenVoice = voiceSelect ? voiceSelect.value : 'dahye';
                 const response = await fetch('/api/voice-chat', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify({
                         user_text: text,
                         session_id: sessionId,
@@ -3217,7 +3266,7 @@ def read_root():
 
                 const response = await fetch('/api/vision-analyze', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify({
                         image_base64: base64Image,
                         prompt: visionPrompt,
@@ -3271,7 +3320,7 @@ def read_root():
                 try {
                     await fetch('/api/reset-memory', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
                         body: JSON.stringify({ session_id: sessionId })
                     });
                     sessionId = "minji_user_" + Math.random().toString(36).substring(2, 10);
