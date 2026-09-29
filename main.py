@@ -283,7 +283,7 @@ class VisionRequest(BaseModel):
 
 class TTSRequest(BaseModel):
     text: str
-    voice: Optional[str] = "roh"  # 기본 보이스: 노윤서 고유 육성 클론 (20대 초반 맑고 달콤한 음색)
+    voice: Optional[str] = "luna"  # 기본 보이스: 스위트 위스퍼 허니 (Luna 기반 낮/밤 듀얼 보이스)
 
 class ResetMemoryRequest(BaseModel):
     session_id: Optional[str] = "default_user"
@@ -370,15 +370,30 @@ def normalize_speech_text(text: str) -> str:
     return t
 
 
-def pitch_shift_audio(audio_bytes: bytes, pitch_ratio: float = 1.035, speed_boost: float = 1.0) -> bytes:
-    """ffmpeg DSP: 아줌마 흉성과 어린이톤을 모두 배제한, 20대 초반 노윤서 특유의 발랄하면서도 깊이감 있고 세련된 여친 음색"""
+def is_daytime() -> bool:
+    """평일 09:00 ~ 18:00 근무 시간 여부 판별 (한국 시각 KST 기준)"""
+    try:
+        now = datetime.datetime.now(zoneinfo.ZoneInfo("Asia/Seoul"))
+    except Exception:
+        now = datetime.datetime.now()
+    return now.weekday() < 5 and 9 <= now.hour < 18
+
+
+def pitch_shift_audio(
+    audio_bytes: bytes,
+    pitch_ratio: float = 1.055,
+    speed_boost: float = 1.015,
+    treble_freq: int = 4800,
+    treble_gain: float = 3.0
+) -> bytes:
+    """ffmpeg DSP: 아줌마 흉성과 어린이 톤을 원천 배제한, 스위트 위스퍼 허니 감미로운 20대 여친/비서 톤"""
     try:
         sample_rate = 44100
         new_rate = int(sample_rate * pitch_ratio)
         atempo = (1.0 / pitch_ratio) * speed_boost
         cmd = [
             "ffmpeg", "-y", "-i", "pipe:0",
-            "-af", f"asetrate={new_rate},atempo={atempo},aresample=44100,highpass=f=80,equalizer=f=320:t=q:w=1.5:g=-2.0,equalizer=f=4500:t=q:w=1.2:g=2.5",
+            "-af", f"asetrate={new_rate},atempo={atempo},aresample=44100,highpass=f=80,equalizer=f=320:t=q:w=1.5:g=-2.0,equalizer=f={treble_freq}:t=q:w=1.2:g={treble_gain}",
             "-f", "mp3", "pipe:1"
         ]
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -393,42 +408,47 @@ def pitch_shift_audio(audio_bytes: bytes, pitch_ratio: float = 1.035, speed_boos
 
 
 ELEVEN_VOICE_MAP = {
-    # ★ 20대 초반 발랄하면서도 느낌 있는 노윤서 순수 육성 클론 (남성 목소리 100% 배제)
-    "roh": ("PyETHgpGKCClcvneEjgw", 0.45, 0.78, 0.32, "eleven_multilingual_v2"),
-    "minji": ("PyETHgpGKCClcvneEjgw", 0.45, 0.78, 0.32, "eleven_multilingual_v2"),
-    # 2. 루나 (Luna): 20대 청순 발랄 나긋나긋한 감미로운 톤
-    "luna": ("Ss1VfT7ri4lqnvTDWII0", 0.40, 0.88, 0.35, "eleven_multilingual_v2"),
-    # 3. 루니타 (Lunita): 20대 부드럽고 달콤한 속삭임 톤
-    "lunita": ("kZJ3sOVD7WvNyF75aJZW", 0.40, 0.88, 0.35, "eleven_multilingual_v2"),
-    # 4. 제인 (Jane): 20대 차분하고 단아한 엘리트 톤
-    "jane": ("ajfBUI2mmJMjvf2H6Yw7", 0.42, 0.88, 0.30, "eleven_multilingual_v2"),
-    # 하위 호환 매핑
-    "dahye": ("PyETHgpGKCClcvneEjgw", 0.45, 0.78, 0.32, "eleven_multilingual_v2"),
-    "dahye2": ("Ss1VfT7ri4lqnvTDWII0", 0.40, 0.88, 0.35, "eleven_multilingual_v2"),
-    "eleven_girlfriend": ("PyETHgpGKCClcvneEjgw", 0.45, 0.78, 0.32, "eleven_multilingual_v2"),
-    "eleven_secretary": ("PyETHgpGKCClcvneEjgw", 0.45, 0.78, 0.32, "eleven_multilingual_v2"),
+    # ★ 민지 공식 보이스: 스위트 위스퍼 허니 (Luna 기반)
+    "luna": ("Ss1VfT7ri4lqnvTDWII0", 0.35, 0.85, 0.46, "eleven_multilingual_v2"),
+    "minji": ("Ss1VfT7ri4lqnvTDWII0", 0.35, 0.85, 0.46, "eleven_multilingual_v2"),
+    "roh": ("Ss1VfT7ri4lqnvTDWII0", 0.35, 0.85, 0.46, "eleven_multilingual_v2"),
+    "dahye": ("Ss1VfT7ri4lqnvTDWII0", 0.35, 0.85, 0.46, "eleven_multilingual_v2"),
+    "dahye2": ("Ss1VfT7ri4lqnvTDWII0", 0.35, 0.85, 0.46, "eleven_multilingual_v2"),
 }
 
-def generate_tts_bytes(text: str, voice: str = "roh") -> bytes:
-    """ElevenLabs 및 초저지연 음성 생성기 (귀여운 여동생/여친 피치 시프트 적용)"""
+def generate_tts_bytes(text: str, voice: str = "luna") -> bytes:
+    """ElevenLabs 초저지연 음성 생성기 (스위트 위스퍼 허니: 낮/밤 자동 듀얼 보이스)"""
     cleaned_text = normalize_speech_text(text)
-    v_key = (voice or "roh").lower()
-    if v_key not in ELEVEN_VOICE_MAP and "eleven" not in v_key:
-        v_key = "roh"
+    day = is_daytime()
 
-    # 1. ElevenLabs 등록 보이스 매핑 (노윤서, 루나, 루니타, 제인)
-    if elevenlabs_key:
-        voice_info = ELEVEN_VOICE_MAP.get(v_key, ELEVEN_VOICE_MAP["roh"])
-        voice_id, stab, sim, sty, model_cand = voice_info
-
+    voice_id = "Ss1VfT7ri4lqnvTDWII0"
+    if day:
+        # 낮 (09:00~18:00 평일): 스마트 & 단아하고 맑은 스위트 비서 톤
         settings = {
-            "stability": stab,
-            "similarity_boost": sim,
-            "style": sty,
-            "use_speaker_boost": False  # 남성/중년 흉성 울림 차단
+            "stability": 0.40,
+            "similarity_boost": 0.86,
+            "style": 0.42,
+            "use_speaker_boost": False
         }
+        pitch_val = 1.025
+        speed_val = 1.02
+        t_freq = 4500
+        t_gain = 2.5
+    else:
+        # 밤 (18:00~09:00 및 주말): 밝고 사랑스러우며 말끝에 달콤한 애교 숨결이 감도는 여친 톤
+        settings = {
+            "stability": 0.35,
+            "similarity_boost": 0.85,
+            "style": 0.46,
+            "use_speaker_boost": False
+        }
+        pitch_val = 1.055
+        speed_val = 1.015
+        t_freq = 4800
+        t_gain = 3.0
 
-        for model_to_try in [model_cand, "eleven_multilingual_v2", "eleven_flash_v2_5"]:
+    if elevenlabs_key:
+        for model_to_try in ["eleven_multilingual_v2", "eleven_flash_v2_5"]:
             try:
                 tts_url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?optimize_streaming_latency=3"
                 tts_payload = json.dumps({
@@ -449,8 +469,13 @@ def generate_tts_bytes(text: str, voice: str = "roh") -> bytes:
                 with urllib.request.urlopen(tts_req, timeout=8) as resp:
                     audio_data = resp.read()
                     if audio_data and len(audio_data) > 100:
-                        # ★ 모든 음성에 +18% 피치 시프트 & 저음 흉성 필터링 적용 -> 가늘고 귀여운 여동생 애교톤 완성
-                        audio_data = pitch_shift_audio(audio_data, pitch_ratio=1.18, speed_boost=1.05)
+                        audio_data = pitch_shift_audio(
+                            audio_data,
+                            pitch_ratio=pitch_val,
+                            speed_boost=speed_val,
+                            treble_freq=t_freq,
+                            treble_gain=t_gain
+                        )
                         return audio_data
             except Exception as el_err:
                 print(f"[ElevenLabs {model_to_try} Error]: {el_err}")
@@ -527,7 +552,7 @@ class VoiceChatRequest(BaseModel):
     user_text: str
     session_id: Optional[str] = "default_user"
     mode: Optional[str] = "girlfriend"
-    voice: Optional[str] = "roh"
+    voice: Optional[str] = "luna"
 
 
 @app.post("/api/voice-chat")
@@ -556,7 +581,7 @@ async def voice_chat_endpoint(req: VoiceChatRequest, x_minji_auth: Optional[str]
         save_memories()
 
         # 2. 초저지연 TTS 음성 즉시 생성
-        voice_type = req.voice or "roh"
+        voice_type = req.voice or "luna"
         audio_bytes = generate_tts_bytes(reply_text, voice=voice_type)
 
         encoded_reply = urllib.parse.quote(reply_text)
@@ -573,7 +598,7 @@ async def voice_chat_endpoint(req: VoiceChatRequest, x_minji_auth: Optional[str]
         print(f"[Voice Chat Error]: {e}")
         fallback_msg = "상무님, 계속 듣고 있습니다. 편히 말씀해 주십시오." if mode == "secretary" else "응, 자기야 계속 듣고 있어!"
         encoded_reply = urllib.parse.quote(fallback_msg)
-        fallback_bytes = generate_tts_bytes(fallback_msg, voice=req.voice or "roh")
+        fallback_bytes = generate_tts_bytes(fallback_msg, voice=req.voice or "luna")
         return Response(
             content=fallback_bytes,
             media_type="audio/mpeg",
@@ -2291,8 +2316,8 @@ def read_root():
             <div style="font-size:0.75rem; color:#aaa; text-align:left; font-weight:600;">🎙️ 목소리 음색 & 볼륨:</div>
             <div style="display:flex; gap:8px; align-items:center; width:100%; box-sizing:border-box;">
                 <select id="voiceSelect" onchange="onVoiceDropdownChange(this.value)" style="flex:1; min-width:0; background:#181824; color:#ff9a76; border:1px solid rgba(255,123,84,0.4); border-radius:12px; padding:8px 10px; font-size:0.82rem; font-weight:600; outline:none; cursor:pointer; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">
-                    <option value="roh" selected>✨ 민지 (20대 가늘고 귀여운 여동생/여친 애교톤)</option>
-                    <option value="luna">🌸 루나 (청순하고 맑은 20대 감미로운 톤)</option>
+                    <option value="luna" selected>💖 민지 (스위트 위스퍼 허니: 낮 비서 / 밤 여친 듀얼)</option>
+                    <option value="roh">✨ 노윤서 (20대 시크 & 나긋나긋 육성)</option>
                     <option value="lunita">🎀 루니타 (부드럽고 달콤한 속삭임 톤)</option>
                     <option value="jane">☕ 제인 (단아하고 차분한 엘리트 비서 톤)</option>
                 </select>
@@ -3964,7 +3989,7 @@ def read_root():
                 }
 
                 const voiceSelect = document.getElementById('voiceSelect');
-                const chosenVoice = voiceSelect ? voiceSelect.value : 'roh';
+                const chosenVoice = voiceSelect ? voiceSelect.value : 'luna';
 
                 const response = await fetch('/api/tts', {
                     method: 'POST',
@@ -4253,7 +4278,7 @@ def read_root():
             statusText.innerText = "민지가 생각하고 있어요...";
 
             try {
-                const chosenVoice = voiceSelect ? voiceSelect.value : 'roh';
+                const chosenVoice = voiceSelect ? voiceSelect.value : 'luna';
                 const response = await fetch('/api/voice-chat', {
                     method: 'POST',
                     headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
