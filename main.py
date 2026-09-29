@@ -2052,9 +2052,49 @@ def read_root():
             transform: translateX(-50%) translateY(0);
             opacity: 1;
         }
+
+        /* Face ID 비접촉 즉시 스캔 칩 배너 */
+        .bio-scan-badge {
+            position: fixed;
+            top: 28px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20, 20, 28, 0.90);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 123, 84, 0.5);
+            border-radius: 30px;
+            padding: 9px 20px;
+            color: #fff;
+            font-size: 0.88rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.65);
+            z-index: 99999;
+            animation: fadeInDown 0.35s ease;
+            pointer-events: none;
+            transition: all 0.3s ease;
+        }
+        .bio-scan-badge.success {
+            border-color: #00f2fe;
+            color: #00f2fe;
+            box-shadow: 0 8px 32px rgba(0, 242, 254, 0.45);
+        }
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translate(-50%, -15px); }
+            to { opacity: 1; transform: translate(-50%, 0); }
+        }
     </style>
 </head>
 <body>
+
+    <!-- Face ID 스캔 플로팅 배너 -->
+    <div id="bioScanningBadge" class="bio-scan-badge" style="display:none;">
+        <span id="bioScanIcon" style="font-size:1.1rem;">👤</span>
+        <span id="bioScanText">Face ID 확인 중...</span>
+    </div>
 
     <!-- ===== 완전 종료 (True Shutdown) OLED 블랙 전원 화면 ===== -->
     <div class="shutdown-screen" id="shutdownScreen" style="display:none;">
@@ -2393,6 +2433,24 @@ def read_root():
             return { icon: "👤", name: "Face ID / 생체인식", desc: "스마트폰 생체인증 지원" };
         }
 
+        // Face ID 비접촉 즉시 스캔 칩 배너 제어
+        function showBioScanningBadge(show, text = "Face ID 확인 중...", isSuccess = false) {
+            const badge = document.getElementById('bioScanningBadge');
+            const textEl = document.getElementById('bioScanText');
+            const iconEl = document.getElementById('bioScanIcon');
+            if (!badge) return;
+            if (show) {
+                if (textEl) textEl.innerText = text;
+                if (iconEl) iconEl.innerText = isSuccess ? "✓" : "👤";
+                if (isSuccess) badge.classList.add('success');
+                else badge.classList.remove('success');
+                badge.style.display = 'flex';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+        window.showBioScanningBadge = showBioScanningBadge;
+
         async function initAuthGate() {
             try {
                 const bio = getBiometricInfo();
@@ -2411,17 +2469,32 @@ def read_root():
                     faceIdBtnText.innerText = isFaceIdRegistered ? `아이폰 Face ID로 즉시 해제` : `아이폰 Face ID 등록하고 시작`;
                 }
 
-                // 인증 완료 여부 확인
-                const savedToken = localStorage.getItem(PW_KEY);
-                if (savedToken && savedToken.trim().length > 0) {
+                // [강섭님 핵심 요구사항]: 로그인 화면 없이 시작!
+                // Face ID가 등록되어 있으면 로그인 화면을 전혀 띄우지 않고, 즉시 Face ID 스캔 후 대화 직결
+                if (isFaceIdRegistered) {
                     if (pwGate) {
                         pwGate.classList.add('hidden');
                         pwGate.style.display = 'none';
                     }
+                    setTimeout(() => {
+                        loginWithFaceID();
+                    }, 150);
                 } else {
-                    if (pwGate) {
-                        pwGate.classList.remove('hidden');
-                        pwGate.style.display = 'flex';
+                    const savedToken = localStorage.getItem(PW_KEY);
+                    if (savedToken && savedToken.trim().length > 0) {
+                        if (pwGate) {
+                            pwGate.classList.add('hidden');
+                            pwGate.style.display = 'none';
+                        }
+                        setTimeout(() => {
+                            initMinji();
+                        }, 200);
+                    } else {
+                        // 최초 1회 Face ID 등록 전일 때만 게이트 표시
+                        if (pwGate) {
+                            pwGate.classList.remove('hidden');
+                            pwGate.style.display = 'flex';
+                        }
                     }
                 }
             } catch(e) {
@@ -2656,8 +2729,14 @@ def read_root():
                         pwGate.classList.add('hidden');
                         pwGate.style.display = 'none';
                     }
-                    alert(`✨ ${bio.name} 등록 완료! 이제 생체인식으로 즉시 열립니다.`);
-                    initAuthGate();
+                    showBioScanningBadge(true, `✓ ${bio.name} 등록 완료!`, true);
+                    triggerHaptic([20, 50]);
+
+                    // 대화 시작 버튼 누를 필요 없이 민지가 바로 인사하며 연결
+                    setTimeout(() => {
+                        showBioScanningBadge(false);
+                        initMinji();
+                    }, 350);
                 }
             } catch (err) {
                 console.warn("Face ID 등록 취소/에러:", err);
@@ -2669,6 +2748,8 @@ def read_root():
 
         // 2. Face ID / Windows Hello로 로그인
         async function loginWithFaceID() {
+            const bio = getBiometricInfo();
+            showBioScanningBadge(true, `${bio.name} 확인 중...`);
             try {
                 const challenge = new Uint8Array(32);
                 window.crypto.getRandomValues(challenge);
@@ -2696,10 +2777,34 @@ def read_root():
                         pwGate.style.display = 'none';
                     }
                     if (pwErr) pwErr.innerText = '';
+                    showBioScanningBadge(true, `✓ ${bio.name} 확인 완료!`, true);
+                    triggerHaptic([20, 50]);
+
+                    // 대화 시작 버튼 누를 필요 없이 민지가 바로 인사하며 연결
+                    setTimeout(() => {
+                        showBioScanningBadge(false);
+                        initMinji();
+                    }, 350);
                 }
             } catch (err) {
                 console.warn("Face ID 인증 취소/실패:", err);
-                const bio = getBiometricInfo();
+                if (err.name === 'NotAllowedError') {
+                    // 모바일 브라우저 사용자 제스처 요구 시 화면 터치로 1초 만에 실행
+                    showBioScanningBadge(true, `👆 화면을 가볍게 터치하시면 ${bio.name}로 시작합니다`);
+                    const onceTouch = async () => {
+                        window.removeEventListener('click', onceTouch);
+                        window.removeEventListener('touchstart', onceTouch);
+                        await loginWithFaceID();
+                    };
+                    window.addEventListener('click', onceTouch, { once: true });
+                    window.addEventListener('touchstart', onceTouch, { once: true });
+                    return;
+                }
+                showBioScanningBadge(false);
+                if (pwGate) {
+                    pwGate.classList.remove('hidden');
+                    pwGate.style.display = 'flex';
+                }
                 if (pwErr) {
                     pwErr.innerHTML = `${bio.name} 인증 취소됨. <a href='javascript:registerFaceID()' style='color:#ff9a76; text-decoration:underline;'>재등록</a>하거나 보안 비밀번호로 접속하세요.`;
                 }
@@ -2732,6 +2837,10 @@ def read_root():
                     if (pwInput) pwInput.value = '';
                     if (pwErr) pwErr.innerText = '';
                     setTimeout(() => pwInput && pwInput.blur && pwInput.blur(), 100);
+                    // 대화 시작 버튼 누를 필요 없이 민지가 바로 인사하며 연결
+                    setTimeout(() => {
+                        initMinji();
+                    }, 200);
                 } else {
                     if (pwErr) pwErr.innerText = '비밀번호가 올바르지 않습니다.';
                     if (pwInput) {
@@ -4014,7 +4123,12 @@ def read_root():
         }
 
         // 민지 연결 초기화
+        let isMinjiConnecting = false;
         async function initMinji() {
+            if (streamActive || isMinjiConnecting) return;
+            isMinjiConnecting = true;
+            if (connectGroup) connectGroup.style.display = 'none';
+
             // [iOS Safari 핵심 대응] 사용자의 터치 제스처 스택에서 동기적으로 Audio & AudioContext 잠금 해제(Unlock)
             try {
                 if (!audioContext) {
@@ -4116,6 +4230,8 @@ def read_root():
                 if (activeControls) activeControls.style.display = 'flex';
                 statusText.innerText = "마이크 준비 완료! 화면을 누르거나 말씀해보세요.";
                 startListening();
+            } finally {
+                isMinjiConnecting = false;
             }
         }
 
