@@ -2869,9 +2869,9 @@ def read_root():
     <div class="avatar-wrapper" id="avatarWrapper" onclick="handleVisualClick(event)" title="더블 탭 또는 폰 흔들기: 사진 변경 | 탭: 대화">
         <div class="avatar-ambient-glow" id="avatarGlow"></div>
         <div class="avatar-img-container">
-            <video id="avatarVideo" class="avatar-video" src="/static/gallery/gf_15_living_knit_silhouette.mp4" autoplay loop muted playsinline webkit-playsinline preload="auto" style="display:block;"></video>
-            <img id="avatarImgA" src="/static/gallery/gf_15_knit_silhouette_bust.jpg" alt="Minji AI Avatar A" class="avatar-img avatar-img-active" style="display:none;">
-            <img id="avatarImgB" src="/static/gallery/gf_15_knit_silhouette_bust.jpg" alt="Minji AI Avatar B" class="avatar-img avatar-img-inactive" style="display:none;">
+            <video id="avatarVideo" class="avatar-video" src="/static/gallery/gf_16_living_turtleneck_window.mp4" autoplay loop muted playsinline webkit-playsinline preload="auto" style="display:block;"></video>
+            <img id="avatarImgA" src="/static/gallery/minji_canonical_turtleneck_window.jpg" alt="Minji AI Avatar A" class="avatar-img avatar-img-active" style="display:none;">
+            <img id="avatarImgB" src="/static/gallery/minji_canonical_turtleneck_window.jpg" alt="Minji AI Avatar B" class="avatar-img avatar-img-inactive" style="display:none;">
         </div>
         <div class="avatar-vignette"></div>
         <div class="avatar-living-sheen"></div>
@@ -3083,7 +3083,7 @@ def read_root():
         const avatarImgA = document.getElementById('avatarImgA');
         const avatarImgB = document.getElementById('avatarImgB');
         let activeAvatarSlot = 'A';
-        let currentDisplayedAvatarSrc = "/static/gallery/gf_15_living_knit_silhouette.mp4";
+        let currentDisplayedAvatarSrc = "/static/gallery/gf_16_living_turtleneck_window.mp4";
 
         // 안정적인 듀얼 슬롯 0.4초 크로스페이드 이미지 및 리빙 비디오 전환기
         function setAvatarImageSmooth(newSrc) {
@@ -3648,18 +3648,19 @@ def read_root():
         // 100% 실사 리빙 비디오 전용 갤러리 풀 (스틸 이미지 완전 배제, 청순 & 은근한 실루엣 굴곡 판타지)
         const GALLERY_POOLS = {
             girlfriend: [
+                "/static/gallery/gf_16_living_turtleneck_window.mp4",
                 "/static/gallery/gf_15_living_knit_silhouette.mp4",
+                "/static/gallery/sec_canonical_living_desk.mp4",
                 "/static/gallery/gf_01_living_deep_vneck.mp4",
                 "/static/gallery/gf_02_living_wrap_knit.mp4",
-                "/static/gallery/sec_canonical_living_desk.mp4",
                 "/static/gallery/sec_09_living_silk_unbutton.mp4"
             ],
             secretary: [
+                "/static/gallery/gf_16_living_turtleneck_window.mp4",
                 "/static/gallery/sec_canonical_living_desk.mp4",
                 "/static/gallery/sec_09_living_silk_unbutton.mp4",
                 "/static/gallery/sec_02_living_silk_desk.mp4",
-                "/static/gallery/gf_15_living_knit_silhouette.mp4",
-                "/static/gallery/gf_01_living_deep_vneck.mp4"
+                "/static/gallery/gf_15_living_knit_silhouette.mp4"
             ]
         };
 
@@ -3681,6 +3682,7 @@ def read_root():
         }
 
         const PHOTO_TITLES = {
+            "/static/gallery/gf_16_living_turtleneck_window.mp4": "🎬 창가 햇살 골지 터틀넥 & 은은한 바디 실루엣",
             "/static/gallery/gf_15_living_knit_silhouette.mp4": "🎬 아이보리 파인니트 은은한 실루엣 & 란제리 라인",
             "/static/gallery/gf_01_living_deep_vneck.mp4": "🎬 크림 딥브이넥 밀착 니트 굴곡 리빙 비디오",
             "/static/gallery/gf_02_living_wrap_knit.mp4": "🎬 피치 랩 니트 부드러운 가슴선 실루엣 리빙 비디오",
