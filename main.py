@@ -569,7 +569,12 @@ async def transcribe_audio(audio: UploadFile = File(...), x_minji_auth: Optional
             file=file_obj,
             language="ko"
         )
-        return {"text": transcription.text.strip()}
+        raw_text = transcription.text.strip()
+        for bad in ["이덕영", "MBC 뉴스", "MBC뉴스", "시청해 주셔서", "구독과 좋아요", "뉴스데스크", "기자였습니다"]:
+            if bad in raw_text:
+                print(f"[Whisper Hallucination Suppressed]: '{raw_text}'")
+                return {"text": ""}
+        return {"text": raw_text}
     except Exception as e:
         print(f"[Whisper Transcribe Error]: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -589,7 +594,12 @@ async def transcribe_base64(req: TranscribeBase64Request, x_minji_auth: Optional
             file=file_obj,
             language="ko"
         )
-        return {"text": transcription.text.strip()}
+        raw_text = transcription.text.strip()
+        for bad in ["이덕영", "MBC 뉴스", "MBC뉴스", "시청해 주셔서", "구독과 좋아요", "뉴스데스크", "기자였습니다"]:
+            if bad in raw_text:
+                print(f"[Whisper Base64 Hallucination Suppressed]: '{raw_text}'")
+                return {"text": ""}
+        return {"text": raw_text}
     except Exception as e:
         print(f"[Whisper Base64 Error]: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1111,6 +1121,15 @@ async def chat_endpoint(req: ChatRequest, x_minji_auth: Optional[str] = Header(N
     if mem_key not in session_memories:
         session_memories[mem_key] = []
     history = session_memories[mem_key]
+
+    u_clean = (req.user_text or "").strip()
+    for bad in ["이덕영", "MBC 뉴스", "MBC뉴스", "시청해 주셔서", "구독과 좋아요", "뉴스데스크"]:
+        if bad in u_clean:
+            return {
+                "reply": "응 오빠, 듣고 있어~ 무슨 생각 하고 있어?",
+                "session_id": session_id,
+                "history_count": len(session_memories.get(mem_key, []))
+            }
 
     try:
         reply_text = generate_chat_reply(history, req.user_text, mode=effective_mode)
