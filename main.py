@@ -47,7 +47,9 @@ gemini_client = genai.Client(api_key=gemini_key) if gemini_key else None
 openai_client = OpenAI(api_key=openai_key) if openai_key else None
 anthropic_client = anthropic.Anthropic(api_key=anthropic_key) if anthropic_key else None
 
-elevenlabs_key = os.getenv("ELEVENLABS_API_KEY", "")
+# ElevenLabs 키가 만료(401)되어 매 턴마다 3~4초 대기 지연이 발생하므로 기본 비활성화.
+# 유효한 새 키 등록 시 /api/setup-elevenlabs 를 통해 동적 활성화됨.
+elevenlabs_key = None
 elevenlabs_voice_id = os.getenv("ELEVENLABS_VOICE_ID", "PyETHgpGKCClcvneEjgw")
 
 import urllib.request
@@ -478,6 +480,7 @@ ELEVEN_VOICE_MAP = {
 
 def generate_tts_bytes(text: str, voice: str = "luna") -> bytes:
     """ElevenLabs 초저지연 음성 생성기 (스위트 위스퍼 허니: 침실 밀착 위스퍼 & 심야 상무실 듀얼 보이스)"""
+    global elevenlabs_key
     cleaned_text = normalize_speech_text(text)
     day = is_daytime()
 
@@ -526,6 +529,10 @@ def generate_tts_bytes(text: str, voice: str = "luna") -> bytes:
                         return audio_data
             except Exception as el_err:
                 print(f"[ElevenLabs {model_to_try} Error]: {el_err}")
+                if "401" in str(el_err) or "Unauthorized" in str(el_err):
+                    elevenlabs_key = None
+                    print("[ElevenLabs Disabled]: API key is invalid/unauthorized. Permanently using ultra-fast OpenAI Nova TTS.")
+                    break
 
     # 2. OpenAI 백업 폴백 (비상시)
     if openai_client:
@@ -3417,7 +3424,7 @@ def read_root():
             }
         }
 
-        // [iOS/모바일 핵심] 앱 백그라운드 전환 시 마이크 및 STT 즉시 해제 (아이폰 Voice Control/주황색 점 아이콘 즉시 소멸)
+        // [iOS/모바일 핵심] 앱 백그라운드 전환 시 마이크 일시정지 및 복귀 시 즉시 재개
         function pauseMicrophoneAndSTT() {
             try {
                 if (recognition) {
@@ -3432,10 +3439,8 @@ def read_root():
             try {
                 if (activeMediaStream) {
                     activeMediaStream.getTracks().forEach(track => {
-                        track.stop();
                         track.enabled = false;
                     });
-                    activeMediaStream = null;
                 }
             } catch(e){}
 
@@ -3461,18 +3466,11 @@ def read_root():
                 if (audioContext && audioContext.state === 'suspended') {
                     await audioContext.resume().catch(()=>{});
                 }
-                let stream = null;
-                try {
-                    stream = await navigator.mediaDevices.getUserMedia({
-                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+                // 기존 스트림 트랙 즉시 활성화
+                if (activeMediaStream) {
+                    activeMediaStream.getTracks().forEach(track => {
+                        track.enabled = true;
                     });
-                } catch(e1) {
-                    try {
-                        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    } catch(e2){}
-                }
-                if (stream) {
-                    setupAudioAnalyser(stream);
                 }
                 if (!isSpeaking && !isProcessing) {
                     startListening();
@@ -3482,15 +3480,37 @@ def read_root():
             }
         }
 
+        // 터치 제스처 시 마이크 스트림 활성 상태 자동 검증 및 복구 (iOS WebKit 특화)
+        async function ensureMicGesture() {
+            if (!streamActive || isMicMuted) return;
+            if (audioContext && audioContext.state === 'suspended') {
+                audioContext.resume().catch(()=>{});
+            }
+            const needsNewStream = !activeMediaStream || activeMediaStream.getTracks().some(t => t.readyState === 'ended');
+            if (needsNewStream) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+                    }).catch(() => navigator.mediaDevices.getUserMedia({ audio: true }).catch(()=>null));
+                    if (stream) {
+                        setupAudioAnalyser(stream);
+                        if (!isSpeaking && !isProcessing) {
+                            startListening();
+                        }
+                    }
+                } catch(e){}
+            }
+        }
+        window.addEventListener('touchstart', ensureMicGesture, { passive: true });
+        window.addEventListener('click', ensureMicGesture, { passive: true });
+
         // 탭을 닫거나 다른 앱으로 전환 시 백그라운드 리소스 자동 해제
         window.addEventListener('pagehide', cleanupAllMediaAndTimers);
         window.addEventListener('beforeunload', cleanupAllMediaAndTimers);
         document.addEventListener('visibilitychange', async () => {
             if (document.visibilityState === 'hidden') {
-                // 아이폰 홈 화면 나가기, 다른 앱 전환, 화면 잠금 시 마이크 하드웨어 즉시 100% 차단
                 pauseMicrophoneAndSTT();
             } else if (document.visibilityState === 'visible') {
-                // 앱 복귀 시 대화 상태였다면 마이크 자연스럽게 재개
                 if (streamActive && !isMicMuted && !isSpeaking && !isProcessing) {
                     await resumeMicrophoneAndSTT();
                 }
@@ -5182,7 +5202,7 @@ def read_root():
                         if (targetInterim.length <= 1) {
                             return;
                         }
-                        // 중간 텍스트 자동 확정 대기 시간을 1.2초 -> 1.8초로 늘려, 사용자가 말하다가 잠시 숨을 고르거나 생각할 때 민지가 성급하게 말을 끊지 않도록 배려
+                        // 중간 텍스트 자동 확정 대기 시간을 0.85초로 최적화 (말 끝난 직후 0.85초 만에 신속하게 발화 전송)
                         if (interimSpeechTimeout) clearTimeout(interimSpeechTimeout);
                         interimSpeechTimeout = setTimeout(async () => {
                             if (interimText.trim() && !hasSpeechTranscribed && !isSpeaking && !isProcessing) {
@@ -5195,7 +5215,7 @@ def read_root():
                                 try { recognition.stop(); } catch(e){}
                                 await sendToMinji(interimText.trim());
                             }
-                        }, 1800);
+                        }, 850);
                     }
                 };
 
