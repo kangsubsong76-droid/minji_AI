@@ -3771,17 +3771,24 @@ def read_root():
         const GALLERY_POOLS = {
             girlfriend: [
                 "/static/gallery/gf_16_living_turtleneck_window.mp4",
+                "/static/gallery/minji_living_01_shower_shirt.mp4",
+                "/static/gallery/minji_living_02_sofa_sunlight.mp4",
+                "/static/gallery/gf_15_living_knit_silhouette.mp4",
+                "/static/gallery/minji_living_03_park_bench.mp4",
+                "/static/gallery/minji_living_05_fitting_hoodie.mp4",
+                "/static/gallery/gf_01_living_deep_vneck.mp4",
+                "/static/gallery/minji_living_06_rain_shelter.mp4",
+                "/static/gallery/minji_living_07_rain_window.mp4",
+                "/static/gallery/gf_02_living_wrap_knit.mp4",
+                "/static/gallery/minji_living_09_chin_lift.mp4",
+                "/static/gallery/sec_09_living_silk_unbutton.mp4",
                 "/static/gallery/minji_scenario_01_shower_shirt.jpg",
                 "/static/gallery/minji_scenario_02_sofa_sunlight.jpg",
-                "/static/gallery/gf_15_living_knit_silhouette.mp4",
                 "/static/gallery/minji_scenario_03_park_bench.jpg",
                 "/static/gallery/minji_scenario_05_fitting_hoodie.jpg",
-                "/static/gallery/gf_01_living_deep_vneck.mp4",
                 "/static/gallery/minji_scenario_06_rain_shelter.jpg",
                 "/static/gallery/minji_scenario_07_rain_window.jpg",
-                "/static/gallery/gf_02_living_wrap_knit.mp4",
-                "/static/gallery/minji_scenario_09_chin_lift.jpg",
-                "/static/gallery/sec_09_living_silk_unbutton.mp4"
+                "/static/gallery/minji_scenario_09_chin_lift.jpg"
             ],
             secretary: [
                 "/static/gallery/sec_09_living_silk_unbutton.mp4",
@@ -3810,18 +3817,25 @@ def read_root():
 
         const PHOTO_TITLES = {
             "/static/gallery/gf_16_living_turtleneck_window.mp4": "🎬 창가 햇살 골지 터틀넥 & 은은한 바디 실루엣",
+            "/static/gallery/minji_living_01_shower_shirt.mp4": "🎬 샤워 후 창가 화이트 셔츠 10초 리빙 비디오",
+            "/static/gallery/minji_living_02_sofa_sunlight.mp4": "🎬 일요일 나른한 오후 역광 소파 10초 리빙 비디오",
+            "/static/gallery/gf_15_living_knit_silhouette.mp4": "🎬 아이보리 파인니트 은은한 실루엣 & 란제리 라인",
+            "/static/gallery/minji_living_03_park_bench.mp4": "🎬 가을 외곽 공원 벤치 초밀착 10초 리빙 비디오",
+            "/static/gallery/minji_living_05_fitting_hoodie.mp4": "🎬 비좁은 피팅룸 오버핏 후디 10초 리빙 비디오",
+            "/static/gallery/gf_01_living_deep_vneck.mp4": "🎬 크림 딥브이넥 밀착 니트 굴곡 리빙 비디오",
+            "/static/gallery/minji_living_06_rain_shelter.mp4": "🎬 비 오는 골목 상자 아래 10초 리빙 비디오",
+            "/static/gallery/minji_living_07_rain_window.mp4": "🎬 비 내리는 밤 창가 에메랄드 슬립 10초 리빙 비디오",
+            "/static/gallery/gf_02_living_wrap_knit.mp4": "🎬 피치 랩 니트 부드러운 가슴선 실루엣 리빙 비디오",
+            "/static/gallery/minji_living_09_chin_lift.mp4": "🎬 턱을 살짝 들어올린 초밀착 10초 리빙 비디오",
+            "/static/gallery/sec_09_living_silk_unbutton.mp4": "🎬 심야 상무실 샴페인 실크 셔츠 언버튼 리빙 비디오",
+            "/static/gallery/sec_02_living_silk_desk.mp4": "🎬 샴페인 실크 데스크 밀착 리빙 비디오",
             "/static/gallery/minji_scenario_01_shower_shirt.jpg": "📸 샤워 후 밤 창가 오버사이즈 화이트 셔츠",
             "/static/gallery/minji_scenario_02_sofa_sunlight.jpg": "📸 나른한 일요일 오후 역광 햇살 소파",
-            "/static/gallery/gf_15_living_knit_silhouette.mp4": "🎬 아이보리 파인니트 은은한 실루엣 & 란제리 라인",
             "/static/gallery/minji_scenario_03_park_bench.jpg": "📸 가을 외곽 공원 벤치 초밀착 데이트",
             "/static/gallery/minji_scenario_05_fitting_hoodie.jpg": "📸 비좁은 피팅룸 오버핏 블랙 후디 & 마스크",
-            "/static/gallery/gf_01_living_deep_vneck.mp4": "🎬 크림 딥브이넥 밀착 니트 굴곡 리빙 비디오",
             "/static/gallery/minji_scenario_06_rain_shelter.jpg": "📸 비 오는 골목 상자 아래 댕댕이 눈망울",
             "/static/gallery/minji_scenario_07_rain_window.jpg": "📸 비 내리는 밤 창가 에메랄드 실크 슬립",
-            "/static/gallery/gf_02_living_wrap_knit.mp4": "🎬 피치 랩 니트 부드러운 가슴선 실루엣 리빙 비디오",
-            "/static/gallery/minji_scenario_09_chin_lift.jpg": "📸 턱을 살짝 들어올린 초밀착 아이컨택",
-            "/static/gallery/sec_09_living_silk_unbutton.mp4": "🎬 심야 상무실 샴페인 실크 셔츠 언버튼 리빙 비디오",
-            "/static/gallery/sec_02_living_silk_desk.mp4": "🎬 샴페인 실크 데스크 밀착 리빙 비디오"
+            "/static/gallery/minji_scenario_09_chin_lift.jpg": "📸 턱을 살짝 들어올린 초밀착 아이컨택"
         };
 
         // 폰을 두드리거나 버튼/화면 탭 시 다음 사진으로 전환
