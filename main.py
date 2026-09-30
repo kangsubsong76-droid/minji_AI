@@ -3639,6 +3639,9 @@ def read_root():
         const GALLERY_POOLS = {
             girlfriend: [
                 "/static/gallery/gf_minji_living_breathing.mp4",
+                "/static/gallery/sec_canonical_living_desk.mp4",
+                "/static/gallery/minji_canonical_face_knit.jpg",
+                "/static/gallery/minji_canonical_face_desk.jpg",
                 "/static/gallery/gf_01_living_deep_vneck.mp4",
                 "/static/gallery/gf_02_living_wrap_knit.mp4",
                 "/static/gallery/gf_09_pov_bed_slip.jpg",
@@ -3657,8 +3660,10 @@ def read_root():
                 "/static/avatar/idle_5.jpg"
             ],
             secretary: [
+                "/static/gallery/sec_canonical_living_desk.mp4",
                 "/static/gallery/sec_minji_living_breathing.mp4",
                 "/static/gallery/sec_02_living_silk_desk.mp4",
+                "/static/gallery/minji_canonical_face_desk.jpg",
                 "/static/gallery/sec_09_pov_night_desk.jpg",
                 "/static/gallery/sec_11_pov_peeking_office.jpg",
                 "/static/gallery/sec_01_champagne_silk_open_glam.jpg",
@@ -3693,6 +3698,9 @@ def read_root():
         }
 
         const PHOTO_TITLES = {
+            "/static/gallery/sec_canonical_living_desk.mp4": "🎬 청순 민지 데스크 화이트셔츠 리빙 비디오 (Canonical Office Desk)",
+            "/static/gallery/minji_canonical_face_desk.jpg": "✨ 청순 민지 오피스 데스크 오리지널",
+            "/static/gallery/minji_canonical_face_knit.jpg": "🌸 청순 민지 창가 아이보리 니트 오리지널",
             "/static/gallery/gf_minji_living_breathing.mp4": "🎬 심야 침실 실크 슬립 리빙 비디오 (Living Night Bedroom)",
             "/static/gallery/gf_01_living_deep_vneck.mp4": "🎬 크림 딥 브이넥 하이앵글 바운스 (Living Deep V-Neck)",
             "/static/gallery/gf_02_living_wrap_knit.mp4": "🎬 피치 랩 니트 앞섬 호흡 (Living Wrap Knit)",
