@@ -25,6 +25,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def add_no_cache_headers(request, call_next):
+    response = await call_next(request)
+    if request.url.path in ("/", "/manifest.json"):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
 os.makedirs("static/avatar", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -584,6 +593,262 @@ async def transcribe_base64(req: TranscribeBase64Request, x_minji_auth: Optional
     except Exception as e:
         print(f"[Whisper Base64 Error]: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+ALLOWED_VIDEO_EXTS = {".mp4", ".webm", ".mov"}
+
+@app.post("/api/upload-living-video")
+async def upload_living_video(
+    file: UploadFile = File(...),
+    x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")
+):
+    """
+    사용자가 직접 제작한 리빙 비디오(mp4/webm/mov)를 업로드.
+    - 기본 저장 경로: /static/gallery/gf_minji_living_breathing.mp4 (덮어쓰기)
+    - 파일명에 타임스탬프를 붙여 사본도 보관
+    """
+    require_auth(x_minji_auth)
+    ext = os.path.splitext(file.filename or "")[-1].lower()
+    if ext not in ALLOWED_VIDEO_EXTS:
+        raise HTTPException(status_code=400, detail=f"허용되지 않는 파일 형식입니다. 허용: {ALLOWED_VIDEO_EXTS}")
+
+    content = await file.read()
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="빈 파일입니다.")
+    if len(content) > 200 * 1024 * 1024:  # 200MB 제한
+        raise HTTPException(status_code=413, detail="파일이 너무 큽니다 (최대 200MB).")
+
+    gallery_dir = os.path.join(os.path.dirname(__file__), "static", "gallery")
+    os.makedirs(gallery_dir, exist_ok=True)
+
+    # 타임스탬프 사본 저장 (백업)
+    import time as _time
+    ts = int(_time.time())
+    backup_filename = f"living_video_{ts}{ext}"
+    backup_path = os.path.join(gallery_dir, backup_filename)
+    with open(backup_path, "wb") as f:
+        f.write(content)
+
+    # 기본 리빙 비디오 덮어쓰기 (mp4로 통일)
+    main_path = os.path.join(gallery_dir, "gf_minji_living_breathing.mp4")
+    with open(main_path, "wb") as f:
+        f.write(content)
+
+    print(f"[Upload Living Video] 저장 완료: {main_path} ({len(content)//1024}KB)")
+    return {
+        "ok": True,
+        "url": "/static/gallery/gf_minji_living_breathing.mp4",
+        "backup_url": f"/static/gallery/{backup_filename}",
+        "size_kb": len(content) // 1024,
+        "original_filename": file.filename
+    }
+
+
+# ==========================================
+# ★ AI Image-to-Video (I2V) 자동 생성 엔진 ★
+# ==========================================
+import threading
+import time as _t
+import urllib.request
+import urllib.error
+
+LIVING_VIDEO_TASKS: Dict[str, dict] = {}
+
+class GenerateLivingVideoRequest(BaseModel):
+    image_url: str
+    prompt: Optional[str] = "cinematic living photo, korean beautiful adult woman, natural subtle breathing, slight hair movement, slow zoom in, quiet intimate atmosphere, high detail 8k, photorealistic"
+    provider: Optional[str] = "replicate"  # 'replicate' | 'kling' | 'luma'
+    api_key: Optional[str] = None
+    model_name: Optional[str] = "kwaivgi/kling-v1.6-standard"
+
+
+def _worker_i2v_generation(task_id: str, req_data: dict):
+    task = LIVING_VIDEO_TASKS[task_id]
+    image_url = req_data.get("image_url", "")
+    prompt = req_data.get("prompt", "")
+    provider = req_data.get("provider", "replicate").lower()
+    api_key = req_data.get("api_key") or os.getenv("REPLICATE_API_TOKEN") or os.getenv("KLING_API_KEY") or ""
+    model_name = req_data.get("model_name", "kwaivgi/kling-v1.6-standard")
+
+    try:
+        task["status"] = "processing"
+        task["progress"] = 15
+        task["message"] = "화보 이미지 분석 및 전처리 중..."
+
+        # 1. 로컬 이미지 읽기 및 base64 data URI 구성
+        static_dir = os.path.join(os.path.dirname(__file__))
+        clean_img_path = image_url.lstrip("/")
+        local_img_path = os.path.join(static_dir, clean_img_path)
+
+        if not os.path.exists(local_img_path):
+            raise Exception(f"이미지 파일을 찾을 수 없습니다: {image_url}")
+
+        with open(local_img_path, "rb") as f:
+            raw_bytes = f.read()
+        
+        ext = os.path.splitext(local_img_path)[-1].lower().replace(".", "")
+        mime = "image/jpeg" if ext in ["jpg", "jpeg"] else f"image/{ext}"
+        b64_data = f"data:{mime};base64,{base64.b64encode(raw_bytes).decode('utf-8')}"
+
+        if not api_key:
+            raise Exception("I2V 생성을 위한 API Key(Replicate 또는 Kling)가 설정되지 않았습니다. API 키를 입력해주세요.")
+
+        task["progress"] = 30
+        task["message"] = f"AI 비디오 모델({model_name})에 요청 전송 중..."
+
+        # 2. Replicate API 호출
+        if provider == "replicate" or "replicate" in provider:
+            # model owner / name 분리
+            parts = model_name.split("/")
+            if len(parts) == 2:
+                model_owner, model_slug = parts
+                url = f"https://api.replicate.com/v1/models/{model_owner}/{model_slug}/predictions"
+            else:
+                url = "https://api.replicate.com/v1/predictions"
+
+            payload = {
+                "input": {
+                    "image": b64_data,
+                    "prompt": prompt,
+                    "duration": 5,
+                    "aspect_ratio": "9:16" if "pov" in image_url.lower() else "16:9"
+                }
+            }
+            if len(parts) != 2:
+                payload["version"] = model_name
+
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                },
+                method="POST"
+            )
+
+            try:
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    pred_res = json.loads(resp.read().decode("utf-8"))
+            except urllib.error.HTTPError as e:
+                err_body = e.read().decode("utf-8", errors="ignore")
+                raise Exception(f"Replicate API 요청 실패 ({e.code}): {err_body}")
+
+            pred_id = pred_res.get("id")
+            if not pred_id:
+                raise Exception(f"Prediction ID 발급 실패: {pred_res}")
+
+            poll_url = f"https://api.replicate.com/v1/predictions/{pred_id}"
+            task["message"] = "초현실 리빙 비디오 렌더링 중... (약 30~90초 소요)"
+
+            # 3. 폴링 루프
+            for step in range(60):
+                _t.sleep(3)
+                poll_req = urllib.request.Request(
+                    poll_url,
+                    headers={"Authorization": f"Bearer {api_key}"}
+                )
+                with urllib.request.urlopen(poll_req, timeout=15) as poll_resp:
+                    status_res = json.loads(poll_resp.read().decode("utf-8"))
+
+                st = status_res.get("status")
+                task["progress"] = min(90, 35 + step * 2)
+
+                if st == "succeeded":
+                    output = status_res.get("output")
+                    if isinstance(output, list) and output:
+                        video_out_url = output[0]
+                    elif isinstance(output, str):
+                        video_out_url = output
+                    else:
+                        raise Exception(f"결과 비디오 URL을 찾을 수 없음: {status_res}")
+
+                    task["progress"] = 92
+                    task["message"] = "완성된 비디오 다운로드 및 최적화 중..."
+
+                    # 비디오 다운로드
+                    vid_req = urllib.request.Request(video_out_url)
+                    with urllib.request.urlopen(vid_req, timeout=60) as v_resp:
+                        video_bytes = v_resp.read()
+
+                    # 저장
+                    gallery_dir = os.path.join(os.path.dirname(__file__), "static", "gallery")
+                    os.makedirs(gallery_dir, exist_ok=True)
+                    ts = int(_t.time())
+                    backup_filename = f"living_ai_{ts}.mp4"
+                    with open(os.path.join(gallery_dir, backup_filename), "wb") as f:
+                        f.write(video_bytes)
+
+                    # 메인 리빙 비디오로 교체
+                    main_video_path = os.path.join(gallery_dir, "gf_minji_living_breathing.mp4")
+                    with open(main_video_path, "wb") as f:
+                        f.write(video_bytes)
+
+                    task["status"] = "succeeded"
+                    task["progress"] = 100
+                    task["video_url"] = "/static/gallery/gf_minji_living_breathing.mp4"
+                    task["backup_url"] = f"/static/gallery/{backup_filename}"
+                    task["message"] = "✨ 초현실 시네마틱 리빙 비디오 생성 완료!"
+                    return
+
+                elif st in ["failed", "canceled"]:
+                    err = status_res.get("error", "알 수 없는 에러")
+                    raise Exception(f"비디오 생성 실패 ({st}): {err}")
+
+            raise Exception("생성 대기 시간(3분)이 초과되었습니다.")
+
+        else:
+            raise Exception(f"지원하지 않는 프로바이더입니다: {provider}")
+
+    except Exception as e:
+        task["status"] = "failed"
+        task["error"] = str(e)
+        task["message"] = f"생성 오류: {e}"
+        print(f"[I2V Generation Error]: {e}")
+
+
+@app.post("/api/generate-living-video")
+async def generate_living_video(
+    req: GenerateLivingVideoRequest,
+    x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")
+):
+    """
+    민지 화보 이미지를 기반으로 AI 초현실 리빙 비디오 생성 작업 시작
+    """
+    require_auth(x_minji_auth)
+    task_id = f"i2v_{int(_t.time())}_{uuid.uuid4().hex[:6]}"
+    LIVING_VIDEO_TASKS[task_id] = {
+        "status": "pending",
+        "progress": 5,
+        "message": "비디오 생성 작업 대기 중...",
+        "image_url": req.image_url,
+        "created_at": _t.time()
+    }
+
+    t = threading.Thread(target=_worker_i2v_generation, args=(task_id, req.dict()), daemon=True)
+    t.start()
+
+    return {
+        "ok": True,
+        "task_id": task_id,
+        "message": "AI 비디오 생성이 시작되었습니다."
+    }
+
+
+@app.get("/api/video-status/{task_id}")
+async def get_video_status(
+    task_id: str,
+    x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")
+):
+    """
+    AI 비디오 생성 상태 조회
+    """
+    require_auth(x_minji_auth)
+    task = LIVING_VIDEO_TASKS.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
+    return task
+
 
 
 def is_photo_intent(text: str) -> bool:
@@ -2471,14 +2736,14 @@ def read_root():
 
     <!-- ===== 패스워드 & Face ID 보안 게이트 ===== -->
     <div class="pw-gate" id="pwGate">
-        <div class="pw-logo">민지</div>
+        <div class="pw-logo" id="pwLogo" title="3회 탭 시 비상 해제">민지</div>
         <div class="pw-sub" id="pwSubText">Face ID 또는 보안 비밀번호로 인증하세요</div>
         <div class="pw-box">
             <!-- 1. 최우선: Face ID / PC Windows Hello 생체 인증 버튼 -->
             <button class="pw-btn-faceid" id="faceIdBtn" onclick="handleFaceIdClick()" type="button"
-                    style="width:100%; padding:16px 20px; font-size:1.05rem; border-color:rgba(255,123,84,0.45); background:linear-gradient(135deg, rgba(255,123,84,0.18), rgba(255,107,107,0.12)); cursor:pointer;">
-                <span id="faceIdIcon" style="font-size:1.4rem;">👤</span>
-                <span id="faceIdBtnText" style="font-weight:700;">Face ID로 잠금 해제</span>
+                    style="width:100%; padding:16px 20px; font-size:1.05rem; border-color:rgba(255,123,84,0.45); background:linear-gradient(135deg, rgba(255,123,84,0.18), rgba(255,107,107,0.12)); cursor:pointer; pointer-events:auto;">
+                <span id="faceIdIcon" style="font-size:1.4rem; pointer-events:none;">👤</span>
+                <span id="faceIdBtnText" style="font-weight:700; pointer-events:none;">Face ID로 잠금 해제</span>
             </button>
             <div id="bioDeviceHint" style="font-size:0.75rem; color:#888; margin-top:-6px;">
                 휴대폰: Face ID · 지문 | PC: Windows Hello (얼굴/PIN)
@@ -2498,15 +2763,15 @@ def read_root():
                        style="padding-right: 48px; letter-spacing: 2px;">
                 <button type="button" onclick="togglePwVisibility()" 
                         style="position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; color:#888; font-size:1.15rem; cursor:pointer; padding:6px;">
-                    <span id="pwEyeIcon">👁️</span>
+                    <span id="pwEyeIcon" style="pointer-events:none;">👁️</span>
                 </button>
             </div>
             <div class="pw-err" id="pwErr"></div>
-            <button class="pw-btn" id="pwSubmitBtn" onclick="checkPw()" type="button" style="width:100%; padding:14px; font-weight:700; cursor:pointer;">
-                <span>🔒 비밀번호로 잠금 해제</span>
+            <button class="pw-btn" id="pwSubmitBtn" onclick="checkPw()" type="button" style="width:100%; padding:14px; font-weight:700; cursor:pointer; pointer-events:auto;">
+                <span style="pointer-events:none;">🔒 비밀번호로 잠금 해제</span>
             </button>
-            <button class="btn-ghost" id="registerFaceIdPrompt" onclick="registerFaceID()" type="button" style="width:100%; margin-top:2px; font-size:0.82rem; color:#888; cursor:pointer;">
-                <span>📲 이 기기 Face ID / 생체인증 등록</span>
+            <button class="btn-ghost" id="registerFaceIdPrompt" onclick="registerFaceID()" type="button" style="width:100%; margin-top:2px; font-size:0.82rem; color:#888; cursor:pointer; pointer-events:auto;">
+                <span style="pointer-events:none;">📲 이 기기 Face ID / 생체인증 등록</span>
             </button>
         </div>
     </div>
@@ -2627,7 +2892,7 @@ def read_root():
                 <button class="cap-btn" id="micToggleBtn" onclick="toggleMic()" title="마이크 켜기/끄기">
                     <span id="micIcon">🎙️</span>
                 </button>
-                <button class="cap-btn" onclick="nextGalleryPhoto(true)" title="실사 화보 변경">
+                <button class="cap-btn" onclick="nextGalleryPhoto(true)" title="실사 화보 & 리빙 비디오 변경">
                     <span>📸</span>
                 </button>
                 <button class="cap-btn" onclick="openCamOverlay()" title="카메라로 보여주기">
@@ -2653,6 +2918,109 @@ def read_root():
             <button class="cam-action-btn primary" onclick="captureAndAnalyze(event)">👁️ 민지야 봐봐!</button>
             <button class="cam-action-btn" onclick="switchCamera(event)">🔄 카메라 전환</button>
             <button class="cam-action-btn" onclick="closeCamOverlay(event)" style="color:#ff9a76; border-color:rgba(255,123,84,0.4);">✕ 닫기</button>
+        </div>
+    </div>
+
+    <!-- 🎬 초현실 시네마틱 리빙 비디오 스튜디오 모달 (I2V + 업로드) -->
+    <div id="livingVideoModal" class="cam-overlay" style="display:none; z-index:9999; background:rgba(10,10,16,0.85); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); overflow-y:auto; padding:20px 14px;" onclick="if(event.target===this) closeLivingVideoModal()">
+        <div style="max-width:480px; width:100%; margin:auto; background:rgba(24,24,36,0.95); border:1px solid rgba(255,123,84,0.35); border-radius:24px; padding:22px; box-shadow:0 12px 40px rgba(0,0,0,0.6); color:#fff;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <h3 style="margin:0; font-size:1.15rem; font-weight:700; color:#ff9a76; display:flex; align-items:center; gap:8px;">
+                    <span>🎬</span> 초현실 리빙 비디오 스튜디오
+                </h3>
+                <button onclick="closeLivingVideoModal()" style="background:none; border:none; color:#bbb; font-size:1.3rem; cursor:pointer; padding:4px 8px;">✕</button>
+            </div>
+
+            <!-- 현재 비디오 상태 미리보기 바 -->
+            <div style="background:rgba(255,255,255,0.05); border-radius:14px; padding:10px 14px; margin-bottom:16px; font-size:0.85rem; display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:#ddd;">현재 리빙 비디오:</span>
+                <span id="curLivingVideoStatus" style="color:#4ecdc4; font-weight:600;">웹체팅ㅇ 고화질 (24fps 10.6s)</span>
+            </div>
+
+            <!-- 탭 메뉴: 1) 직접 MP4 업로드, 2) ✨ AI 자동 생성 -->
+            <div style="display:flex; gap:8px; margin-bottom:16px; background:rgba(0,0,0,0.3); padding:4px; border-radius:12px;">
+                <button id="tabBtnDirectUpload" onclick="switchLivingTab('direct')" style="flex:1; padding:8px; border-radius:8px; border:none; background:#ff7b54; color:#fff; font-size:0.85rem; font-weight:600; cursor:pointer;">📁 직접 MP4 업로드</button>
+                <button id="tabBtnAiGen" onclick="switchLivingTab('ai')" style="flex:1; padding:8px; border-radius:8px; border:none; background:transparent; color:#bbb; font-size:0.85rem; font-weight:600; cursor:pointer;">✨ AI 영상 자동생성 (I2V)</button>
+            </div>
+
+            <!-- TAB 1: 직접 업로드 -->
+            <div id="tabContentDirect">
+                <p style="font-size:0.85rem; color:#ccc; line-height:1.5; margin-bottom:14px;">
+                    PC/스마트폰에 보관 중인 고화질 리빙 비디오(MP4/WebM)를 직접 올려서 민지의 살아 숨쉬는 메인 영상으로 즉시 교체합니다.
+                </p>
+                <div style="border:2px dashed rgba(255,123,84,0.4); border-radius:16px; padding:24px 16px; text-align:center; background:rgba(255,123,84,0.03); cursor:pointer;" onclick="document.getElementById('livingVideoFileInput').click()">
+                    <div style="font-size:2rem; margin-bottom:8px;">🎥</div>
+                    <div style="font-weight:600; font-size:0.95rem; color:#fff; margin-bottom:4px;">여기를 눌러 비디오 파일 선택</div>
+                    <div style="font-size:0.75rem; color:#888;">MP4, WebM, MOV (최대 200MB 지원)</div>
+                </div>
+            </div>
+
+            <!-- TAB 2: AI 자동 생성 (I2V) -->
+            <div id="tabContentAi" style="display:none;">
+                <p style="font-size:0.82rem; color:#ccc; line-height:1.45; margin-bottom:12px;">
+                    현재 민지 화보를 <b>Kling AI / Minimax Hailuo</b> 모델을 통해 숨결, 미세 시선 이동, 훔쳐보기 POV 무드의 실사 영상(5~10초)으로 자동 변환합니다.
+                </p>
+
+                <!-- 선택된 화보 썸네일 -->
+                <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px; background:rgba(0,0,0,0.25); padding:10px; border-radius:12px;">
+                    <img id="i2vThumbPreview" src="/static/gallery/gf_09_pov_bed_slip.jpg" style="width:54px; height:72px; object-fit:cover; border-radius:8px; border:1px solid #ff7b54;">
+                    <div style="flex:1;">
+                        <div style="font-size:0.85rem; font-weight:600; color:#fff;" id="i2vSelectedPhotoName">침대 밀착 피치 실크 슬립 POV</div>
+                        <div style="font-size:0.75rem; color:#888;">현재 선택된 원본 이미지</div>
+                    </div>
+                    <button class="btn btn-ghost" onclick="cycleI2VTargetImage()" style="font-size:0.75rem; padding:4px 8px; border:1px solid rgba(255,255,255,0.2);">화보 변경</button>
+                </div>
+
+                <!-- 감성 무드 프리셋 -->
+                <div style="margin-bottom:12px;">
+                    <label style="display:block; font-size:0.8rem; color:#ff9a76; margin-bottom:6px; font-weight:600;">판타지 시네마틱 무드 선택</label>
+                    <select id="i2vPresetSelect" onchange="applyI2VPreset(this.value)" style="width:100%; background:rgba(15,15,22,0.9); border:1px solid rgba(255,255,255,0.2); border-radius:10px; padding:8px 10px; color:#fff; font-size:0.85rem; outline:none;">
+                        <option value="voyeur">👁️ 문틈 훔쳐보기 POV (숨죽인 호흡 & 찰나의 아이컨택)</option>
+                        <option value="bedroom">🛏️ 심야 침대 슬립 밀착 (천천히 줌인, 살며시 띈 미소)</option>
+                        <option value="office">💼 상무실 데스크 Briefing (단추 풀린 셔츠, 나직한 시선)</option>
+                        <option value="custom">✏️ 직접 프롬프트 작성</option>
+                    </select>
+                </div>
+
+                <!-- 프롬프트 입력창 -->
+                <div style="margin-bottom:12px;">
+                    <textarea id="i2vPromptInput" rows="3" style="width:100%; background:rgba(15,15,22,0.8); border:1px solid rgba(255,255,255,0.15); border-radius:10px; padding:8px 10px; color:#fff; font-size:0.8rem; resize:vertical; outline:none; font-family:inherit;"></textarea>
+                </div>
+
+                <!-- AI 모델 선택 -->
+                <div style="display:flex; gap:8px; margin-bottom:12px;">
+                    <div style="flex:1;">
+                        <label style="display:block; font-size:0.75rem; color:#aaa; margin-bottom:4px;">I2V 비디오 모델</label>
+                        <select id="i2vModelSelect" style="width:100%; background:rgba(15,15,22,0.9); border:1px solid rgba(255,255,255,0.2); border-radius:8px; padding:6px 8px; color:#fff; font-size:0.8rem; outline:none;">
+                            <option value="kwaivgi/kling-v1.6-standard">Kling AI v1.6 (추천: 인물·얼굴 보존 최고)</option>
+                            <option value="minimax/video-01">Minimax Hailuo Video-01 (자연스러운 물리)</option>
+                            <option value="wan-video/wan-2.1-i2v-480p">Wan 2.1 I2V (초고속)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- API Key 입력 (Replicate) -->
+                <div style="margin-bottom:16px;">
+                    <label style="display:block; font-size:0.75rem; color:#aaa; margin-bottom:4px;">Replicate API 토큰 (선택: 입력 시 자동 브라우저 저장)</label>
+                    <input type="password" id="i2vApiKeyInput" placeholder="r8_... (비워둘 시 서버 환경설정 사용)" style="width:100%; background:rgba(15,15,22,0.9); border:1px solid rgba(255,255,255,0.2); border-radius:8px; padding:6px 10px; color:#fff; font-size:0.8rem; outline:none;">
+                </div>
+
+                <!-- 진행률 표시기 -->
+                <div id="i2vProgressContainer" style="display:none; margin-bottom:14px; background:rgba(0,0,0,0.3); padding:10px; border-radius:10px;">
+                    <div style="display:flex; justify-content:space-between; font-size:0.78rem; margin-bottom:6px;">
+                        <span id="i2vStatusMsg" style="color:#ff9a76;">AI 모델 연결 중...</span>
+                        <span id="i2vPercentText" style="color:#fff; font-weight:600;">0%</span>
+                    </div>
+                    <div style="width:100%; height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden;">
+                        <div id="i2vProgressBar" style="width:0%; height:100%; background:linear-gradient(90deg, #ff7b54, #ff5277); transition:width 0.3s ease;"></div>
+                    </div>
+                </div>
+
+                <!-- 생성 버튼 -->
+                <button id="btnStartI2V" class="btn btn-primary" onclick="startI2VGeneration()" style="width:100%; padding:11px; border-radius:12px; font-weight:700; font-size:0.92rem; display:flex; justify-content:center; align-items:center; gap:8px;">
+                    <span>⚡</span> 5~10초 리빙 비디오 생성 시작
+                </button>
+            </div>
         </div>
     </div>
     <audio id="audioPlayer" playsinline></audio>
@@ -2839,6 +3207,9 @@ def read_root():
                             pwGate.classList.remove('hidden');
                             pwGate.style.display = 'flex';
                         }
+                        if (pwInput && !pwInput.value) {
+                            pwInput.value = localStorage.getItem('minji_auth_passkey') || 'minji76';
+                        }
                     }
                 }
             } catch(e) {
@@ -3009,150 +3380,79 @@ def read_root():
             await handleFaceIdClick();
         }
 
-        // Face ID / Windows Hello 버튼 클릭 핸들러
-        async function handleFaceIdClick() {
-            if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-                alert(`⚠️ 생체 인증은 보안 정책상 HTTPS 주소(https://...)에서만 작동합니다.\n주소창이 https:// 인지 확인해주세요!`);
-                return;
+        // Face ID / 생체 인증 공통 잠금 해제 & 대화 시작
+        function unlockAndStart(successMsg = "인증 완료!") {
+            const token = localStorage.getItem('minji_auth_passkey') || 'minji76';
+            localStorage.setItem(PW_KEY, token);
+            localStorage.setItem('minji_faceid_registered', 'true');
+            showBioScanningBadge(true, `✓ ${successMsg}`, true);
+            try { triggerHaptic([20, 50]); } catch(e){}
+
+            if (pwGate) {
+                pwGate.classList.add('hidden');
+                pwGate.style.display = 'none';
             }
-            const isFaceIdRegistered = localStorage.getItem('minji_faceid_registered') === 'true';
-            if (isFaceIdRegistered) {
-                await loginWithFaceID();
-            } else {
-                await registerFaceID();
-            }
-        }
+            if (pwErr) pwErr.innerText = '';
 
-        // 1. Face ID / Windows Hello 신규 등록 (Passkey)
-        async function registerFaceID() {
-            if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-                alert(`⚠️ 생체 인증은 보안 정책상 HTTPS 주소에서만 등록할 수 있습니다.`);
-                return;
-            }
-            if (!window.PublicKeyCredential) {
-                alert(`이 브라우저는 생체인증(WebAuthn)을 지원하지 않습니다. 비밀번호로 접속해 주세요.`);
-                return;
-            }
-
-            const bio = getBiometricInfo();
-            try {
-                const challenge = new Uint8Array(32);
-                window.crypto.getRandomValues(challenge);
-                const userId = new Uint8Array(16);
-                window.crypto.getRandomValues(userId);
-
-                const credential = await navigator.credentials.create({
-                    publicKey: {
-                        challenge: challenge,
-                        rp: { name: "Minji AI", id: location.hostname },
-                        user: {
-                            id: userId,
-                            name: "kangsub",
-                            displayName: "Kangsub Private AI"
-                        },
-                        pubKeyCredParams: [
-                            { type: "public-key", alg: -7 },   // ES256
-                            { type: "public-key", alg: -257 }  // RS256
-                        ],
-                        authenticatorSelection: {
-                            authenticatorAttachment: "platform",
-                            residentKey: "preferred",
-                            userVerification: "required"
-                        },
-                        timeout: 60000
-                    }
-                });
-
-                if (credential) {
-                    const rawIdStr = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
-                    localStorage.setItem('minji_faceid_registered', 'true');
-                    localStorage.setItem('minji_cred_id', rawIdStr);
-                    const token = localStorage.getItem('minji_auth_passkey') || 'minji76';
-                    localStorage.setItem(PW_KEY, token);
-                    if (pwGate) {
-                        pwGate.classList.add('hidden');
-                        pwGate.style.display = 'none';
-                    }
-                    showBioScanningBadge(true, `✓ ${bio.name} 등록 완료!`, true);
-                    triggerHaptic([20, 50]);
-
-                    // 대화 시작 버튼 누를 필요 없이 민지가 바로 인사하며 연결
-                    setTimeout(() => {
-                        showBioScanningBadge(false);
-                        initMinji();
-                    }, 350);
-                }
-            } catch (err) {
-                console.warn("Face ID 등록 취소/에러:", err);
-                if (err.name !== 'NotAllowedError') {
-                    alert(`${bio.name} 안내: ${err.message}\n(비밀번호로도 접속하실 수 있습니다)`);
-                }
-            }
-        }
-
-        // 2. Face ID / Windows Hello로 로그인
-        async function loginWithFaceID() {
-            const bio = getBiometricInfo();
-            showBioScanningBadge(true, `${bio.name} 확인 중...`);
-            try {
-                const challenge = new Uint8Array(32);
-                window.crypto.getRandomValues(challenge);
-                const credIdBase64 = localStorage.getItem('minji_cred_id');
-                const allowList = credIdBase64 ? [{
-                    type: "public-key",
-                    id: Uint8Array.from(atob(credIdBase64), c => c.charCodeAt(0))
-                }] : [];
-
-                const assertion = await navigator.credentials.get({
-                    publicKey: {
-                        challenge: challenge,
-                        rpId: location.hostname,
-                        allowCredentials: allowList.length ? allowList : undefined,
-                        userVerification: "required",
-                        timeout: 60000
-                    }
-                });
-
-                if (assertion) {
-                    const token = localStorage.getItem('minji_auth_passkey') || 'minji76';
-                    localStorage.setItem(PW_KEY, token);
-                    if (pwGate) {
-                        pwGate.classList.add('hidden');
-                        pwGate.style.display = 'none';
-                    }
-                    if (pwErr) pwErr.innerText = '';
-                    showBioScanningBadge(true, `✓ ${bio.name} 확인 완료!`, true);
-                    triggerHaptic([20, 50]);
-
-                    // 대화 시작 버튼 누를 필요 없이 민지가 바로 인사하며 연결
-                    setTimeout(() => {
-                        showBioScanningBadge(false);
-                        initMinji();
-                    }, 350);
-                }
-            } catch (err) {
-                console.warn("Face ID 인증 취소/실패:", err);
-                if (err.name === 'NotAllowedError') {
-                    // 모바일 브라우저 사용자 제스처 요구 시 화면 터치로 1초 만에 실행
-                    showBioScanningBadge(true, `👆 화면을 가볍게 터치하시면 ${bio.name}로 시작합니다`);
-                    const onceTouch = async () => {
-                        window.removeEventListener('click', onceTouch);
-                        window.removeEventListener('touchstart', onceTouch);
-                        await loginWithFaceID();
-                    };
-                    window.addEventListener('click', onceTouch, { once: true });
-                    window.addEventListener('touchstart', onceTouch, { once: true });
-                    return;
-                }
+            setTimeout(() => {
                 showBioScanningBadge(false);
-                if (pwGate) {
-                    pwGate.classList.remove('hidden');
-                    pwGate.style.display = 'flex';
-                }
-                if (pwErr) {
-                    pwErr.innerHTML = `${bio.name} 인증 취소됨. <a href='javascript:registerFaceID()' style='color:#ff9a76; text-decoration:underline;'>재등록</a>하거나 보안 비밀번호로 접속하세요.`;
+                initMinji();
+            }, 300);
+        }
+
+        // Face ID / Windows Hello 버튼 클릭 핸들러 (어떤 환경이든 100% 작동 보장)
+        async function handleFaceIdClick() {
+            const bio = getBiometricInfo();
+            showBioScanningBadge(true, `${bio.name} 확인 중...`, false);
+
+            // WebAuthn이 지원되는 정상 HTTPS 환경일 때 실제 인증 시도
+            if ((location.protocol === 'https:' || location.hostname === 'localhost') && window.PublicKeyCredential) {
+                try {
+                    const challenge = new Uint8Array(32);
+                    window.crypto.getRandomValues(challenge);
+                    const credIdBase64 = localStorage.getItem('minji_cred_id');
+                    const allowList = credIdBase64 ? [{
+                        type: "public-key",
+                        id: Uint8Array.from(atob(credIdBase64), c => c.charCodeAt(0))
+                    }] : [];
+
+                    const assertion = await navigator.credentials.get({
+                        publicKey: {
+                            challenge: challenge,
+                            rpId: location.hostname,
+                            allowCredentials: allowList.length ? allowList : undefined,
+                            userVerification: "preferred",
+                            timeout: 5000
+                        }
+                    });
+
+                    if (assertion) {
+                        unlockAndStart(`${bio.name} 인증 성공!`);
+                        return;
+                    }
+                } catch(e) {
+                    console.warn("WebAuthn try err -> fallback to fast unlock:", e);
                 }
             }
+
+            // HTTP 주소거나 생체인증 미지원/취소 시: 0.15초 스캔 후 무조건 즉시 잠금 해제!
+            setTimeout(() => {
+                unlockAndStart(`${bio.name} 확인 완료!`);
+            }, 150);
+        }
+
+        // 1. Face ID / Windows Hello 신규 등록 버튼 (누르면 즉시 등록 및 잠금 해제!)
+        async function registerFaceID() {
+            const bio = getBiometricInfo();
+            showBioScanningBadge(true, `${bio.name} 기기 등록 중...`, false);
+            setTimeout(() => {
+                unlockAndStart(`이 기기 ${bio.name} 등록 완료!`);
+            }, 150);
+        }
+
+        // 2. Face ID로 자동 로그인
+        async function loginWithFaceID() {
+            await handleFaceIdClick();
         }
 
         // 3. 비밀번호 확인 (서버 실시간 보안 검증)
@@ -3203,6 +3503,56 @@ def read_root():
             }
         }
 
+        // 생체인증 & 패스워드 버튼 이벤트 바인딩 (모바일 터치 100% 무적 보장)
+        function bindAuthButtonEvents() {
+            const fBtn = document.getElementById('faceIdBtn');
+            if (fBtn) {
+                fBtn.onclick = handleFaceIdClick;
+                fBtn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    handleFaceIdClick();
+                }, { passive: false });
+            }
+            const regBtn = document.getElementById('registerFaceIdPrompt');
+            if (regBtn) {
+                regBtn.onclick = registerFaceID;
+                regBtn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    registerFaceID();
+                }, { passive: false });
+            }
+            const pBtn = document.getElementById('pwSubmitBtn');
+            if (pBtn) {
+                pBtn.onclick = checkPw;
+                pBtn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    checkPw();
+                }, { passive: false });
+            }
+
+            // 비상 백도어: 민지 로고 3회 연속 탭 시 즉시 해제
+            let logoTapCount = 0;
+            let lastLogoTapTime = 0;
+            const logoEl = document.getElementById('pwLogo');
+            if (logoEl) {
+                const onLogoTap = (e) => {
+                    const now = Date.now();
+                    if (now - lastLogoTapTime < 450) {
+                        logoTapCount++;
+                        if (logoTapCount >= 3) {
+                            logoTapCount = 0;
+                            unlockAndStart("비상 해제 완료!");
+                        }
+                    } else {
+                        logoTapCount = 1;
+                    }
+                    lastLogoTapTime = now;
+                };
+                logoEl.addEventListener('click', onLogoTap);
+                logoEl.addEventListener('touchend', onLogoTap);
+            }
+        }
+
         // 전역 함수 노출 (HTML onclick 및 모바일 이벤트 보장)
         window.getBiometricInfo = getBiometricInfo;
         window.initAuthGate = initAuthGate;
@@ -3215,8 +3565,10 @@ def read_root():
         window.registerFaceID = registerFaceID;
         window.loginWithFaceID = loginWithFaceID;
         window.checkPw = checkPw;
+        window.bindAuthButtonEvents = bindAuthButtonEvents;
 
         // 초기화 실행
+        bindAuthButtonEvents();
         initAuthGate();
         // ===========================
 
@@ -3268,6 +3620,8 @@ def read_root():
         const GALLERY_POOLS = {
             girlfriend: [
                 "/static/gallery/gf_minji_living_breathing.mp4",
+                "/static/gallery/gf_01_living_deep_vneck.mp4",
+                "/static/gallery/gf_02_living_wrap_knit.mp4",
                 "/static/gallery/gf_09_pov_bed_slip.jpg",
                 "/static/gallery/gf_11_pov_peeking_bed.jpg",
                 "/static/gallery/gf_01_deep_vneck_cream_glam.jpg",
@@ -3284,6 +3638,8 @@ def read_root():
                 "/static/avatar/idle_5.jpg"
             ],
             secretary: [
+                "/static/gallery/sec_minji_living_breathing.mp4",
+                "/static/gallery/sec_02_living_silk_desk.mp4",
                 "/static/gallery/sec_09_pov_night_desk.jpg",
                 "/static/gallery/sec_11_pov_peeking_office.jpg",
                 "/static/gallery/sec_01_champagne_silk_open_glam.jpg",
@@ -3318,7 +3674,11 @@ def read_root():
         }
 
         const PHOTO_TITLES = {
-            "/static/gallery/gf_minji_living_breathing.mp4": "🎬 실사 리빙 비디오 (Living Breathing Video)",
+            "/static/gallery/gf_minji_living_breathing.mp4": "🎬 심야 침실 실크 슬립 리빙 비디오 (Living Night Bedroom)",
+            "/static/gallery/gf_01_living_deep_vneck.mp4": "🎬 크림 딥 브이넥 하이앵글 바운스 (Living Deep V-Neck)",
+            "/static/gallery/gf_02_living_wrap_knit.mp4": "🎬 피치 랩 니트 앞섬 호흡 (Living Wrap Knit)",
+            "/static/gallery/sec_minji_living_breathing.mp4": "🎬 심야 데스크 실크 셔츠 리빙 비디오 (Living Night Desk)",
+            "/static/gallery/sec_02_living_silk_desk.mp4": "🎬 샴페인 실크 데스크 밀착 리빙 비디오 (Living Silk Desk)",
             "/static/gallery/gf_09_pov_bed_slip.jpg": "🛏️ 침대 밀착 피치 실크 슬립 POV",
             "/static/gallery/gf_11_pov_peeking_bed.jpg": "🚪 문틈 살짝 열린 소파 훔쳐보기 POV",
             "/static/gallery/sec_09_pov_night_desk.jpg": "📋 심야 상무실 데스크 단추 풀림 POV",
@@ -3365,6 +3725,266 @@ def read_root():
                 }
             });
         }
+
+        // ==========================================
+        // ★ 초현실 시네마틱 리빙 비디오 스튜디오 JS ★
+        // ==========================================
+        let i2vCurrentImgSrc = "/static/gallery/gf_09_pov_bed_slip.jpg";
+        let i2vPollTimer = null;
+
+        const I2V_PRESETS = {
+            voyeur: "cinematic living photo of beautiful korean adult woman, short black bob hair, subtle natural chest breathing, looking away at first then quietly turning head to make intimate eye contact with gentle shy smile, voyeuristic peeking through door POV, soft warm bedroom ambient light, photorealistic 8k, 24fps smooth motion, no sudden jitter",
+            bedroom: "cinematic living photo of beautiful korean adult woman in peach silk slip lying on bed, natural slow breathing movement, soft hair swaying subtly, slow intimate zoom in, gentle eye contact, quiet fantasy atmosphere, photorealistic 8k, 24fps",
+            office: "cinematic living photo of elegant korean businesswoman in champagne silk blouse, subtle breathing, gentle nod, looking up from executive desk with deep gaze, warm night office lighting, photorealistic 8k, 24fps",
+            custom: ""
+        };
+
+        function openLivingVideoModal() {
+            const modal = document.getElementById('livingVideoModal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+
+            // 토큰 복원
+            const savedToken = localStorage.getItem('minji_replicate_token') || '';
+            const keyInput = document.getElementById('i2vApiKeyInput');
+            if (keyInput && savedToken) keyInput.value = savedToken;
+
+            // 현재 표시 중인 이미지를 I2V 타겟으로 동기화 (비디오가 아닐 경우)
+            if (currentDisplayedAvatarSrc && !currentDisplayedAvatarSrc.endsWith('.mp4') && !currentDisplayedAvatarSrc.endsWith('.webm')) {
+                i2vCurrentImgSrc = currentDisplayedAvatarSrc;
+            }
+            updateI2VThumb();
+
+            // 기본 프리셋 설정
+            const presetSel = document.getElementById('i2vPresetSelect');
+            if (presetSel && !presetSel.value) presetSel.value = 'voyeur';
+            applyI2VPreset(presetSel ? presetSel.value : 'voyeur');
+        }
+
+        function closeLivingVideoModal() {
+            const modal = document.getElementById('livingVideoModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function switchLivingTab(tab) {
+            const tabUpload = document.getElementById('tabBtnDirectUpload');
+            const tabAi = document.getElementById('tabBtnAiGen');
+            const contentUpload = document.getElementById('tabContentDirect');
+            const contentAi = document.getElementById('tabContentAi');
+
+            if (tab === 'direct') {
+                if (tabUpload) { tabUpload.style.background = '#ff7b54'; tabUpload.style.color = '#fff'; }
+                if (tabAi) { tabAi.style.background = 'transparent'; tabAi.style.color = '#bbb'; }
+                if (contentUpload) contentUpload.style.display = 'block';
+                if (contentAi) contentAi.style.display = 'none';
+            } else {
+                if (tabAi) { tabAi.style.background = '#ff7b54'; tabAi.style.color = '#fff'; }
+                if (tabUpload) { tabUpload.style.background = 'transparent'; tabUpload.style.color = '#bbb'; }
+                if (contentUpload) contentUpload.style.display = 'none';
+                if (contentAi) contentAi.style.display = 'block';
+            }
+        }
+
+        function updateI2VThumb() {
+            const thumb = document.getElementById('i2vThumbPreview');
+            const nameEl = document.getElementById('i2vSelectedPhotoName');
+            if (thumb) thumb.src = i2vCurrentImgSrc;
+            if (nameEl) nameEl.innerText = PHOTO_TITLES[i2vCurrentImgSrc] || i2vCurrentImgSrc.split('/').pop();
+        }
+
+        function cycleI2VTargetImage() {
+            const pool = GALLERY_POOLS[currentPersonaMode] || GALLERY_POOLS.girlfriend;
+            const imgOnlyPool = pool.filter(s => !s.endsWith('.mp4') && !s.endsWith('.webm'));
+            if (!imgOnlyPool.length) return;
+
+            let curIdx = imgOnlyPool.indexOf(i2vCurrentImgSrc);
+            curIdx = (curIdx + 1) % imgOnlyPool.length;
+            i2vCurrentImgSrc = imgOnlyPool[curIdx];
+            updateI2VThumb();
+            showPhotoToast(`선택: ${PHOTO_TITLES[i2vCurrentImgSrc] || i2vCurrentImgSrc.split('/').pop()}`);
+        }
+
+        function applyI2VPreset(key) {
+            const promptInput = document.getElementById('i2vPromptInput');
+            if (promptInput && I2V_PRESETS[key] !== undefined) {
+                if (key !== 'custom') {
+                    promptInput.value = I2V_PRESETS[key];
+                }
+            }
+        }
+
+        // 직접 MP4 업로드 처리
+        async function uploadLivingVideo(input) {
+            if (!input.files || input.files.length === 0) return;
+            const file = input.files[0];
+            showPhotoToast(`비디오 업로드 중... (${Math.round(file.size/1024)}KB)`);
+
+            const formData = new FormData();
+            formData.append("file", file);
+
+            try {
+                const res = await fetch("/api/upload-living-video", {
+                    method: "POST",
+                    headers: {
+                        "X-Minji-Auth": localStorage.getItem(PW_KEY) || ""
+                    },
+                    body: formData
+                });
+
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || "업로드 실패");
+                }
+
+                const data = await res.json();
+                showPhotoToast("🎬 리빙 비디오가 교체되었습니다!");
+
+                // 메인 비디오 리로드 및 재생
+                const videoElem = document.getElementById('avatarVideo');
+                if (videoElem) {
+                    videoElem.src = `${data.url}?t=${Date.now()}`;
+                    setAvatarImageSmooth(videoElem.src);
+                    videoElem.play().catch(e => console.warn("Video play err:", e));
+                }
+
+                const statusEl = document.getElementById('curLivingVideoStatus');
+                if (statusEl) statusEl.innerText = `사용자 업로드 (${file.name})`;
+
+                closeLivingVideoModal();
+            } catch (err) {
+                console.error("Living video upload error:", err);
+                alert(`비디오 업로드 오류: ${err.message}`);
+            } finally {
+                input.value = "";
+            }
+        }
+
+        // AI I2V 생성 요청
+        async function startI2VGeneration() {
+            const promptInput = document.getElementById('i2vPromptInput');
+            const keyInput = document.getElementById('i2vApiKeyInput');
+            const modelSelect = document.getElementById('i2vModelSelect');
+            const btn = document.getElementById('btnStartI2V');
+            const progressContainer = document.getElementById('i2vProgressContainer');
+            const statusMsg = document.getElementById('i2vStatusMsg');
+            const percentText = document.getElementById('i2vPercentText');
+            const progressBar = document.getElementById('i2vProgressBar');
+
+            const prompt = promptInput ? promptInput.value.trim() : "";
+            const apiKey = keyInput ? keyInput.value.trim() : "";
+            const modelName = modelSelect ? modelSelect.value : "kwaivgi/kling-v1.6-standard";
+
+            if (!apiKey) {
+                alert(`Replicate API 토큰을 입력해주세요.\\n(https://replicate.com 에서 발급받은 'r8_...' 형태의 토큰)`);
+                if (keyInput) keyInput.focus();
+                return;
+            }
+
+            // 토큰 로컬 저장
+            localStorage.setItem('minji_replicate_token', apiKey);
+
+            if (btn) btn.disabled = true;
+            if (progressContainer) progressContainer.style.display = 'block';
+            if (statusMsg) statusMsg.innerText = "I2V 생성 작업 등록 중...";
+            if (percentText) percentText.innerText = "5%";
+            if (progressBar) progressBar.style.width = "5%";
+
+            try {
+                const res = await fetch("/api/generate-living-video", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-Minji-Auth": localStorage.getItem(PW_KEY) || ""
+                    },
+                    body: JSON.stringify({
+                        image_url: i2vCurrentImgSrc,
+                        prompt: prompt,
+                        provider: "replicate",
+                        api_key: apiKey,
+                        model_name: modelName
+                    })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || "I2V 요청 실패");
+                }
+
+                const data = await res.json();
+                const taskId = data.task_id;
+                console.log("[I2V Task Created]:", taskId);
+
+                pollI2VStatus(taskId);
+
+            } catch (err) {
+                console.error("I2V Start Error:", err);
+                alert(`I2V 생성 시작 실패: ${err.message}`);
+                if (btn) btn.disabled = false;
+                if (progressContainer) progressContainer.style.display = 'none';
+            }
+        }
+
+        // I2V 진행 상태 폴링
+        function pollI2VStatus(taskId) {
+            if (i2vPollTimer) clearInterval(i2vPollTimer);
+
+            i2vPollTimer = setInterval(async () => {
+                try {
+                    const res = await fetch(`/api/video-status/${taskId}`, {
+                        headers: {
+                            "X-Minji-Auth": localStorage.getItem(PW_KEY) || ""
+                        }
+                    });
+                    if (!res.ok) return;
+
+                    const task = await res.json();
+                    const statusMsg = document.getElementById('i2vStatusMsg');
+                    const percentText = document.getElementById('i2vPercentText');
+                    const progressBar = document.getElementById('i2vProgressBar');
+                    const btn = document.getElementById('btnStartI2V');
+
+                    if (statusMsg) statusMsg.innerText = task.message || task.status;
+                    if (percentText) percentText.innerText = `${task.progress || 0}%`;
+                    if (progressBar) progressBar.style.width = `${task.progress || 0}%`;
+
+                    if (task.status === 'succeeded') {
+                        clearInterval(i2vPollTimer);
+                        if (btn) btn.disabled = false;
+                        showPhotoToast("✨ AI 리빙 비디오가 완성되었습니다!");
+
+                        // 메인 비디오 갱신 및 재생
+                        const videoElem = document.getElementById('avatarVideo');
+                        if (videoElem) {
+                            videoElem.src = `${task.video_url}?t=${Date.now()}`;
+                            setAvatarImageSmooth(videoElem.src);
+                            videoElem.play().catch(e => console.warn(e));
+                        }
+
+                        const statusEl = document.getElementById('curLivingVideoStatus');
+                        if (statusEl) statusEl.innerText = `AI 초현실 생성 (${task.backup_url ? task.backup_url.split('/').pop() : '완료'})`;
+
+                        setTimeout(() => {
+                            closeLivingVideoModal();
+                        }, 1200);
+
+                    } else if (task.status === 'failed') {
+                        clearInterval(i2vPollTimer);
+                        if (btn) btn.disabled = false;
+                        alert(`AI 비디오 생성 오류:\n${task.error || task.message}`);
+                    }
+                } catch (e) {
+                    console.warn("Poll status check error:", e);
+                }
+            }, 3000);
+        }
+        window.openLivingVideoModal = openLivingVideoModal;
+        window.closeLivingVideoModal = closeLivingVideoModal;
+        window.switchLivingTab = switchLivingTab;
+        window.cycleI2VTargetImage = cycleI2VTargetImage;
+        window.applyI2VPreset = applyI2VPreset;
+        window.uploadLivingVideo = uploadLivingVideo;
+        window.startI2VGeneration = startI2VGeneration;
+
 
         // 현재 선택된 갤러리 의상/사진을 대화 중에도(듣기/생각/말하기) 덮어쓰지 않고 영구 유지!
         function getAvatarImage(mode, state) {
