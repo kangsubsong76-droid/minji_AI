@@ -3661,6 +3661,7 @@ def read_root():
             ],
             secretary: [
                 "/static/gallery/sec_canonical_living_desk.mp4",
+                "/static/gallery/sec_09_living_silk_unbutton.mp4",
                 "/static/gallery/sec_minji_living_breathing.mp4",
                 "/static/gallery/sec_02_living_silk_desk.mp4",
                 "/static/gallery/minji_canonical_face_desk.jpg",
@@ -3699,6 +3700,7 @@ def read_root():
 
         const PHOTO_TITLES = {
             "/static/gallery/sec_canonical_living_desk.mp4": "🎬 청순 민지 데스크 화이트셔츠 리빙 비디오 (Canonical Office Desk)",
+            "/static/gallery/sec_09_living_silk_unbutton.mp4": "🎬 심야 상무실 샴페인 실크 셔츠 언버튼 리빙 비디오 (Living Silk Unbutton)",
             "/static/gallery/minji_canonical_face_desk.jpg": "✨ 청순 민지 오피스 데스크 오리지널",
             "/static/gallery/minji_canonical_face_knit.jpg": "🌸 청순 민지 창가 아이보리 니트 오리지널",
             "/static/gallery/gf_minji_living_breathing.mp4": "🎬 심야 침실 실크 슬립 리빙 비디오 (Living Night Bedroom)",
