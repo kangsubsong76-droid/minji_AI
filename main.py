@@ -1575,6 +1575,11 @@ def read_root():
             filter: brightness(0.98) contrast(1.02);
             z-index: 2;
             pointer-events: none;
+            contain: strict;
+            transform: translateZ(0);
+            -webkit-transform: translateZ(0);
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
         }
 
         .avatar-img {
@@ -2864,7 +2869,7 @@ def read_root():
     <div class="avatar-wrapper" id="avatarWrapper" onclick="handleVisualClick(event)" title="더블 탭 또는 폰 흔들기: 사진 변경 | 탭: 대화">
         <div class="avatar-ambient-glow" id="avatarGlow"></div>
         <div class="avatar-img-container">
-            <video id="avatarVideo" class="avatar-video" src="/static/gallery/gf_15_living_knit_silhouette.mp4" autoplay loop muted playsinline style="display:block;"></video>
+            <video id="avatarVideo" class="avatar-video" src="/static/gallery/gf_15_living_knit_silhouette.mp4" autoplay loop muted playsinline webkit-playsinline preload="auto" style="display:block;"></video>
             <img id="avatarImgA" src="/static/gallery/gf_15_knit_silhouette_bust.jpg" alt="Minji AI Avatar A" class="avatar-img avatar-img-active" style="display:none;">
             <img id="avatarImgB" src="/static/gallery/gf_15_knit_silhouette_bust.jpg" alt="Minji AI Avatar B" class="avatar-img avatar-img-inactive" style="display:none;">
         </div>
@@ -3087,6 +3092,11 @@ def read_root():
 
             if (newSrc.endsWith('.mp4') || newSrc.endsWith('.webm')) {
                 if (videoElem) {
+                    try {
+                        videoElem.pause();
+                        videoElem.removeAttribute('src');
+                        videoElem.load();
+                    } catch (e) {}
                     videoElem.src = newSrc;
                     videoElem.style.display = 'block';
                     videoElem.play().catch(e => console.log('Video play err:', e));
