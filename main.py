@@ -3639,7 +3639,10 @@ def read_root():
         const GALLERY_POOLS = {
             girlfriend: [
                 "/static/gallery/gf_minji_living_breathing.mp4",
+                "/static/gallery/gf_15_living_knit_silhouette.mp4",
                 "/static/gallery/sec_canonical_living_desk.mp4",
+                "/static/gallery/gf_15_knit_silhouette_bust.jpg",
+                "/static/gallery/gf_14_knit_silhouette_full.jpg",
                 "/static/gallery/minji_canonical_face_knit.jpg",
                 "/static/gallery/minji_canonical_face_desk.jpg",
                 "/static/gallery/gf_01_living_deep_vneck.mp4",
@@ -3699,6 +3702,9 @@ def read_root():
         }
 
         const PHOTO_TITLES = {
+            "/static/gallery/gf_15_living_knit_silhouette.mp4": "🎬 아이보리 파인니트 은은한 실루엣 리빙 비디오 (Living Fine-Knit Silhouette)",
+            "/static/gallery/gf_15_knit_silhouette_bust.jpg": "🤍 아이보리 파인니트 은은한 실루엣 (상반신)",
+            "/static/gallery/gf_14_knit_silhouette_full.jpg": "🤍 아이보리 터틀넥 니트 & 스커트 실루엣 (전신)",
             "/static/gallery/sec_canonical_living_desk.mp4": "🎬 청순 민지 데스크 화이트셔츠 리빙 비디오 (Canonical Office Desk)",
             "/static/gallery/sec_09_living_silk_unbutton.mp4": "🎬 심야 상무실 샴페인 실크 셔츠 언버튼 리빙 비디오 (Living Silk Unbutton)",
             "/static/gallery/minji_canonical_face_desk.jpg": "✨ 청순 민지 오피스 데스크 오리지널",
