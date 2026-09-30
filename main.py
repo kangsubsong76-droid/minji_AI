@@ -3688,13 +3688,6 @@ def read_root():
             "/static/gallery/sec_09_living_silk_unbutton.mp4": "🎬 심야 상무실 샴페인 실크 셔츠 언버튼 리빙 비디오",
             "/static/gallery/sec_02_living_silk_desk.mp4": "🎬 샴페인 실크 데스크 밀착 리빙 비디오"
         };
-            "/static/gallery/gf_03_sweetheart_pink_sofa.jpg": "🛋️ 핑크 스위트하트 소파",
-            "/static/gallery/gf_04_vneck_ribbed_classic.jpg": "🤍 화이트 골지 브이넥",
-            "/static/gallery/gf_05_offshoulder_lavender_cafe.jpg": "☕ 오프숄더 라벤더 니트",
-            "/static/gallery/gf_06_bedroom_slip.jpg": "🌙 침실 실크 슬립",
-            "/static/gallery/gf_07_sofa_knit.jpg": "🛋️ 소파 니트",
-            "/static/gallery/gf_08_wine_evening.jpg": "🍷 이브닝 와인 드레스"
-        };
 
         // 폰을 두드리거나 버튼/화면 탭 시 다음 사진으로 전환
         function nextGalleryPhoto(manual = false) {
