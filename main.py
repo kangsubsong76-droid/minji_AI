@@ -3635,50 +3635,21 @@ def read_root():
             }
         };
 
-        // 갤러리 이미지 풀 (여친 모드 & 비서 모드 - 강섭님 전용 동일 인물 POV & 몰래 훔쳐보기 판타지 화보)
+        // 100% 실사 리빙 비디오 전용 갤러리 풀 (스틸 이미지 완전 배제, 청순 & 은근한 실루엣 굴곡 판타지)
         const GALLERY_POOLS = {
             girlfriend: [
                 "/static/gallery/gf_15_living_knit_silhouette.mp4",
-                "/static/gallery/sec_canonical_living_desk.mp4",
-                "/static/gallery/gf_15_knit_silhouette_bust.jpg",
-                "/static/gallery/gf_14_knit_silhouette_full.jpg",
-                "/static/gallery/minji_canonical_face_knit.jpg",
-                "/static/gallery/minji_canonical_face_desk.jpg",
                 "/static/gallery/gf_01_living_deep_vneck.mp4",
                 "/static/gallery/gf_02_living_wrap_knit.mp4",
-                "/static/gallery/gf_11_pov_peeking_bed.jpg",
-                "/static/gallery/gf_01_deep_vneck_cream_glam.jpg",
-                "/static/gallery/gf_02_wrap_knit_peach_glam.jpg",
-                "/static/gallery/gf_03_sweetheart_pink_sofa.jpg",
-                "/static/gallery/gf_04_vneck_ribbed_classic.jpg",
-                "/static/gallery/gf_05_offshoulder_lavender_cafe.jpg",
-                "/static/gallery/gf_06_bedroom_slip.jpg",
-                "/static/gallery/gf_07_sofa_knit.jpg",
-                "/static/gallery/gf_08_wine_evening.jpg",
-                "/static/avatar/idle.jpg",
-                "/static/avatar/idle_2.jpg",
-                "/static/avatar/idle_4.jpg",
-                "/static/avatar/idle_5.jpg"
+                "/static/gallery/sec_canonical_living_desk.mp4",
+                "/static/gallery/sec_09_living_silk_unbutton.mp4"
             ],
             secretary: [
                 "/static/gallery/sec_canonical_living_desk.mp4",
                 "/static/gallery/sec_09_living_silk_unbutton.mp4",
-                "/static/gallery/sec_minji_living_breathing.mp4",
                 "/static/gallery/sec_02_living_silk_desk.mp4",
-                "/static/gallery/minji_canonical_face_desk.jpg",
-                "/static/gallery/sec_09_pov_night_desk.jpg",
-                "/static/gallery/sec_11_pov_peeking_office.jpg",
-                "/static/gallery/sec_01_champagne_silk_open_glam.jpg",
-                "/static/gallery/sec_02_silk_desk_lean_glam.jpg",
-                "/static/gallery/sec_03_silk_folder_briefing.jpg",
-                "/static/gallery/sec_04_charcoal_blazer_lace_tablet.jpg",
-                "/static/gallery/sec_05_champagne_draped_blouse.jpg",
-                "/static/gallery/sec_06_desk_silk.jpg",
-                "/static/gallery/sec_07_tablet_blazer.jpg",
-                "/static/gallery/sec_08_tea_lounge.jpg",
-                "/static/avatar_secretary/idle.jpg",
-                "/static/avatar_secretary/idle_2.jpg",
-                "/static/avatar_secretary/idle_3.jpg"
+                "/static/gallery/gf_15_living_knit_silhouette.mp4",
+                "/static/gallery/gf_01_living_deep_vneck.mp4"
             ]
         };
 
@@ -3700,24 +3671,13 @@ def read_root():
         }
 
         const PHOTO_TITLES = {
-            "/static/gallery/gf_15_living_knit_silhouette.mp4": "🎬 아이보리 파인니트 은은한 실루엣 리빙 비디오 (Living Fine-Knit Silhouette)",
-            "/static/gallery/gf_15_knit_silhouette_bust.jpg": "🤍 아이보리 파인니트 은은한 실루엣 (상반신)",
-            "/static/gallery/gf_14_knit_silhouette_full.jpg": "🤍 아이보리 터틀넥 니트 & 스커트 실루엣 (전신)",
-            "/static/gallery/sec_canonical_living_desk.mp4": "🎬 청순 민지 데스크 화이트셔츠 리빙 비디오 (Canonical Office Desk)",
-            "/static/gallery/sec_09_living_silk_unbutton.mp4": "🎬 심야 상무실 샴페인 실크 셔츠 언버튼 리빙 비디오 (Living Silk Unbutton)",
-            "/static/gallery/minji_canonical_face_desk.jpg": "✨ 청순 민지 오피스 데스크 오리지널",
-            "/static/gallery/minji_canonical_face_knit.jpg": "🌸 청순 민지 창가 아이보리 니트 오리지널",
-            "/static/gallery/gf_minji_living_breathing.mp4": "🎬 심야 침실 실크 슬립 리빙 비디오 (Living Night Bedroom)",
-            "/static/gallery/gf_01_living_deep_vneck.mp4": "🎬 크림 딥 브이넥 하이앵글 바운스 (Living Deep V-Neck)",
-            "/static/gallery/gf_02_living_wrap_knit.mp4": "🎬 피치 랩 니트 앞섬 호흡 (Living Wrap Knit)",
-            "/static/gallery/sec_minji_living_breathing.mp4": "🎬 심야 데스크 실크 셔츠 리빙 비디오 (Living Night Desk)",
-            "/static/gallery/sec_02_living_silk_desk.mp4": "🎬 샴페인 실크 데스크 밀착 리빙 비디오 (Living Silk Desk)",
-            "/static/gallery/gf_09_pov_bed_slip.jpg": "🛏️ 침대 밀착 피치 실크 슬립 POV",
-            "/static/gallery/gf_11_pov_peeking_bed.jpg": "🚪 문틈 살짝 열린 소파 훔쳐보기 POV",
-            "/static/gallery/sec_09_pov_night_desk.jpg": "📋 심야 상무실 데스크 단추 풀림 POV",
-            "/static/gallery/sec_11_pov_peeking_office.jpg": "🚪 집무실 문틈 소파 휴식 POV",
-            "/static/gallery/gf_01_deep_vneck_cream_glam.jpg": "✨ 크림 딥 브이넥 베이글 니트",
-            "/static/gallery/gf_02_wrap_knit_peach_glam.jpg": "🌸 피치 랩 가디건",
+            "/static/gallery/gf_15_living_knit_silhouette.mp4": "🎬 아이보리 파인니트 은은한 실루엣 & 란제리 라인",
+            "/static/gallery/gf_01_living_deep_vneck.mp4": "🎬 크림 딥브이넥 밀착 니트 굴곡 리빙 비디오",
+            "/static/gallery/gf_02_living_wrap_knit.mp4": "🎬 피치 랩 니트 부드러운 가슴선 실루엣 리빙 비디오",
+            "/static/gallery/sec_canonical_living_desk.mp4": "🎬 청순 민지 데스크 화이트셔츠 리빙 비디오",
+            "/static/gallery/sec_09_living_silk_unbutton.mp4": "🎬 심야 상무실 샴페인 실크 셔츠 언버튼 리빙 비디오",
+            "/static/gallery/sec_02_living_silk_desk.mp4": "🎬 샴페인 실크 데스크 밀착 리빙 비디오"
+        };
             "/static/gallery/gf_03_sweetheart_pink_sofa.jpg": "🛋️ 핑크 스위트하트 소파",
             "/static/gallery/gf_04_vneck_ribbed_classic.jpg": "🤍 화이트 골지 브이넥",
             "/static/gallery/gf_05_offshoulder_lavender_cafe.jpg": "☕ 오프숄더 라벤더 니트",
