@@ -3417,13 +3417,82 @@ def read_root():
             }
         }
 
+        // [iOS/모바일 핵심] 앱 백그라운드 전환 시 마이크 및 STT 즉시 해제 (아이폰 Voice Control/주황색 점 아이콘 즉시 소멸)
+        function pauseMicrophoneAndSTT() {
+            try {
+                if (recognition) {
+                    recognition.onend = null;
+                    recognition.onerror = null;
+                    recognition.onresult = null;
+                    recognition.abort();
+                    recognition = null;
+                }
+            } catch(e){}
+
+            try {
+                if (activeMediaStream) {
+                    activeMediaStream.getTracks().forEach(track => {
+                        track.stop();
+                        track.enabled = false;
+                    });
+                    activeMediaStream = null;
+                }
+            } catch(e){}
+
+            try {
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                }
+            } catch(e){}
+
+            try {
+                if (audioContext && audioContext.state === 'running') {
+                    audioContext.suspend();
+                }
+            } catch(e){}
+
+            isListening = false;
+            isStartingRecognition = false;
+        }
+
+        async function resumeMicrophoneAndSTT() {
+            if (!streamActive || isMicMuted) return;
+            try {
+                if (audioContext && audioContext.state === 'suspended') {
+                    await audioContext.resume().catch(()=>{});
+                }
+                let stream = null;
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+                    });
+                } catch(e1) {
+                    try {
+                        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    } catch(e2){}
+                }
+                if (stream) {
+                    setupAudioAnalyser(stream);
+                }
+                if (!isSpeaking && !isProcessing) {
+                    startListening();
+                }
+            } catch(err) {
+                console.warn("[Resume Mic Error]:", err);
+            }
+        }
+
         // 탭을 닫거나 다른 앱으로 전환 시 백그라운드 리소스 자동 해제
         window.addEventListener('pagehide', cleanupAllMediaAndTimers);
         window.addEventListener('beforeunload', cleanupAllMediaAndTimers);
-        document.addEventListener('visibilitychange', () => {
+        document.addEventListener('visibilitychange', async () => {
             if (document.visibilityState === 'hidden') {
-                if (mediaRecorder && mediaRecorder.state === 'recording') {
-                    try { mediaRecorder.stop(); } catch(e){}
+                // 아이폰 홈 화면 나가기, 다른 앱 전환, 화면 잠금 시 마이크 하드웨어 즉시 100% 차단
+                pauseMicrophoneAndSTT();
+            } else if (document.visibilityState === 'visible') {
+                // 앱 복귀 시 대화 상태였다면 마이크 자연스럽게 재개
+                if (streamActive && !isMicMuted && !isSpeaking && !isProcessing) {
+                    await resumeMicrophoneAndSTT();
                 }
             }
         });
