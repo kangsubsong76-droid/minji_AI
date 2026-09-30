@@ -944,8 +944,12 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str, mode: str
         try:
             messages = [{"role": "system", "content": current_system_prompt}]
             for item in history[-18:]:
-                role = "assistant" if item["role"] == "model" else "user"
-                content_text = item["text"]
+                if not isinstance(item, dict):
+                    continue
+                content_text = item.get("text", "").strip()
+                if not content_text:
+                    continue
+                role = "assistant" if item.get("role") == "model" else "user"
                 # 여친 모드일 때 과거 히스토리의 '상무님' 호칭 및 비서 어투가 새어나오지 않도록 정제
                 if effective_mode == "girlfriend" and role == "assistant":
                     content_text = (
@@ -996,8 +1000,13 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str, mode: str
         try:
             claude_messages = []
             for item in history[-18:]:
-                role = "assistant" if item["role"] == "model" else "user"
-                claude_messages.append({"role": role, "content": item["text"]})
+                if not isinstance(item, dict):
+                    continue
+                c_text = item.get("text", "").strip()
+                if not c_text:
+                    continue
+                role = "assistant" if item.get("role") == "model" else "user"
+                claude_messages.append({"role": role, "content": c_text})
             claude_messages.append({"role": "user", "content": user_text})
 
             response = anthropic_client.messages.create(
@@ -1025,9 +1034,15 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str, mode: str
         try:
             contents = []
             for item in history[-18:]:
+                if not isinstance(item, dict):
+                    continue
+                g_text = item.get("text", "").strip()
+                if not g_text:
+                    continue
+                role = item.get("role", "user")
                 contents.append(types.Content(
-                    role=item["role"],
-                    parts=[types.Part.from_text(text=item["text"])]
+                    role=role,
+                    parts=[types.Part.from_text(text=g_text)]
                 ))
             contents.append(types.Content(
                 role="user",
@@ -1575,11 +1590,6 @@ def read_root():
             filter: brightness(0.98) contrast(1.02);
             z-index: 2;
             pointer-events: none;
-            contain: strict;
-            transform: translateZ(0);
-            -webkit-transform: translateZ(0);
-            backface-visibility: hidden;
-            -webkit-backface-visibility: hidden;
         }
 
         .avatar-img {
@@ -2869,7 +2879,7 @@ def read_root():
     <div class="avatar-wrapper" id="avatarWrapper" onclick="handleVisualClick(event)" title="더블 탭 또는 폰 흔들기: 사진 변경 | 탭: 대화">
         <div class="avatar-ambient-glow" id="avatarGlow"></div>
         <div class="avatar-img-container">
-            <video id="avatarVideo" class="avatar-video" src="/static/gallery/gf_16_living_turtleneck_window.mp4" autoplay loop muted playsinline webkit-playsinline preload="auto" style="display:block;"></video>
+            <video id="avatarVideo" class="avatar-video" src="/static/gallery/gf_16_living_turtleneck_window.mp4" poster="/static/gallery/minji_canonical_turtleneck_window.jpg" autoplay loop muted playsinline webkit-playsinline preload="auto" style="display:block;"></video>
             <img id="avatarImgA" src="/static/gallery/minji_canonical_turtleneck_window.jpg" alt="Minji AI Avatar A" class="avatar-img avatar-img-active" style="display:none;">
             <img id="avatarImgB" src="/static/gallery/minji_canonical_turtleneck_window.jpg" alt="Minji AI Avatar B" class="avatar-img avatar-img-inactive" style="display:none;">
         </div>
@@ -3083,23 +3093,42 @@ def read_root():
         const avatarImgA = document.getElementById('avatarImgA');
         const avatarImgB = document.getElementById('avatarImgB');
         let activeAvatarSlot = 'A';
-        let currentDisplayedAvatarSrc = "/static/gallery/gf_16_living_turtleneck_window.mp4";
+        let currentDisplayedAvatarSrc = "";
+
+        // 모바일 사파리/크롬 비디오 오토플레이 보장 (첫 터치/클릭 시 즉각 재생)
+        window.addEventListener('touchstart', function() {
+            const v = document.getElementById('avatarVideo');
+            if (v) { v.muted = true; v.play().catch(()=>{}); }
+        }, { passive: true });
+        window.addEventListener('click', function() {
+            const v = document.getElementById('avatarVideo');
+            if (v) { v.muted = true; v.play().catch(()=>{}); }
+        }, { passive: true });
 
         // 안정적인 듀얼 슬롯 0.4초 크로스페이드 이미지 및 리빙 비디오 전환기
         function setAvatarImageSmooth(newSrc) {
-            if (!newSrc || newSrc === currentDisplayedAvatarSrc) return;
+            if (!newSrc) return;
             const videoElem = document.getElementById('avatarVideo');
 
             if (newSrc.endsWith('.mp4') || newSrc.endsWith('.webm')) {
                 if (videoElem) {
-                    try {
-                        videoElem.pause();
-                        videoElem.removeAttribute('src');
-                        videoElem.load();
-                    } catch (e) {}
-                    videoElem.src = newSrc;
+                    videoElem.muted = true;
+                    videoElem.defaultMuted = true;
+                    videoElem.playsInline = true;
+                    videoElem.setAttribute('playsinline', '');
+                    videoElem.setAttribute('webkit-playsinline', '');
                     videoElem.style.display = 'block';
-                    videoElem.play().catch(e => console.log('Video play err:', e));
+
+                    if (!videoElem.src || !videoElem.src.endsWith(newSrc)) {
+                        videoElem.src = newSrc;
+                        videoElem.load();
+                    }
+                    const playPromise = videoElem.play();
+                    if (playPromise !== undefined) {
+                        playPromise.catch(e => {
+                            console.log('Video play deferred until touch:', e);
+                        });
+                    }
                 }
                 if (avatarImgA) avatarImgA.style.display = 'none';
                 if (avatarImgB) avatarImgB.style.display = 'none';
@@ -3422,6 +3451,8 @@ def read_root():
                 pwGate.style.display = 'none';
             }
             if (pwErr) pwErr.innerText = '';
+            const vUnl = document.getElementById('avatarVideo');
+            if (vUnl) { vUnl.muted = true; vUnl.play().catch(()=>{}); }
 
             setTimeout(() => {
                 showBioScanningBadge(false);
@@ -3508,6 +3539,8 @@ def read_root():
                         pwGate.classList.add('hidden');
                         pwGate.style.display = 'none';
                     }
+                    const vPw = document.getElementById('avatarVideo');
+                    if (vPw) { vPw.muted = true; vPw.play().catch(()=>{}); }
                     if (pwInput) pwInput.value = '';
                     if (pwErr) pwErr.innerText = '';
                     setTimeout(() => pwInput && pwInput.blur && pwInput.blur(), 100);
@@ -3645,21 +3678,26 @@ def read_root():
             }
         };
 
-        // 100% 실사 리빙 비디오 전용 갤러리 풀 (스틸 이미지 완전 배제, 청순 & 은근한 실루엣 굴곡 판타지)
+        // 실사 리빙 비디오 & 8K 정품 상황별 화보 갤러리 풀 (민지 고유 얼굴 100% 보존)
         const GALLERY_POOLS = {
             girlfriend: [
                 "/static/gallery/gf_16_living_turtleneck_window.mp4",
+                "/static/gallery/minji_scenario_01_shower_shirt.jpg",
+                "/static/gallery/minji_scenario_02_sofa_sunlight.jpg",
                 "/static/gallery/gf_15_living_knit_silhouette.mp4",
-                "/static/gallery/sec_canonical_living_desk.mp4",
+                "/static/gallery/minji_scenario_03_park_bench.jpg",
+                "/static/gallery/minji_scenario_05_fitting_hoodie.jpg",
                 "/static/gallery/gf_01_living_deep_vneck.mp4",
+                "/static/gallery/minji_scenario_06_rain_shelter.jpg",
+                "/static/gallery/minji_scenario_07_rain_window.jpg",
                 "/static/gallery/gf_02_living_wrap_knit.mp4",
+                "/static/gallery/minji_scenario_09_chin_lift.jpg",
                 "/static/gallery/sec_09_living_silk_unbutton.mp4"
             ],
             secretary: [
-                "/static/gallery/gf_16_living_turtleneck_window.mp4",
-                "/static/gallery/sec_canonical_living_desk.mp4",
                 "/static/gallery/sec_09_living_silk_unbutton.mp4",
                 "/static/gallery/sec_02_living_silk_desk.mp4",
+                "/static/gallery/gf_16_living_turtleneck_window.mp4",
                 "/static/gallery/gf_15_living_knit_silhouette.mp4"
             ]
         };
@@ -3683,10 +3721,16 @@ def read_root():
 
         const PHOTO_TITLES = {
             "/static/gallery/gf_16_living_turtleneck_window.mp4": "🎬 창가 햇살 골지 터틀넥 & 은은한 바디 실루엣",
+            "/static/gallery/minji_scenario_01_shower_shirt.jpg": "📸 샤워 후 밤 창가 오버사이즈 화이트 셔츠",
+            "/static/gallery/minji_scenario_02_sofa_sunlight.jpg": "📸 나른한 일요일 오후 역광 햇살 소파",
             "/static/gallery/gf_15_living_knit_silhouette.mp4": "🎬 아이보리 파인니트 은은한 실루엣 & 란제리 라인",
+            "/static/gallery/minji_scenario_03_park_bench.jpg": "📸 가을 외곽 공원 벤치 초밀착 데이트",
+            "/static/gallery/minji_scenario_05_fitting_hoodie.jpg": "📸 비좁은 피팅룸 오버핏 블랙 후디 & 마스크",
             "/static/gallery/gf_01_living_deep_vneck.mp4": "🎬 크림 딥브이넥 밀착 니트 굴곡 리빙 비디오",
+            "/static/gallery/minji_scenario_06_rain_shelter.jpg": "📸 비 오는 골목 상자 아래 댕댕이 눈망울",
+            "/static/gallery/minji_scenario_07_rain_window.jpg": "📸 비 내리는 밤 창가 에메랄드 실크 슬립",
             "/static/gallery/gf_02_living_wrap_knit.mp4": "🎬 피치 랩 니트 부드러운 가슴선 실루엣 리빙 비디오",
-            "/static/gallery/sec_canonical_living_desk.mp4": "🎬 청순 민지 데스크 화이트셔츠 리빙 비디오",
+            "/static/gallery/minji_scenario_09_chin_lift.jpg": "📸 턱을 살짝 들어올린 초밀착 아이컨택",
             "/static/gallery/sec_09_living_silk_unbutton.mp4": "🎬 심야 상무실 샴페인 실크 셔츠 언버튼 리빙 비디오",
             "/static/gallery/sec_02_living_silk_desk.mp4": "🎬 샴페인 실크 데스크 밀착 리빙 비디오"
         };
@@ -4792,17 +4836,19 @@ def read_root():
                 volumeCheckInterval = setInterval(() => {
                     if (isMicMuted) return;
                     analyser.getByteFrequencyData(dataArray);
-                    let sum = 0;
-                    for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-                    let average = sum / dataArray.length;
 
-                    // 1. 민지 발화 중 볼륨 기반 강제 인터럽트 제거 (TV 소리/주변 소음으로 인한 오작동 방지)
-                    // (오직 '잠깐만', '근데', '음', '있잖아' 등의 명시적 키워드나 화면 터치로만 인터럽트)
+                    // 인간 음성 주파수 대역(약 100Hz~4000Hz, 빈 1~25) 집중 분석
+                    let vocalSum = 0;
+                    const vocalEnd = Math.min(26, dataArray.length);
+                    for (let i = 1; i < vocalEnd; i++) {
+                        vocalSum += dataArray[i];
+                    }
+                    let vocalAverage = vocalSum / (vocalEnd - 1);
 
-                    // 2. 대기/청취 중 사용자 음성 볼륨 실시간 시각화 (노트북 마이크 22 이상)
+                    // 대기/청취 중 사용자 음성 감지 (감도 대폭 향상: 10 이상)
                     if (!isSpeaking && !isProcessing) {
                         const micBtn = document.getElementById('micToggleBtn');
-                        if (average > 22) {
+                        if (vocalAverage > 10) {
                             if (micBtn) {
                                 micBtn.style.boxShadow = "0 0 16px rgba(0, 242, 254, 0.85)";
                                 micBtn.style.borderColor = "#00f2fe";
@@ -4812,7 +4858,7 @@ def read_root():
                                 audioChunks = [];
                                 hasSpeechTranscribed = false;
                                 try {
-                                    mediaRecorder.start(200);
+                                    mediaRecorder.start(150);
                                     isAudioRecording = true;
                                 } catch(e){
                                     console.warn("[MediaRecorder Start Error]:", e);
@@ -4826,7 +4872,7 @@ def read_root():
                                     } catch(e){}
                                     isAudioRecording = false;
                                 }
-                            }, 1100);
+                            }, 1200);
                         } else {
                             if (micBtn) {
                                 micBtn.style.boxShadow = "";
