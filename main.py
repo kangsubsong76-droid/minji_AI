@@ -2864,9 +2864,9 @@ def read_root():
     <div class="avatar-wrapper" id="avatarWrapper" onclick="handleVisualClick(event)" title="더블 탭 또는 폰 흔들기: 사진 변경 | 탭: 대화">
         <div class="avatar-ambient-glow" id="avatarGlow"></div>
         <div class="avatar-img-container">
-            <video id="avatarVideo" class="avatar-video" src="/static/gallery/gf_minji_living_breathing.mp4" autoplay loop muted playsinline style="display:block;"></video>
-            <img id="avatarImgA" src="/static/gallery/gf_09_pov_bed_slip.jpg" alt="Minji AI Avatar A" class="avatar-img avatar-img-active" style="display:none;">
-            <img id="avatarImgB" src="/static/gallery/gf_09_pov_bed_slip.jpg" alt="Minji AI Avatar B" class="avatar-img avatar-img-inactive" style="display:none;">
+            <video id="avatarVideo" class="avatar-video" src="/static/gallery/gf_15_living_knit_silhouette.mp4" autoplay loop muted playsinline style="display:block;"></video>
+            <img id="avatarImgA" src="/static/gallery/gf_15_knit_silhouette_bust.jpg" alt="Minji AI Avatar A" class="avatar-img avatar-img-active" style="display:none;">
+            <img id="avatarImgB" src="/static/gallery/gf_15_knit_silhouette_bust.jpg" alt="Minji AI Avatar B" class="avatar-img avatar-img-inactive" style="display:none;">
         </div>
         <div class="avatar-vignette"></div>
         <div class="avatar-living-sheen"></div>
@@ -3078,7 +3078,7 @@ def read_root():
         const avatarImgA = document.getElementById('avatarImgA');
         const avatarImgB = document.getElementById('avatarImgB');
         let activeAvatarSlot = 'A';
-        let currentDisplayedAvatarSrc = "/static/gallery/gf_minji_living_breathing.mp4";
+        let currentDisplayedAvatarSrc = "/static/gallery/gf_15_living_knit_silhouette.mp4";
 
         // 안정적인 듀얼 슬롯 0.4초 크로스페이드 이미지 및 리빙 비디오 전환기
         function setAvatarImageSmooth(newSrc) {
@@ -3638,7 +3638,6 @@ def read_root():
         // 갤러리 이미지 풀 (여친 모드 & 비서 모드 - 강섭님 전용 동일 인물 POV & 몰래 훔쳐보기 판타지 화보)
         const GALLERY_POOLS = {
             girlfriend: [
-                "/static/gallery/gf_minji_living_breathing.mp4",
                 "/static/gallery/gf_15_living_knit_silhouette.mp4",
                 "/static/gallery/sec_canonical_living_desk.mp4",
                 "/static/gallery/gf_15_knit_silhouette_bust.jpg",
@@ -3647,7 +3646,6 @@ def read_root():
                 "/static/gallery/minji_canonical_face_desk.jpg",
                 "/static/gallery/gf_01_living_deep_vneck.mp4",
                 "/static/gallery/gf_02_living_wrap_knit.mp4",
-                "/static/gallery/gf_09_pov_bed_slip.jpg",
                 "/static/gallery/gf_11_pov_peeking_bed.jpg",
                 "/static/gallery/gf_01_deep_vneck_cream_glam.jpg",
                 "/static/gallery/gf_02_wrap_knit_peach_glam.jpg",
