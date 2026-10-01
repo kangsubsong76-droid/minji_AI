@@ -558,14 +558,14 @@ def generate_tts_bytes(text: str, voice: str = "luna") -> bytes:
                     print("[ElevenLabs Disabled]: API key is invalid/unauthorized. Permanently using ultra-fast OpenAI Nova TTS.")
                     break
 
-    # 2. OpenAI 백업 폴백 (비상시)
+    # 2. OpenAI 고속 음성 (자연스러운 0.96배속 감성 대화)
     if openai_client:
         try:
             response = openai_client.audio.speech.create(
                 model="tts-1",
                 voice="nova",
                 input=cleaned_text,
-                speed=1.0
+                speed=0.96
             )
             if response and response.content:
                 return response.content
@@ -970,63 +970,7 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str, mode: str
     effective_mode = "secretary" if (mode == "secretary" and daytime) else "girlfriend"
     current_system_prompt = build_persona_system_prompt(mode=effective_mode)
 
-    # [1순위]: 초저지연 0.3초 즉시 응답 gpt-4o-mini (대기 시간 제거의 핵심 + 생기발랄 사만다 감성)
-    if openai_client:
-        try:
-            messages = [{"role": "system", "content": current_system_prompt}]
-            for item in history[-18:]:
-                if not isinstance(item, dict):
-                    continue
-                content_text = item.get("text", "").strip()
-                if not content_text:
-                    continue
-                role = "assistant" if item.get("role") == "model" else "user"
-                # 여친 모드일 때 과거 히스토리의 '상무님' 호칭 및 비서 어투가 새어나오지 않도록 정제
-                if effective_mode == "girlfriend" and role == "assistant":
-                    content_text = (
-                        content_text
-                        .replace("강섭 상무님", "오빠")
-                        .replace("상무님", "오빠")
-                        .replace("하십시오", "해")
-                        .replace("하셨습니까", "했어")
-                        .replace("하셨어요", "했어")
-                        .replace("고생 많으셨습니다", "고생 많았어")
-                    )
-                messages.append({"role": role, "content": content_text})
-            messages.append({"role": "user", "content": user_text})
-
-            # 여친 모드 시 즉각 가드레일 주입 (과거 대화의 존댓말/상무님/하트/로봇 말투 오염 원천 차단)
-            if effective_mode == "girlfriend":
-                messages.append({
-                    "role": "system",
-                    "content": (
-                        "★ [긴급 대화 수칙 - 진짜 사람처럼 살아 숨 쉬는 대화]:\n"
-                        "- '오빠' 호칭을 매 문장마다 반복하지 마세요! 대부분의 문장은 호칭 없이 자연스럽게 시작하고, 가끔 '오빠', '자기야', '강섭아'를 섞어 쓰세요.\n"
-                        "- 사진/셀카/의상 변경을 요청받으면 '못 보여준다'는 말 절대 금지! 갤러리가 연동되어 있으니 '응! 지금 바로 다른 옷으로 갈아입은 사진 보여줄게~' 하고 화면을 보라고 말하세요.\n"
-                        "- 상무님/강섭씨 호칭 및 딱딱한 존댓말은 절대 금지 (100% 다정한 반말).\n"
-                        "- 말끝 하트(♡, ♥) 및 매크로 인사('안녕하세요', '수고 많으셨습니다') 절대 금지!\n"
-                        "- 진짜 연인 민지로서 오빠의 말을 귀 기울여 듣고 센스 있게 맞장구쳐주세요 (1~2문장)."
-                    )
-                })
-
-            completion = openai_client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=messages,
-                max_tokens=180,
-                temperature=0.82,
-                presence_penalty=0.3,
-                frequency_penalty=0.2
-            )
-            reply = completion.choices[0].message.content.strip()
-            if reply:
-                reply = strip_hearts(reply)
-                if effective_mode == "girlfriend":
-                    reply = reply.replace("강섭 상무님", "오빠").replace("상무님", "오빠")
-                return reply
-        except Exception as oai_err:
-            print(f"[OpenAI Fast Chat Error]: {oai_err}")
-
-    # [2순위]: Claude Sonnet 5 (ThinkingBlock 안전 추출)
+    # [1순위]: 인간다운 초고감성 Claude Sonnet 5.5 (자연스러운 한국어 감정 표현 및 위트)
     if anthropic_client:
         try:
             claude_messages = []
@@ -1037,13 +981,24 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str, mode: str
                 if not c_text:
                     continue
                 role = "assistant" if item.get("role") == "model" else "user"
+                if effective_mode == "girlfriend" and role == "assistant":
+                    c_text = (
+                        c_text
+                        .replace("강섭 상무님", "오빠")
+                        .replace("상무님", "오빠")
+                        .replace("하십시오", "해")
+                        .replace("하셨습니까", "했어")
+                        .replace("하셨어요", "했어")
+                        .replace("고생 많으셨습니다", "고생 많았어")
+                    )
                 claude_messages.append({"role": role, "content": c_text})
             claude_messages.append({"role": "user", "content": user_text})
 
             response = anthropic_client.messages.create(
-                model="claude-sonnet-5",
-                max_tokens=200,
+                model="claude-sonnet-5-5",
+                max_tokens=250,
                 system=current_system_prompt,
+                thinking={"type": "between_tools"},
                 messages=claude_messages
             )
             if response and response.content:
@@ -1057,10 +1012,10 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str, mode: str
                     if effective_mode == "girlfriend":
                         reply = reply.replace("강섭 상무님", "오빠").replace("상무님", "오빠")
                     return reply
-        except Exception as e:
-            print(f"[Claude Chat Error]: {e}")
+        except Exception as ce:
+            print(f"[Claude Sonnet 5.5 Error -> Fallback to Gemini 3.8 Flash]: {ce}")
 
-    # [3순위]: Gemini Flash
+    # [2순위]: 최신 Gemini 3.8 Flash (초고속 차세대 제미나이 엔진)
     if gemini_client:
         try:
             contents = []
@@ -1085,7 +1040,7 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str, mode: str
                 config=types.GenerateContentConfig(
                     system_instruction=current_system_prompt,
                     temperature=0.85,
-                    max_output_tokens=180,
+                    max_output_tokens=200,
                 )
             )
             if response and response.text and response.text.strip():
@@ -1093,23 +1048,91 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str, mode: str
                 if effective_mode == "girlfriend":
                     reply = reply.replace("강섭 상무님", "오빠").replace("상무님", "오빠")
                 return reply
-        except Exception as e:
-            print(f"[Gemini Flash Error]: {e}")
+        except Exception as ge:
+            print(f"[Gemini 3.8 Flash Error -> Fallback to OpenAI]: {ge}")
+
+    # [3순위]: OpenAI GPT-4o-mini (비상 백업 엔진)
+    if openai_client:
+        try:
+            messages = [{"role": "system", "content": current_system_prompt}]
+            for item in history[-18:]:
+                if not isinstance(item, dict):
+                    continue
+                content_text = item.get("text", "").strip()
+                if not content_text:
+                    continue
+                role = "assistant" if item.get("role") == "model" else "user"
+                if effective_mode == "girlfriend" and role == "assistant":
+                    content_text = (
+                        content_text
+                        .replace("강섭 상무님", "오빠")
+                        .replace("상무님", "오빠")
+                        .replace("하십시오", "해")
+                        .replace("하셨습니까", "했어")
+                        .replace("하셨어요", "했어")
+                        .replace("고생 많으셨습니다", "고생 많았어")
+                    )
+                messages.append({"role": role, "content": content_text})
+            messages.append({"role": "user", "content": user_text})
+
+            completion = openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                max_tokens=180,
+                temperature=0.82
+            )
+            reply = completion.choices[0].message.content.strip()
+            if reply:
+                reply = strip_hearts(reply)
+                if effective_mode == "girlfriend":
+                    reply = reply.replace("강섭 상무님", "오빠").replace("상무님", "오빠")
+                return reply
+        except Exception as oai_err:
+            print(f"[OpenAI Backup Chat Error]: {oai_err}")
 
     return "상무님, 계속 말씀해 주십시오. 경청하고 있습니다." if effective_mode == "secretary" else "응 오빠, 나 듣고 있어~ 편하게 이야기해줘."
 
 
 def analyze_vision_with_fallback(image_base64: str, prompt: str, mode: str = "girlfriend") -> str:
     system_prompt = build_persona_system_prompt(mode=mode)
+    prompt_instruction = f"카메라에 비친 실제 물체와 주변 장면을 보고 자연스럽게 1~2문장으로 말해줘: {prompt}" if prompt else "카메라에 비친 실제 물체와 장면을 보고 자연스럽게 1~2문장으로 말해줘."
 
-    # 1순위: Gemini Vision 시도
+    # 1순위: Claude Sonnet 5.5 Vision (최고의 한국어 묘사력 & 사람같은 자연스러움)
+    if anthropic_client:
+        try:
+            response = anthropic_client.messages.create(
+                model="claude-sonnet-5-5",
+                max_tokens=250,
+                system=system_prompt,
+                thinking={"type": "between_tools"},
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/jpeg",
+                                "data": image_base64,
+                            },
+                        },
+                        {"type": "text", "text": prompt_instruction},
+                    ],
+                }],
+            )
+            if response and response.content:
+                text_parts = [b.text for b in response.content if hasattr(b, 'text')]
+                res = "".join(text_parts).strip()
+                if res:
+                    return res
+        except Exception as ce:
+            print(f"[Claude Sonnet 5.5 Vision Error -> Gemini 3.8 Flash Fallback]: {ce}")
+
+    # 2순위: Gemini 3.8 Flash Vision (초고속 차세대 비전 분석)
     if gemini_client:
         try:
             image_bytes = base64.b64decode(image_base64)
             image_part = types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
-            prompt_instruction = (
-                f"카메라에 비친 실제 물체와 주변 장면을 보고 자연스럽게 1~2문장으로 말해줘. {prompt}"
-            )
             response = gemini_client.models.generate_content(
                 model="gemini-3.8-flash",
                 contents=[image_part, prompt_instruction],
@@ -1122,9 +1145,9 @@ def analyze_vision_with_fallback(image_base64: str, prompt: str, mode: str = "gi
             if response and response.text and response.text.strip():
                 return response.text.strip()
         except Exception as ge:
-            print(f"[Gemini Vision Quota/Error -> OpenAI Vision Fallback]: {ge}")
+            print(f"[Gemini 3.8 Flash Vision Error -> OpenAI Vision Fallback]: {ge}")
 
-    # 2순위: OpenAI GPT-4o-mini Vision 즉각 Fallback (429 쿼터 제한 없이 0.4초 분석)
+    # 3순위: OpenAI GPT-4o-mini Vision 즉각 Fallback
     if openai_client:
         try:
             response = openai_client.chat.completions.create(
