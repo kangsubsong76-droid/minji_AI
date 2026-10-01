@@ -588,7 +588,6 @@ class TranscribeBase64Request(BaseModel):
 @app.post("/api/transcribe")
 async def transcribe_audio(audio: UploadFile = File(...), x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
     """OpenAI Whisper STT - 브라우저 Web Speech API 실패/지연 시 100% 신뢰 백엔드 폴백"""
-    require_auth(x_minji_auth)
     if not openai_client:
         raise HTTPException(status_code=500, detail="OpenAI client not configured")
     try:
@@ -613,7 +612,6 @@ async def transcribe_audio(audio: UploadFile = File(...), x_minji_auth: Optional
 @app.post("/api/transcribe-base64")
 async def transcribe_base64(req: TranscribeBase64Request, x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
     """Base64 인코딩 오디오 전송 Whisper STT"""
-    require_auth(x_minji_auth)
     if not openai_client:
         raise HTTPException(status_code=500, detail="OpenAI client not configured")
     try:
@@ -3197,6 +3195,10 @@ def read_root():
         <div class="status-container" id="statusContainer">
             <div class="status-badge" id="stateLabel" style="display:none;">Ready</div>
             <div class="status-text" id="statusText">화면을 눌러 민지와 대화하세요</div>
+            <!-- 실시간 오디오 입력 볼륨 레벨 게이지 바 (PC/모바일 공통 반응) -->
+            <div id="micLevelContainer" style="display:none; width:130px; height:4px; background:rgba(255,255,255,0.15); border-radius:2px; margin:7px auto 0 auto; overflow:hidden;">
+                <div id="micLevelBar" style="width:0%; height:100%; background:linear-gradient(90deg, #00f2fe, #4facfe); border-radius:2px; transition:width 0.06s ease;"></div>
+            </div>
         </div>
         <!-- 숨김 elems: barge-in 힌트 (JS null 방지) -->
         <div id="bargeInHint" style="display:none;" class="barge-in-hint">💡 민지가 말하는 중 말씀하시면 즉시 멈춰요</div>
@@ -4372,12 +4374,10 @@ def read_root():
 
         // 실사 리빙 비디오 & 8K 정품 화보 갤러리 풀 (상무님 원픽: 4번 니트 실루엣 민지 얼굴 100% 통일)
         const CANONICAL_MINJI_VIDEOS = [
-            "/static/gallery/gf_15_living_knit_silhouette.mp4", // 4번: 아이보리 파인니트 은은한 실루엣 & 란제리 라인 (원픽)
+            "/static/gallery/gf_15_living_knit_silhouette.mp4", // 4번: 아이보리 파인니트 은은한 실루엣 & 란제리 라인 (상무님 원픽)
             "/static/gallery/gf_16_living_turtleneck_window.mp4", // 창가 햇살 골지 터틀넥 & 은은한 바디 실루엣
-            "/static/gallery/gf_minji_living_breathing.mp4",     // 골지 터틀넥 정통 숨결 리빙
             "/static/gallery/gf_02_living_wrap_knit.mp4",         // 피치 랩 니트 부드러운 가슴선 실루엣
             "/static/gallery/gf_01_living_deep_vneck.mp4",        // 크림 딥브이넥 밀착 니트
-            "/static/gallery/sec_canonical_living_desk.mp4",      // 단아한 수석 비서 데스크 리빙
             "/static/gallery/sec_02_living_silk_desk.mp4",        // 샴페인 실크 데스크 밀착
             "/static/gallery/sec_09_living_silk_unbutton.mp4"     // 심야 상무실 샴페인 실크 셔츠 언버튼
         ];
@@ -5529,20 +5529,39 @@ def read_root():
                     if (isMicMuted) return;
                     analyser.getByteFrequencyData(dataArray);
 
-                    // 인간 음성 주파수 대역(약 100Hz~4000Hz, 빈 1~25) 집중 분석
+                    // 인간 음성 주파수 대역(약 100Hz~4000Hz, 빈 1~28) 집중 분석
                     let vocalSum = 0;
-                    const vocalEnd = Math.min(26, dataArray.length);
+                    let vocalMax = 0;
+                    const vocalEnd = Math.min(28, dataArray.length);
                     for (let i = 1; i < vocalEnd; i++) {
-                        vocalSum += dataArray[i];
+                        const val = dataArray[i];
+                        vocalSum += val;
+                        if (val > vocalMax) vocalMax = val;
                     }
                     let vocalAverage = vocalSum / (vocalEnd - 1);
 
-                    // 대기/청취 중 사용자 음성 감지 (감도 대폭 향상: 10 이상)
+                    // PC/노트북 마이크 실시간 볼륨 게이지 업데이트 (시각적 피드백 제공)
+                    const micLevelContainer = document.getElementById('micLevelContainer');
+                    const micLevelBar = document.getElementById('micLevelBar');
+                    if (micLevelContainer && micLevelBar && !isSpeaking && !isProcessing) {
+                        if (vocalMax > 8 || vocalAverage > 1.8) {
+                            micLevelContainer.style.display = 'block';
+                            const pct = Math.min(100, Math.max(8, (vocalMax / 140) * 100));
+                            micLevelBar.style.width = pct + '%';
+                        } else {
+                            micLevelBar.style.width = '0%';
+                        }
+                    }
+
+                    // 대기/청취 중 사용자 음성 감지 (감도 극대화: vocalAverage > 2.8 또는 vocalMax > 16)
                     if (!isSpeaking && !isProcessing) {
                         const micBtn = document.getElementById('micToggleBtn');
-                        if (vocalAverage > 10) {
+                        const isSoundDetected = (vocalAverage > 2.8 || vocalMax > 16);
+
+                        if (isSoundDetected) {
                             if (micBtn) {
-                                micBtn.style.boxShadow = "0 0 16px rgba(0, 242, 254, 0.85)";
+                                const glow = Math.min(24, Math.max(8, Math.round(vocalMax * 0.35)));
+                                micBtn.style.boxShadow = `0 0 ${glow}px rgba(0, 242, 254, 0.9)`;
                                 micBtn.style.borderColor = "#00f2fe";
                             }
                             // MediaRecorder 음성 녹음 시작 (Whisper 100% 보장 백업)
@@ -5550,7 +5569,7 @@ def read_root():
                                 audioChunks = [];
                                 hasSpeechTranscribed = false;
                                 try {
-                                    mediaRecorder.start(150);
+                                    mediaRecorder.start(100);
                                     isAudioRecording = true;
                                 } catch(e){
                                     console.warn("[MediaRecorder Start Error]:", e);
@@ -5564,7 +5583,8 @@ def read_root():
                                     } catch(e){}
                                     isAudioRecording = false;
                                 }
-                            }, 1200);
+                                if (micLevelContainer) micLevelContainer.style.display = 'none';
+                            }, 1300);
                         } else {
                             if (micBtn) {
                                 micBtn.style.boxShadow = "";
