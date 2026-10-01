@@ -1,13 +1,16 @@
 import os
 import io
+import time
 import base64
 import subprocess
+import asyncio
 from typing import Dict, List, Optional
-from fastapi import FastAPI, HTTPException, UploadFile, File, Header
-from fastapi.responses import HTMLResponse, Response
+from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Request
+from fastapi.responses import HTMLResponse, Response, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+import google_service
 from google import genai
 from google.genai import types
 from openai import OpenAI
@@ -194,15 +197,36 @@ def get_current_context_prompt() -> str:
         time_slot = "모두가 잠든 고요한 새벽 시간대"
         slot_hint = "아직 안 자고 뭐하고 있는지, 내일 피곤할 텐데 오빠를 걱정스럽고 애틋하게 챙겨줘."
 
-    task_summary = ""
-    if is_daytime():
-        if calendar_tasks.get("events"):
-            event_titles = [f"{e.get('time', '')} {e.get('title', '')}".strip() for e in calendar_tasks["events"][:2]]
-            task_summary += f"\n- 강섭 상무님 주요 일정: {', '.join(event_titles)}"
-        if calendar_tasks.get("tasks"):
-            pending = [t.get('title', '') for t in calendar_tasks["tasks"] if not t.get('completed', False)][:2]
-            if pending:
-                task_summary += f"\n- 대기 중인 중요 Task: {', '.join(pending)}"
+    # 실시간 구글 캘린더 & 할 일(Tasks) 연동 현황 반영
+    fresh_data = load_json_data(TASKS_FILE, {"events": [], "tasks": []})
+    events = fresh_data.get("events", [])
+    tasks = fresh_data.get("tasks", [])
+    today_ymd = now.strftime("%Y-%m-%d")
+    tomorrow_ymd = (now + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    today_events = [e for e in events if e.get("date") == today_ymd]
+    tomorrow_events = [e for e in events if e.get("date") == tomorrow_ymd]
+    pending_tasks = [t for t in tasks if not t.get("completed", False)]
+
+    schedule_lines = []
+    if today_events:
+        items = [f"[{e.get('time', '종일')}] {e.get('title', '')}" + (f" ({e.get('note')})" if e.get('note') else "") for e in today_events]
+        schedule_lines.append(f"- 오늘 일정({len(today_events)}건): " + ", ".join(items))
+    else:
+        schedule_lines.append("- 오늘 일정: 공식 일정 없음 (자유롭고 편안한 하루)")
+
+    if tomorrow_events and (hour >= 18 or hour < 5):
+        items = [f"[{e.get('time', '종일')}] {e.get('title', '')}" for e in tomorrow_events]
+        schedule_lines.append(f"- 내일 주요 예정: " + ", ".join(items))
+
+    if pending_tasks:
+        t_items = [t.get("title", "") + (f" (~{t.get('due_date')})" if t.get('due_date') else "") for t in pending_tasks[:4]]
+        schedule_lines.append(f"- 대기 중인 중요 할 일({len(pending_tasks)}건): " + ", ".join(t_items))
+    else:
+        schedule_lines.append("- 남은 할 일: 모두 완료됨!")
+
+    conn_status = "연동됨" if fresh_data.get("is_google_connected") else "로컬"
+    task_summary = f"\n[실시간 캘린더 & 할 일(Tasks) 현황 - 구글 {conn_status}]\n" + "\n".join(schedule_lines)
 
     return (
         f"[현재 실시간 상황 정보]\n"
@@ -1133,6 +1157,102 @@ def analyze_vision_with_fallback(image_base64: str, prompt: str, mode: str = "gi
     return "상무님, 보여주신 장면 확인했습니다." if mode == "secretary" else "와, 카메라에 비친 장면 정말 느낌 있다!"
 
 
+def handle_natural_schedule_intent(user_text: str, mode: str = "girlfriend") -> Optional[str]:
+    """
+    사용자의 자연어 대화에서 일정 등록/할일 추가/할일 완료 의도를 포착하여
+    구글 캘린더 및 구글 Tasks에 실시간으로 반영합니다.
+    """
+    if not openai_client:
+        return None
+
+    triggers = ["일정", "스케줄", "미팅", "회의", "할 일", "할일", "투두", "완료", "잡아줘", "등록해줘", "추가해줘", "체크해줘"]
+    if not any(t in user_text for t in triggers):
+        return None
+
+    try:
+        kst = timezone(timedelta(hours=9))
+        now_dt = datetime.now(kst)
+        now_str = now_dt.strftime("%Y-%m-%d %H:%M")
+        system_prompt = (
+            f"현재 시각: {now_str} (한국표준시 KST)\n"
+            "사용자의 발화에서 '일정 추가(add_event)', '할 일 추가(add_task)', '할 일 완료(complete_task)' 의도가 있는지 판단하세요.\n"
+            "단순한 일정/할일 질문('오늘 일정 뭐야', '할 일 뭐 남았어' 등)은 action: null 로 응답하세요.\n"
+            "JSON 형식:\n"
+            "1) 일정 등록 (예: 내일 3시 미팅 잡아줘): {\"action\": \"add_event\", \"title\": \"...\", \"date\": \"YYYY-MM-DD\", \"time\": \"HH:MM\", \"note\": \"...\"}\n"
+            "2) 할 일 추가 (예: 할 일에 보고서 검토 추가해줘): {\"action\": \"add_task\", \"title\": \"...\", \"due_date\": \"YYYY-MM-DD\"}\n"
+            "3) 할 일 완료 (예: '계약서 검토 완료했어', '미팅 준비 끝났어'): {\"action\": \"complete_task\", \"keyword\": \"...\"}\n"
+            "4) 그 외/단순 질문: {\"action\": null}"
+        )
+        res = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_text}
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=150,
+            temperature=0
+        )
+        parsed = json.loads(res.choices[0].message.content)
+        action = parsed.get("action")
+
+        if action == "add_event" and parsed.get("title") and parsed.get("date"):
+            title = parsed["title"]
+            time_part = parsed.get("time") or "10:00"
+            date_part = parsed["date"]
+            dt_str = f"{date_part}T{time_part}:00"
+            try:
+                start_dt = datetime.fromisoformat(dt_str).replace(tzinfo=kst)
+                if google_service.is_connected():
+                    google_service.add_google_calendar_event(title, start_dt, note=parsed.get("note", ""))
+                else:
+                    new_e = {"id": f"event_{int(time.time())}", "title": title, "date": date_part, "time": time_part, "note": parsed.get("note", "")}
+                    calendar_tasks.setdefault("events", []).append(new_e)
+                    save_json_data(TASKS_FILE, calendar_tasks)
+
+                if mode == "secretary":
+                    return f"상무님, 구글 캘린더에 '{title}' 일정({date_part} {time_part})을 등록해 두었습니다."
+                else:
+                    return f"응 오빠! 구글 캘린더에 '{title}' ({date_part} {time_part}) 일정 쏙 넣어뒀어~ 내가 잊지 않게 챙겨줄게!"
+            except Exception as e:
+                print(f"[AddEvent Parse Error]: {e}")
+
+        elif action == "add_task" and parsed.get("title"):
+            title = parsed["title"]
+            due_date = parsed.get("due_date") or now_dt.strftime("%Y-%m-%d")
+            if google_service.is_connected():
+                google_service.add_google_task(title, due_date=due_date)
+            else:
+                new_t = {"id": f"task_{int(time.time())}", "title": title, "due_date": due_date, "completed": False}
+                calendar_tasks.setdefault("tasks", []).append(new_t)
+                save_json_data(TASKS_FILE, calendar_tasks)
+
+            if mode == "secretary":
+                return f"상무님, 구글 할 일(Tasks)에 '{title}' 업무를 등록했습니다."
+            else:
+                return f"응 오빠! 구글 할 일 목록에 '{title}' 추가해뒀어~ 오늘도 하나씩 차근차근 해보자!"
+
+        elif action == "complete_task" and parsed.get("keyword"):
+            kw = parsed["keyword"].lower().strip()
+            current_tasks_data = load_json_data(TASKS_FILE, {"events": [], "tasks": []})
+            tasks = google_service.fetch_google_tasks() if google_service.is_connected() else current_tasks_data.get("tasks", [])
+            for t in tasks:
+                t_title = t.get("title", "").lower()
+                if kw in t_title or t_title in kw or any(w in t_title for w in kw.split()) or any(w in kw for w in t_title.split()):
+                    if google_service.is_connected() and t.get("id"):
+                        google_service.complete_google_task(t["id"])
+                    else:
+                        t["completed"] = True
+                        save_json_data(TASKS_FILE, current_tasks_data)
+                    if mode == "secretary":
+                        return f"상무님, '{t['title']}' 업무를 완료 처리했습니다."
+                    else:
+                        return f"와 오빠 최고야! '{t['title']}' 할 일 완료로 체크해뒀어, 정말 수고 많았어~"
+    except Exception as e:
+        print(f"[NaturalScheduleIntent Error]: {e}")
+    return None
+
+
 @app.post("/api/chat")
 async def chat_endpoint(req: ChatRequest, x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
     require_auth(x_minji_auth)
@@ -1154,7 +1274,11 @@ async def chat_endpoint(req: ChatRequest, x_minji_auth: Optional[str] = Header(N
             }
 
     try:
-        reply_text = generate_chat_reply(history, req.user_text, mode=effective_mode)
+        schedule_reply = handle_natural_schedule_intent(req.user_text, mode=effective_mode)
+        if schedule_reply:
+            reply_text = schedule_reply
+        else:
+            reply_text = generate_chat_reply(history, req.user_text, mode=effective_mode)
 
         # 세션 기억 업데이트 및 파일 영구 저장
         history.append({"role": "user", "text": req.user_text})
@@ -1266,22 +1390,129 @@ async def reset_memory(req: ResetMemoryRequest, x_minji_auth: Optional[str] = He
     return {"status": "ok", "message": f"세션({session_id}) 대화 기억이 초기화되었습니다."}
 
 
-# ===== 일정(Calendar) 및 할 일(Tasks) 관리 API =====
+# ===== 구글 캘린더(Google Calendar) 및 구글 할 일(Google Tasks) 연동 API =====
 @app.get("/api/schedule-tasks")
 async def get_schedule_tasks(x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
     require_auth(x_minji_auth)
-    return calendar_tasks
+    return google_service.get_google_status()
+
+
+@app.get("/api/google/status")
+async def get_google_status_api(x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
+    require_auth(x_minji_auth)
+    return google_service.get_google_status()
+
+
+@app.post("/api/google/configure")
+async def configure_google_oauth(req: dict, x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
+    require_auth(x_minji_auth)
+    client_id = req.get("client_id", "").strip()
+    client_secret = req.get("client_secret", "").strip()
+    redirect_uri = req.get("redirect_uri", "").strip()
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=400, detail="client_id와 client_secret이 필요합니다.")
+    cfg = google_service.save_oauth_config(client_id, client_secret, redirect_uri)
+    return {"status": "ok", "config": {"client_id_preview": client_id[:12] + "...", "redirect_uri": cfg.get("redirect_uri")}}
+
+
+@app.get("/api/google/login")
+async def google_login(request: Request, redirect_uri: Optional[str] = None):
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or "3.37.37.127"
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    if "trycloudflare.com" in host:
+        proto = "https"
+    effective_redirect_uri = redirect_uri or f"{proto}://{host}/api/google/oauth-callback"
+
+    try:
+        auth_url = google_service.generate_auth_url(effective_redirect_uri)
+        return RedirectResponse(url=auth_url)
+    except Exception as e:
+        return HTMLResponse(f"<h3>구글 로그인 URL 생성 실패</h3><p>{e}</p><p><a href='/'>홈으로 돌아가기</a></p>", status_code=400)
+
+
+@app.get("/api/google/oauth-callback")
+async def google_oauth_callback(request: Request, code: Optional[str] = None, error: Optional[str] = None):
+    if error:
+        return HTMLResponse(f"<h3>구글 연동 취소 또는 오류</h3><p>{error}</p><p><a href='/'>돌아가기</a></p>", status_code=400)
+    if not code:
+        return HTMLResponse("<h3>오류: 인증 코드가 전달되지 않았습니다.</h3><p><a href='/'>돌아가기</a></p>", status_code=400)
+
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or "3.37.37.127"
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    if "trycloudflare.com" in host:
+        proto = "https"
+    redirect_uri = f"{proto}://{host}/api/google/oauth-callback"
+
+    try:
+        token_data = google_service.exchange_code_for_tokens(code, redirect_uri)
+        user_email = token_data.get("user_email", "사용자")
+        return HTMLResponse(f"""
+        <!DOCTYPE html>
+        <html lang='ko'>
+        <head>
+            <meta charset='utf-8'>
+            <title>구글 연동 완료</title>
+            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+            <style>
+                body {{ background:#09090d; color:#fff; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; margin:0; text-align:center; padding:16px; box-sizing:border-box; }}
+                .card {{ background:rgba(255,255,255,0.06); padding:32px 24px; border-radius:24px; border:1px solid rgba(255,123,84,0.4); max-width:360px; box-shadow:0 12px 40px rgba(0,0,0,0.6); }}
+                h2 {{ color:#ff9a76; margin:0 0 14px 0; font-size:1.3rem; }}
+                p {{ color:#ccc; font-size:0.92rem; line-height:1.6; margin:0 0 20px 0; }}
+                .btn {{ display:inline-block; padding:12px 28px; background:linear-gradient(135deg, #ff7b54, #ff5252); color:#fff; text-decoration:none; border-radius:14px; font-weight:700; font-size:0.95rem; box-shadow:0 4px 15px rgba(255,123,84,0.4); }}
+            </style>
+        </head>
+        <body>
+            <div class='card'>
+                <h2>🎉 구글 연동 성공!</h2>
+                <p><strong>{user_email}</strong> 계정의<br>구글 캘린더와 할 일(Tasks)이 민지와 성공적으로 연결되었습니다.</p>
+                <a href='/?google_synced=true' class='btn'>민지 만나러 가기</a>
+            </div>
+            <script>
+                setTimeout(() => {{ window.location.href = '/?google_synced=true'; }}, 2200);
+            </script>
+        </body>
+        </html>
+        """)
+    except Exception as e:
+        return HTMLResponse(f"<h3>토큰 발급 실패</h3><p>{e}</p><p><a href='/'>돌아가기</a></p>", status_code=500)
+
+
+@app.post("/api/google/sync")
+async def trigger_google_sync(x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
+    require_auth(x_minji_auth)
+    updated = google_service.sync_google_data()
+    return {"status": "ok", "data": updated}
+
+
+@app.post("/api/google/disconnect")
+async def disconnect_google(x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
+    require_auth(x_minji_auth)
+    google_service.clear_tokens()
+    return {"status": "ok", "message": "구글 계정 연동이 해제되었습니다."}
 
 
 @app.post("/api/schedule-tasks/add-event")
 async def add_schedule_event(req: dict, x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
     require_auth(x_minji_auth)
+    title = req.get("title", "새로운 일정")
+    date_str = req.get("date", datetime.now().strftime("%Y-%m-%d"))
+    time_str = req.get("time", "10:00")
+    note = req.get("note", "")
+    kst = timezone(timedelta(hours=9))
+    try:
+        dt = datetime.fromisoformat(f"{date_str}T{time_str}:00").replace(tzinfo=kst)
+        if google_service.is_connected():
+            res = google_service.add_google_calendar_event(title, dt, note=note)
+            return {"status": "ok", "event": res, "is_google": True}
+    except Exception as e:
+        print(f"[API Add Event Error]: {e}")
+
     new_event = {
-        "id": f"event_{int(datetime.now().timestamp())}",
-        "title": req.get("title", "새로운 일정"),
-        "date": req.get("date", datetime.now().strftime("%Y-%m-%d")),
-        "time": req.get("time", "10:00"),
-        "note": req.get("note", "")
+        "id": f"event_{int(time.time())}",
+        "title": title,
+        "date": date_str,
+        "time": time_str,
+        "note": note
     }
     calendar_tasks.setdefault("events", []).append(new_event)
     save_json_data(TASKS_FILE, calendar_tasks)
@@ -1291,15 +1522,56 @@ async def add_schedule_event(req: dict, x_minji_auth: Optional[str] = Header(Non
 @app.post("/api/schedule-tasks/add-task")
 async def add_schedule_task(req: dict, x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
     require_auth(x_minji_auth)
+    title = req.get("title", "새로운 업무")
+    due_date = req.get("due_date", datetime.now().strftime("%Y-%m-%d"))
+    note = req.get("note", "")
+    if google_service.is_connected():
+        res = google_service.add_google_task(title, due_date=due_date, note=note)
+        return {"status": "ok", "task": res, "is_google": True}
+
     new_task = {
-        "id": f"task_{int(datetime.now().timestamp())}",
-        "title": req.get("title", "새로운 업무"),
-        "due_date": req.get("due_date", datetime.now().strftime("%Y-%m-%d")),
+        "id": f"task_{int(time.time())}",
+        "title": title,
+        "due_date": due_date,
         "completed": False
     }
     calendar_tasks.setdefault("tasks", []).append(new_task)
     save_json_data(TASKS_FILE, calendar_tasks)
     return {"status": "ok", "task": new_task, "tasks": calendar_tasks["tasks"]}
+
+
+@app.post("/api/schedule-tasks/complete-task")
+async def complete_schedule_task(req: dict, x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
+    require_auth(x_minji_auth)
+    task_id = req.get("task_id")
+    if not task_id:
+        raise HTTPException(status_code=400, detail="task_id가 필요합니다.")
+
+    if google_service.is_connected() and (str(task_id).startswith("gtask_") or len(str(task_id)) > 15):
+        success = google_service.complete_google_task(task_id)
+        if success:
+            return {"status": "ok", "is_google": True}
+
+    current = load_json_data(TASKS_FILE, {"events": [], "tasks": []})
+    for t in current.get("tasks", []):
+        if t.get("id") == task_id:
+            t["completed"] = True
+            break
+    save_json_data(TASKS_FILE, current)
+    return {"status": "ok", "is_google": False}
+
+
+@app.on_event("startup")
+async def schedule_background_startup():
+    async def bg_google_sync():
+        while True:
+            try:
+                if google_service.is_connected():
+                    google_service.sync_google_data()
+            except Exception as e:
+                print(f"[BG Google Sync Error]: {e}")
+            await asyncio.sleep(600)
+    asyncio.create_task(bg_google_sync())
 
 
 @app.get("/manifest.json")
@@ -2865,16 +3137,19 @@ def read_root():
             </div>
         </div>
 
-        <!-- 4행: 화면 제어 & 앱 종료 (강조된 종료 버튼) -->
-        <div style="display:flex; gap:8px; align-items:center; width:100%; margin-top:2px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.08); box-sizing:border-box;">
-            <button class="view-mode-btn" onclick="enterNativeFullscreen()" title="주소창 없는 전체화면" style="flex:1; padding:9px 6px; font-size:0.78rem; border-radius:12px; background:rgba(255,123,84,0.15); border:1px solid rgba(255,123,84,0.4); color:#ff9a76; font-weight:600; cursor:pointer;">
-                <span>📺 주소창 숨김 (전체화면)</span>
+        <!-- 4행: 구글 캘린더/할일, 화면 제어 & 앱 종료 -->
+        <div style="display:flex; gap:6px; align-items:center; width:100%; margin-top:2px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.08); box-sizing:border-box;">
+            <button class="view-mode-btn" onclick="openGoogleScheduleModal()" title="구글 캘린더 & 할 일 연동" style="padding:9px 10px; font-size:0.78rem; border-radius:12px; background:rgba(255,154,118,0.18); border:1px solid rgba(255,154,118,0.5); color:#ff9a76; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:5px; flex-shrink:0;">
+                <span>📅</span><span>일정·할일</span><span id="googleStatusDot" style="width:7px; height:7px; border-radius:50%; background:#888; display:inline-block;"></span>
             </button>
-            <button class="view-mode-btn" onclick="resetMemory()" title="기억 초기화" style="padding:9px 12px; font-size:0.78rem; border-radius:12px; cursor:pointer; flex-shrink:0;">
-                <span>🔄 기억 리셋</span>
+            <button class="view-mode-btn" onclick="enterNativeFullscreen()" title="주소창 없는 전체화면" style="flex:1; padding:9px 6px; font-size:0.78rem; border-radius:12px; background:rgba(255,123,84,0.12); border:1px solid rgba(255,123,84,0.3); color:#ff9a76; font-weight:600; cursor:pointer; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">
+                <span>📺 전체화면</span>
             </button>
-            <button class="btn-exit" onclick="exitApp()" title="앱 완전 종료" style="padding:9px 16px; font-size:0.82rem; font-weight:700; border-radius:12px; background:linear-gradient(135deg, #d32f2f, #b71c1c); border:1px solid #ff5252; color:#fff; cursor:pointer; box-shadow:0 4px 12px rgba(211,47,47,0.4); display:flex; align-items:center; gap:5px; flex-shrink:0;">
-                <span>⏻</span><span>앱 종료</span>
+            <button class="view-mode-btn" onclick="resetMemory()" title="기억 초기화" style="padding:9px 8px; font-size:0.78rem; border-radius:12px; cursor:pointer; flex-shrink:0;">
+                <span>🔄 리셋</span>
+            </button>
+            <button class="btn-exit" onclick="exitApp()" title="앱 완전 종료" style="padding:9px 12px; font-size:0.80rem; font-weight:700; border-radius:12px; background:linear-gradient(135deg, #d32f2f, #b71c1c); border:1px solid #ff5252; color:#fff; cursor:pointer; box-shadow:0 4px 12px rgba(211,47,47,0.4); display:flex; align-items:center; gap:4px; flex-shrink:0;">
+                <span>⏻</span><span>종료</span>
             </button>
         </div>
     </div>
@@ -3063,7 +3338,92 @@ def read_root():
                 </button>
             </div>
         </div>
+    <!-- 📅 구글 캘린더 & 할 일(Tasks) 통합 모달 -->
+    <div id="googleScheduleModal" class="cam-overlay" style="display:none; z-index:9999; background:rgba(10,10,16,0.85); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); overflow-y:auto; padding:20px 14px;" onclick="if(event.target===this) closeGoogleScheduleModal()">
+        <div style="max-width:460px; width:100%; margin:auto; background:rgba(24,24,36,0.96); border:1px solid rgba(255,123,84,0.35); border-radius:24px; padding:22px; box-shadow:0 12px 40px rgba(0,0,0,0.7); color:#fff; box-sizing:border-box;">
+            <!-- 모달 헤더 -->
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <h3 style="margin:0; font-size:1.15rem; font-weight:700; color:#ff9a76; display:flex; align-items:center; gap:8px;">
+                    <span>📅</span> 민지의 데일리 비서 (구글 캘린더 & 할 일)
+                </h3>
+                <button onclick="closeGoogleScheduleModal()" style="background:none; border:none; color:#bbb; font-size:1.3rem; cursor:pointer; padding:4px 8px;">✕</button>
+            </div>
+
+            <!-- 연동 상태 카드 -->
+            <div id="googleStatusCard" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:12px 14px; margin-bottom:16px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span id="gStatusIndicator" style="width:10px; height:10px; border-radius:50%; background:#888; display:inline-block;"></span>
+                        <span id="gStatusText" style="font-size:0.88rem; font-weight:700; color:#ddd;">연동 상태 확인 중...</span>
+                    </div>
+                    <div id="gActionBtns" style="display:flex; gap:6px;"></div>
+                </div>
+                <div id="gSyncTimeText" style="font-size:0.75rem; color:#888; margin-top:6px;">동기화 상태 로딩 중...</div>
+            </div>
+
+            <!-- 탭 메뉴 (📅 오늘 일정 / ✅ 할 일 / ⚙️ 구글 연동 설정) -->
+            <div style="display:flex; gap:6px; margin-bottom:14px; background:rgba(0,0,0,0.3); padding:4px; border-radius:12px;">
+                <button id="tabScheduleBtn" onclick="switchScheduleTab('events')" style="flex:1; padding:8px 0; border:none; border-radius:8px; background:#ff7b54; color:#fff; font-size:0.82rem; font-weight:700; cursor:pointer;">📅 오늘 일정</button>
+                <button id="tabTasksBtn" onclick="switchScheduleTab('tasks')" style="flex:1; padding:8px 0; border:none; border-radius:8px; background:transparent; color:#888; font-size:0.82rem; font-weight:700; cursor:pointer;">✅ 할 일</button>
+                <button id="tabConfigBtn" onclick="switchScheduleTab('config')" style="flex:1; padding:8px 0; border:none; border-radius:8px; background:transparent; color:#888; font-size:0.82rem; font-weight:700; cursor:pointer;">⚙️ 연동 설정</button>
+            </div>
+
+            <!-- 탭 1: 일정 목록 -->
+            <div id="tabEventsView" style="display:flex; flex-direction:column; gap:10px;">
+                <div id="eventsListContainer" style="display:flex; flex-direction:column; gap:8px; max-height:220px; overflow-y:auto; padding-right:4px;"></div>
+                <div style="margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.08);">
+                    <div style="font-size:0.8rem; color:#ff9a76; font-weight:700; margin-bottom:6px;">➕ 새 일정 등록</div>
+                    <div style="display:flex; gap:6px; margin-bottom:6px;">
+                        <input type="date" id="newEventDate" style="flex:1; background:#1b1b28; border:1px solid #444; border-radius:8px; color:#fff; padding:6px 8px; font-size:0.8rem;">
+                        <input type="time" id="newEventTime" value="10:00" style="width:90px; background:#1b1b28; border:1px solid #444; border-radius:8px; color:#fff; padding:6px 8px; font-size:0.8rem;">
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <input type="text" id="newEventTitle" placeholder="일정 제목 (예: 오후 파트너사 미팅)" style="flex:1; background:#1b1b28; border:1px solid #444; border-radius:8px; color:#fff; padding:8px 10px; font-size:0.82rem; outline:none;">
+                        <button onclick="submitNewEvent()" style="background:#ff7b54; border:none; border-radius:8px; color:#fff; padding:0 14px; font-weight:700; font-size:0.82rem; cursor:pointer;">추가</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 탭 2: 할 일(Tasks) 목록 -->
+            <div id="tabTasksView" style="display:none; flex-direction:column; gap:10px;">
+                <div id="tasksListContainer" style="display:flex; flex-direction:column; gap:8px; max-height:220px; overflow-y:auto; padding-right:4px;"></div>
+                <div style="margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.08);">
+                    <div style="font-size:0.8rem; color:#ff9a76; font-weight:700; margin-bottom:6px;">➕ 새 할 일 추가</div>
+                    <div style="display:flex; gap:6px;">
+                        <input type="text" id="newTaskTitle" placeholder="할 일 내용 (예: 보고서 최종 서명)" style="flex:1; background:#1b1b28; border:1px solid #444; border-radius:8px; color:#fff; padding:8px 10px; font-size:0.82rem; outline:none;">
+                        <button onclick="submitNewTask()" style="background:#ff7b54; border:none; border-radius:8px; color:#fff; padding:0 14px; font-weight:700; font-size:0.82rem; cursor:pointer;">추가</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 탭 3: 구글 OAuth 연동 설정 -->
+            <div id="tabConfigView" style="display:none; flex-direction:column; gap:12px;">
+                <div style="font-size:0.82rem; color:#aaa; line-height:1.5;">
+                    구글 클라우드 콘솔의 OAuth 2.0 웹 클라이언트 정보를 입력해 주세요. 등록 후 <strong>[구글 로그인]</strong>을 진행하시면 캘린더와 Google Tasks가 실시간으로 연결됩니다.
+                </div>
+                <div>
+                    <label style="font-size:0.75rem; color:#888; display:block; margin-bottom:4px;">Google Client ID</label>
+                    <input type="text" id="gClientIdInput" placeholder="예: 12345...apps.googleusercontent.com" style="width:100%; box-sizing:border-box; background:#1b1b28; border:1px solid #444; border-radius:8px; color:#fff; padding:8px 10px; font-size:0.82rem;">
+                </div>
+                <div>
+                    <label style="font-size:0.75rem; color:#888; display:block; margin-bottom:4px;">Google Client Secret</label>
+                    <input type="password" id="gClientSecretInput" placeholder="GOCSPX-..." style="width:100%; box-sizing:border-box; background:#1b1b28; border:1px solid #444; border-radius:8px; color:#fff; padding:8px 10px; font-size:0.82rem;">
+                </div>
+                <div style="background:rgba(255,123,84,0.08); border:1px dashed rgba(255,123,84,0.4); border-radius:10px; padding:10px; font-size:0.74rem; color:#ccc; line-height:1.4;">
+                    📌 <strong>Google 콘솔 '승인된 리디렉션 URI'에 등록할 주소:</strong><br>
+                    <code style="color:#ff9a76; word-break:break-all;">https://formatting-worker-july-contribution.trycloudflare.com/api/google/oauth-callback</code><br>
+                    <code style="color:#ff9a76; word-break:break-all;">http://3.37.37.127/api/google/oauth-callback</code>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button onclick="saveGoogleOAuthConfig()" style="flex:1; padding:11px; background:#ff7b54; border:none; border-radius:10px; color:#fff; font-weight:700; font-size:0.85rem; cursor:pointer;">설정 저장하기</button>
+                    <button id="btnStartGoogleOAuth" onclick="startGoogleOAuthLogin()" style="flex:1; padding:11px; background:#4285F4; border:none; border-radius:10px; color:#fff; font-weight:700; font-size:0.85rem; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
+                        <span>G</span><span>구글 로그인</span>
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
+
     <audio id="audioPlayer" playsinline></audio>
 
     <script>
@@ -3073,6 +3433,257 @@ def read_root():
             const token = localStorage.getItem(PW_KEY) || '';
             return Object.assign({ 'X-Minji-Auth': token }, extraHeaders);
         }
+
+        // ===== 구글 캘린더 & 할 일(Tasks) 관리 컨트롤러 =====
+        let googleScheduleData = null;
+        let activeScheduleTab = 'events';
+
+        async function openGoogleScheduleModal() {
+            const modal = document.getElementById('googleScheduleModal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            await loadGoogleStatus();
+        }
+
+        function closeGoogleScheduleModal() {
+            const modal = document.getElementById('googleScheduleModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function switchScheduleTab(tab) {
+            activeScheduleTab = tab;
+            const tEvents = document.getElementById('tabEventsView');
+            const tTasks = document.getElementById('tabTasksView');
+            const tConfig = document.getElementById('tabConfigView');
+            const bEvents = document.getElementById('tabScheduleBtn');
+            const bTasks = document.getElementById('tabTasksBtn');
+            const bConfig = document.getElementById('tabConfigBtn');
+
+            if (tEvents) tEvents.style.display = tab === 'events' ? 'flex' : 'none';
+            if (tTasks) tTasks.style.display = tab === 'tasks' ? 'flex' : 'none';
+            if (tConfig) tConfig.style.display = tab === 'config' ? 'flex' : 'none';
+
+            if (bEvents) { bEvents.style.background = tab === 'events' ? '#ff7b54' : 'transparent'; bEvents.style.color = tab === 'events' ? '#fff' : '#888'; }
+            if (bTasks) { bTasks.style.background = tab === 'tasks' ? '#ff7b54' : 'transparent'; bTasks.style.color = tab === 'tasks' ? '#fff' : '#888'; }
+            if (bConfig) { bConfig.style.background = tab === 'config' ? '#ff7b54' : 'transparent'; bConfig.style.color = tab === 'config' ? '#fff' : '#888'; }
+        }
+
+        async function loadGoogleStatus() {
+            try {
+                const res = await fetch('/api/google/status', { headers: getAuthHeaders() });
+                if (res.ok) {
+                    googleScheduleData = await res.json();
+                    renderGoogleScheduleUI(googleScheduleData);
+                }
+            } catch (e) {
+                console.error('Failed to load Google status:', e);
+            }
+        }
+
+        function renderGoogleScheduleUI(data) {
+            if (!data) return;
+            const dot = document.getElementById('googleStatusDot');
+            const gDot = document.getElementById('gStatusIndicator');
+            const gText = document.getElementById('gStatusText');
+            const gSync = document.getElementById('gSyncTimeText');
+            const gBtns = document.getElementById('gActionBtns');
+
+            const isConn = data.is_connected;
+            if (dot) dot.style.background = isConn ? '#4ecdc4' : '#888';
+            if (gDot) gDot.style.background = isConn ? '#4ecdc4' : '#888';
+
+            if (isConn) {
+                if (gText) gText.innerHTML = `<span style="color:#4ecdc4;">🟢 구글 계정 연동됨</span> (${data.user_email || '인증 완료'})`;
+                if (gSync) gSync.innerText = `최근 동기화: ${data.last_synced || '방금 전'} | 오늘 일정 ${data.today_event_count}건, 남은 할 일 ${data.pending_task_count}건`;
+                if (gBtns) {
+                    gBtns.innerHTML = `
+                        <button onclick="triggerGoogleSync()" style="background:rgba(78,205,196,0.2); border:1px solid #4ecdc4; color:#4ecdc4; border-radius:8px; padding:4px 8px; font-size:0.75rem; cursor:pointer;">🔄 동기화</button>
+                        <button onclick="disconnectGoogleAccount()" style="background:rgba(255,82,82,0.15); border:1px solid #ff5252; color:#ff8282; border-radius:8px; padding:4px 8px; font-size:0.75rem; cursor:pointer;">해제</button>
+                    `;
+                }
+            } else {
+                if (gText) gText.innerHTML = `<span style="color:#bbb;">⚪ 구글 계정 미연동</span> (로컬 모드)`;
+                if (gSync) gSync.innerText = data.is_configured ? '설정 완료됨. [구글 로그인] 버튼을 눌러 연동하세요.' : '설정 탭에서 Google OAuth Client 정보를 입력하세요.';
+                if (gBtns) {
+                    gBtns.innerHTML = `
+                        <button onclick="switchScheduleTab('config')" style="background:#ff7b54; border:none; color:#fff; border-radius:8px; padding:5px 10px; font-size:0.75rem; font-weight:700; cursor:pointer;">연동하기</button>
+                    `;
+                }
+            }
+
+            // 일정 렌더링
+            const evContainer = document.getElementById('eventsListContainer');
+            if (evContainer) {
+                const events = data.events || [];
+                if (events.length === 0) {
+                    evContainer.innerHTML = `<div style="text-align:center; color:#777; padding:24px 0; font-size:0.85rem;">등록된 일정이 없습니다.</div>`;
+                } else {
+                    evContainer.innerHTML = events.map(e => `
+                        <div style="background:rgba(255,255,255,0.04); border-left:3px solid #ff7b54; border-radius:10px; padding:10px 12px; display:flex; justify-content:space-between; align-items:center;">
+                            <div style="flex:1; min-width:0;">
+                                <div style="font-size:0.88rem; font-weight:700; color:#fff; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${e.title}</div>
+                                <div style="font-size:0.75rem; color:#aaa; margin-top:2px;">📅 ${e.date || ''} ⏰ ${e.time || '종일'}${e.note ? ' · ' + e.note : ''}</div>
+                            </div>
+                            ${e.is_google ? '<span style="font-size:0.7rem; color:#4285F4; background:rgba(66,133,244,0.15); padding:2px 6px; border-radius:6px; margin-left:8px; flex-shrink:0;">Google</span>' : ''}
+                        </div>
+                    `).join('');
+                }
+            }
+
+            // 할 일 렌더링
+            const tkContainer = document.getElementById('tasksListContainer');
+            if (tkContainer) {
+                const tasks = data.tasks || [];
+                if (tasks.length === 0) {
+                    tkContainer.innerHTML = `<div style="text-align:center; color:#777; padding:24px 0; font-size:0.85rem;">남은 할 일이 없습니다.</div>`;
+                } else {
+                    tkContainer.innerHTML = tasks.map(t => `
+                        <div style="background:rgba(255,255,255,0.04); border-radius:10px; padding:10px 12px; display:flex; align-items:center; gap:10px;">
+                            <button onclick="toggleTaskComplete('${t.id}')" style="width:22px; height:22px; border-radius:6px; border:2px solid ${t.completed ? '#4ecdc4' : '#666'}; background:${t.completed ? '#4ecdc4' : 'transparent'}; color:#fff; font-size:0.75rem; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; flex-shrink:0;">
+                                ${t.completed ? '✓' : ''}
+                            </button>
+                            <div style="flex:1; min-width:0; text-decoration:${t.completed ? 'line-through' : 'none'}; color:${t.completed ? '#777' : '#fff'};">
+                                <div style="font-size:0.88rem; font-weight:600; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${t.title}</div>
+                                ${t.due_date ? `<div style="font-size:0.72rem; color:#888; margin-top:2px;">마감일: ${t.due_date}</div>` : ''}
+                            </div>
+                            ${t.is_google ? '<span style="font-size:0.7rem; color:#4285F4; background:rgba(66,133,244,0.15); padding:2px 6px; border-radius:6px; flex-shrink:0;">Google</span>' : ''}
+                        </div>
+                    `).join('');
+                }
+            }
+        }
+
+        async function saveGoogleOAuthConfig() {
+            const cid = document.getElementById('gClientIdInput').value.trim();
+            const sec = document.getElementById('gClientSecretInput').value.trim();
+            if (!cid || !sec) {
+                alert('Client ID와 Client Secret을 모두 입력해 주세요.');
+                return;
+            }
+            try {
+                const res = await fetch('/api/google/configure', {
+                    method: 'POST',
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ client_id: cid, client_secret: sec })
+                });
+                if (res.ok) {
+                    showPhotoToast('✅ 설정 저장 완료! [구글 로그인]을 진행해 주세요.');
+                    await loadGoogleStatus();
+                } else {
+                    alert('설정 저장 실패');
+                }
+            } catch (e) {
+                alert('네트워크 오류: ' + e);
+            }
+        }
+
+        function startGoogleOAuthLogin() {
+            window.location.href = '/api/google/login';
+        }
+
+        async function triggerGoogleSync() {
+            showPhotoToast('🔄 구글 캘린더 & 할 일 동기화 중...');
+            try {
+                const res = await fetch('/api/google/sync', {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+                if (res.ok) {
+                    showPhotoToast('🎉 구글 동기화가 완료되었습니다!');
+                    await loadGoogleStatus();
+                } else {
+                    showPhotoToast('동기화 실패');
+                }
+            } catch (e) {
+                showPhotoToast('오류 발생');
+            }
+        }
+
+        async function disconnectGoogleAccount() {
+            if (!confirm('구글 계정 연동을 해제하시겠습니까?')) return;
+            try {
+                await fetch('/api/google/disconnect', {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+                showPhotoToast('연동이 해제되었습니다.');
+                await loadGoogleStatus();
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function submitNewEvent() {
+            const title = document.getElementById('newEventTitle').value.trim();
+            const date = document.getElementById('newEventDate').value;
+            const time = document.getElementById('newEventTime').value;
+            if (!title) {
+                alert('일정 제목을 입력해 주세요.');
+                return;
+            }
+            try {
+                const res = await fetch('/api/schedule-tasks/add-event', {
+                    method: 'POST',
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ title, date, time })
+                });
+                if (res.ok) {
+                    document.getElementById('newEventTitle').value = '';
+                    showPhotoToast('📅 새 일정이 등록되었습니다!');
+                    await loadGoogleStatus();
+                }
+            } catch (e) {
+                alert('일정 등록 오류: ' + e);
+            }
+        }
+
+        async function submitNewTask() {
+            const title = document.getElementById('newTaskTitle').value.trim();
+            if (!title) {
+                alert('할 일 내용을 입력해 주세요.');
+                return;
+            }
+            try {
+                const res = await fetch('/api/schedule-tasks/add-task', {
+                    method: 'POST',
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ title })
+                });
+                if (res.ok) {
+                    document.getElementById('newTaskTitle').value = '';
+                    showPhotoToast('✅ 새 할 일이 추가되었습니다!');
+                    await loadGoogleStatus();
+                }
+            } catch (e) {
+                alert('할 일 등록 오류: ' + e);
+            }
+        }
+
+        async function toggleTaskComplete(taskId) {
+            try {
+                const res = await fetch('/api/schedule-tasks/complete-task', {
+                    method: 'POST',
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ task_id: taskId })
+                });
+                if (res.ok) {
+                    showPhotoToast('🎉 할 일 완료 처리되었습니다!');
+                    await loadGoogleStatus();
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        // 페이지 로드 시 구글 연동 완료 쿼리 파라미터 처리
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('google_synced') === 'true') {
+                showPhotoToast('🎉 구글 캘린더 & 할 일 연동 완료!');
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+            loadGoogleStatus();
+        });
         
         // 인증 관련 엘리먼트
         const shutdownScreen = document.getElementById('shutdownScreen');
