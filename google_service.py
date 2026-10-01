@@ -20,7 +20,7 @@ TASKS_FILE = os.path.join(CONFIG_DIR, "calendar_tasks.json")
 
 # Default Scopes for Calendar & Tasks
 SCOPES = [
-    "https://www.googleapis.com/auth/calendar.events",
+    "https://www.googleapis.com/auth/calendar",
     "https://www.googleapis.com/auth/tasks",
     "https://www.googleapis.com/auth/userinfo.email",
     "openid"
