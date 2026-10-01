@@ -1421,8 +1421,7 @@ async def get_schedule_tasks(x_minji_auth: Optional[str] = Header(None, alias="X
 
 
 @app.get("/api/google/status")
-async def get_google_status_api(x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
-    require_auth(x_minji_auth)
+async def get_google_status_api():
     return google_service.get_google_status()
 
 
@@ -1501,8 +1500,7 @@ async def google_oauth_callback(request: Request, code: Optional[str] = None, er
 
 
 @app.post("/api/google/sync")
-async def trigger_google_sync(x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
-    require_auth(x_minji_auth)
+async def trigger_google_sync():
     updated = google_service.sync_google_data()
     return {"status": "ok", "data": updated}
 
@@ -1515,8 +1513,7 @@ async def disconnect_google(x_minji_auth: Optional[str] = Header(None, alias="X-
 
 
 @app.post("/api/schedule-tasks/add-event")
-async def add_schedule_event(req: dict, x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
-    require_auth(x_minji_auth)
+async def add_schedule_event(req: dict):
     title = req.get("title", "새로운 일정")
     date_str = req.get("date", datetime.now().strftime("%Y-%m-%d"))
     time_str = req.get("time", "10:00")
@@ -1543,8 +1540,7 @@ async def add_schedule_event(req: dict, x_minji_auth: Optional[str] = Header(Non
 
 
 @app.post("/api/schedule-tasks/add-task")
-async def add_schedule_task(req: dict, x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
-    require_auth(x_minji_auth)
+async def add_schedule_task(req: dict):
     title = req.get("title", "새로운 업무")
     due_date = req.get("due_date", datetime.now().strftime("%Y-%m-%d"))
     note = req.get("note", "")
@@ -1564,8 +1560,7 @@ async def add_schedule_task(req: dict, x_minji_auth: Optional[str] = Header(None
 
 
 @app.post("/api/schedule-tasks/complete-task")
-async def complete_schedule_task(req: dict, x_minji_auth: Optional[str] = Header(None, alias="X-Minji-Auth")):
-    require_auth(x_minji_auth)
+async def complete_schedule_task(req: dict):
     task_id = req.get("task_id")
     if not task_id:
         raise HTTPException(status_code=400, detail="task_id가 필요합니다.")
@@ -3184,7 +3179,7 @@ def read_root():
     <div class="avatar-wrapper" id="avatarWrapper" onclick="handleVisualClick(event)" title="더블 탭 또는 폰 흔들기: 사진 변경 | 탭: 대화">
         <div class="avatar-ambient-glow" id="avatarGlow"></div>
         <div class="avatar-img-container">
-            <video id="avatarVideo" class="avatar-video" src="/static/gallery/gf_16_living_turtleneck_window.mp4" poster="/static/gallery/minji_canonical_turtleneck_window.jpg" autoplay loop muted playsinline webkit-playsinline preload="auto" style="display:block;"></video>
+            <video id="avatarVideo" class="avatar-video" src="/static/gallery/gf_15_living_knit_silhouette.mp4" poster="/static/gallery/minji_canonical_turtleneck_window.jpg" autoplay loop muted playsinline webkit-playsinline preload="auto" style="display:block;"></video>
             <img id="avatarImgA" src="/static/gallery/minji_canonical_turtleneck_window.jpg" alt="Minji AI Avatar A" class="avatar-img avatar-img-active" style="display:none;">
             <img id="avatarImgB" src="/static/gallery/minji_canonical_turtleneck_window.jpg" alt="Minji AI Avatar B" class="avatar-img avatar-img-inactive" style="display:none;">
         </div>
@@ -3419,8 +3414,6 @@ def read_root():
             </div>
         </div>
     </div>
-        </div>
-    </div>
 
     <audio id="audioPlayer" playsinline></audio>
 
@@ -3438,15 +3431,18 @@ def read_root():
 
         async function openGoogleScheduleModal() {
             const modal = document.getElementById('googleScheduleModal');
-            if (!modal) return;
-            modal.style.display = 'flex';
+            if (modal) {
+                modal.style.display = 'flex';
+            }
             await loadGoogleStatus();
         }
+        window.openGoogleScheduleModal = openGoogleScheduleModal;
 
         function closeGoogleScheduleModal() {
             const modal = document.getElementById('googleScheduleModal');
             if (modal) modal.style.display = 'none';
         }
+        window.closeGoogleScheduleModal = closeGoogleScheduleModal;
 
         function switchScheduleTab(tab) {
             activeScheduleTab = tab;
@@ -4374,35 +4370,21 @@ def read_root():
             }
         };
 
-        // 실사 리빙 비디오 & 8K 정품 상황별 화보 갤러리 풀 (민지 고유 얼굴 100% 보존)
+        // 실사 리빙 비디오 & 8K 정품 화보 갤러리 풀 (상무님 원픽: 4번 니트 실루엣 민지 얼굴 100% 통일)
+        const CANONICAL_MINJI_VIDEOS = [
+            "/static/gallery/gf_15_living_knit_silhouette.mp4", // 4번: 아이보리 파인니트 은은한 실루엣 & 란제리 라인 (원픽)
+            "/static/gallery/gf_16_living_turtleneck_window.mp4", // 창가 햇살 골지 터틀넥 & 은은한 바디 실루엣
+            "/static/gallery/gf_minji_living_breathing.mp4",     // 골지 터틀넥 정통 숨결 리빙
+            "/static/gallery/gf_02_living_wrap_knit.mp4",         // 피치 랩 니트 부드러운 가슴선 실루엣
+            "/static/gallery/gf_01_living_deep_vneck.mp4",        // 크림 딥브이넥 밀착 니트
+            "/static/gallery/sec_canonical_living_desk.mp4",      // 단아한 수석 비서 데스크 리빙
+            "/static/gallery/sec_02_living_silk_desk.mp4",        // 샴페인 실크 데스크 밀착
+            "/static/gallery/sec_09_living_silk_unbutton.mp4"     // 심야 상무실 샴페인 실크 셔츠 언버튼
+        ];
+
         const GALLERY_POOLS = {
-            girlfriend: [
-                "/static/gallery/gf_16_living_turtleneck_window.mp4",
-                "/static/gallery/minji_living_01_shower_shirt.mp4",
-                "/static/gallery/minji_living_02_sofa_sunlight.mp4",
-                "/static/gallery/gf_15_living_knit_silhouette.mp4",
-                "/static/gallery/minji_living_03_park_bench.mp4",
-                "/static/gallery/minji_living_05_fitting_hoodie.mp4",
-                "/static/gallery/gf_01_living_deep_vneck.mp4",
-                "/static/gallery/minji_living_06_rain_shelter.mp4",
-                "/static/gallery/minji_living_07_rain_window.mp4",
-                "/static/gallery/gf_02_living_wrap_knit.mp4",
-                "/static/gallery/minji_living_09_chin_lift.mp4",
-                "/static/gallery/sec_09_living_silk_unbutton.mp4",
-                "/static/gallery/minji_scenario_01_shower_shirt.jpg",
-                "/static/gallery/minji_scenario_02_sofa_sunlight.jpg",
-                "/static/gallery/minji_scenario_03_park_bench.jpg",
-                "/static/gallery/minji_scenario_05_fitting_hoodie.jpg",
-                "/static/gallery/minji_scenario_06_rain_shelter.jpg",
-                "/static/gallery/minji_scenario_07_rain_window.jpg",
-                "/static/gallery/minji_scenario_09_chin_lift.jpg"
-            ],
-            secretary: [
-                "/static/gallery/sec_09_living_silk_unbutton.mp4",
-                "/static/gallery/sec_02_living_silk_desk.mp4",
-                "/static/gallery/gf_16_living_turtleneck_window.mp4",
-                "/static/gallery/gf_15_living_knit_silhouette.mp4"
-            ]
+            girlfriend: CANONICAL_MINJI_VIDEOS,
+            secretary: CANONICAL_MINJI_VIDEOS
         };
 
         let currentGalleryIdx = {
