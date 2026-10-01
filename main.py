@@ -3177,7 +3177,7 @@ def read_root():
     <div class="avatar-wrapper" id="avatarWrapper" onclick="handleVisualClick(event)" title="더블 탭 또는 폰 흔들기: 사진 변경 | 탭: 대화">
         <div class="avatar-ambient-glow" id="avatarGlow"></div>
         <div class="avatar-img-container">
-            <video id="avatarVideo" class="avatar-video" src="/static/gallery/gf_15_living_knit_silhouette.mp4" poster="/static/gallery/minji_canonical_turtleneck_window.jpg" autoplay loop muted playsinline webkit-playsinline preload="auto" style="display:block;"></video>
+            <video id="avatarVideo" class="avatar-video" src="/static/gallery/gf_15_living_knit_10s_master.mp4" poster="/static/gallery/minji_canonical_turtleneck_window.jpg" autoplay loop muted playsinline webkit-playsinline preload="auto" style="display:block;"></video>
             <img id="avatarImgA" src="/static/gallery/minji_canonical_turtleneck_window.jpg" alt="Minji AI Avatar A" class="avatar-img avatar-img-active" style="display:none;">
             <img id="avatarImgB" src="/static/gallery/minji_canonical_turtleneck_window.jpg" alt="Minji AI Avatar B" class="avatar-img avatar-img-inactive" style="display:none;">
         </div>
@@ -4374,7 +4374,10 @@ def read_root():
 
         // 실사 리빙 비디오 & 8K 정품 화보 갤러리 풀 (상무님 원픽: 4번 니트 실루엣 민지 얼굴 100% 통일)
         const CANONICAL_MINJI_VIDEOS = [
-            "/static/gallery/gf_15_living_knit_silhouette.mp4", // 4번: 아이보리 파인니트 은은한 실루엣 & 란제리 라인 (상무님 원픽)
+            "/static/gallery/gf_15_living_knit_10s_master.mp4",   // [NEW 10초] 원픽 니트 실루엣 마스터 에디션 (밀착 눈맞춤 & 다정한 숨결)
+            "/static/gallery/gf_15_living_knit_hair_tuck.mp4",    // [NEW 10초] 창가 햇살 머리 쓸어넘기며 미소 짓는 민지
+            "/static/gallery/gf_15_living_knit_lean_whisper.mp4", // [NEW 10초] 오빠에게 살짝 다가오며 귓속말하는 밀착 민지
+            "/static/gallery/gf_15_living_knit_silhouette.mp4",   // [5초 오리지널] 원픽 아이보리 파인니트 은은한 실루엣
             "/static/gallery/gf_16_living_turtleneck_window.mp4", // 창가 햇살 골지 터틀넥 & 은은한 바디 실루엣
             "/static/gallery/gf_02_living_wrap_knit.mp4",         // 피치 랩 니트 부드러운 가슴선 실루엣
             "/static/gallery/gf_01_living_deep_vneck.mp4",        // 크림 딥브이넥 밀착 니트
