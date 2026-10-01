@@ -3384,11 +3384,10 @@ def read_root():
                 <div id="gSyncTimeText" style="font-size:0.75rem; color:#888; margin-top:6px;">동기화 상태 로딩 중...</div>
             </div>
 
-            <!-- 탭 메뉴 (📅 오늘 일정 / ✅ 할 일 / ⚙️ 구글 연동 설정) -->
+            <!-- 탭 메뉴 (📅 오늘 일정 / ✅ 할 일) -->
             <div style="display:flex; gap:6px; margin-bottom:14px; background:rgba(0,0,0,0.3); padding:4px; border-radius:12px;">
                 <button id="tabScheduleBtn" onclick="switchScheduleTab('events')" style="flex:1; padding:8px 0; border:none; border-radius:8px; background:#ff7b54; color:#fff; font-size:0.82rem; font-weight:700; cursor:pointer;">📅 오늘 일정</button>
                 <button id="tabTasksBtn" onclick="switchScheduleTab('tasks')" style="flex:1; padding:8px 0; border:none; border-radius:8px; background:transparent; color:#888; font-size:0.82rem; font-weight:700; cursor:pointer;">✅ 할 일</button>
-                <button id="tabConfigBtn" onclick="switchScheduleTab('config')" style="flex:1; padding:8px 0; border:none; border-radius:8px; background:transparent; color:#888; font-size:0.82rem; font-weight:700; cursor:pointer;">⚙️ 연동 설정</button>
             </div>
 
             <!-- 탭 1: 일정 목록 -->
@@ -3418,32 +3417,8 @@ def read_root():
                     </div>
                 </div>
             </div>
-
-            <!-- 탭 3: 구글 OAuth 연동 설정 -->
-            <div id="tabConfigView" style="display:none; flex-direction:column; gap:12px;">
-                <div style="font-size:0.82rem; color:#aaa; line-height:1.5;">
-                    구글 클라우드 콘솔의 OAuth 2.0 웹 클라이언트 정보를 입력해 주세요. 등록 후 <strong>[구글 로그인]</strong>을 진행하시면 캘린더와 Google Tasks가 실시간으로 연결됩니다.
-                </div>
-                <div>
-                    <label style="font-size:0.75rem; color:#888; display:block; margin-bottom:4px;">Google Client ID</label>
-                    <input type="text" id="gClientIdInput" placeholder="예: 12345...apps.googleusercontent.com" style="width:100%; box-sizing:border-box; background:#1b1b28; border:1px solid #444; border-radius:8px; color:#fff; padding:8px 10px; font-size:0.82rem;">
-                </div>
-                <div>
-                    <label style="font-size:0.75rem; color:#888; display:block; margin-bottom:4px;">Google Client Secret</label>
-                    <input type="password" id="gClientSecretInput" placeholder="GOCSPX-..." style="width:100%; box-sizing:border-box; background:#1b1b28; border:1px solid #444; border-radius:8px; color:#fff; padding:8px 10px; font-size:0.82rem;">
-                </div>
-                <div style="background:rgba(255,123,84,0.08); border:1px dashed rgba(255,123,84,0.4); border-radius:10px; padding:10px; font-size:0.74rem; color:#ccc; line-height:1.4;">
-                    📌 <strong>Google 콘솔 '승인된 리디렉션 URI'에 등록할 주소:</strong><br>
-                    <code style="color:#ff9a76; word-break:break-all;">https://formatting-worker-july-contribution.trycloudflare.com/api/google/oauth-callback</code><br>
-                    <code style="color:#ff9a76; word-break:break-all;">http://3.37.37.127/api/google/oauth-callback</code>
-                </div>
-                <div style="display:flex; gap:8px;">
-                    <button onclick="saveGoogleOAuthConfig()" style="flex:1; padding:11px; background:#ff7b54; border:none; border-radius:10px; color:#fff; font-weight:700; font-size:0.85rem; cursor:pointer;">설정 저장하기</button>
-                    <button id="btnStartGoogleOAuth" onclick="startGoogleOAuthLogin()" style="flex:1; padding:11px; background:#4285F4; border:none; border-radius:10px; color:#fff; font-weight:700; font-size:0.85rem; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
-                        <span>G</span><span>구글 로그인</span>
-                    </button>
-                </div>
-            </div>
+        </div>
+    </div>
         </div>
     </div>
 
@@ -3477,18 +3452,14 @@ def read_root():
             activeScheduleTab = tab;
             const tEvents = document.getElementById('tabEventsView');
             const tTasks = document.getElementById('tabTasksView');
-            const tConfig = document.getElementById('tabConfigView');
             const bEvents = document.getElementById('tabScheduleBtn');
             const bTasks = document.getElementById('tabTasksBtn');
-            const bConfig = document.getElementById('tabConfigBtn');
 
             if (tEvents) tEvents.style.display = tab === 'events' ? 'flex' : 'none';
             if (tTasks) tTasks.style.display = tab === 'tasks' ? 'flex' : 'none';
-            if (tConfig) tConfig.style.display = tab === 'config' ? 'flex' : 'none';
 
             if (bEvents) { bEvents.style.background = tab === 'events' ? '#ff7b54' : 'transparent'; bEvents.style.color = tab === 'events' ? '#fff' : '#888'; }
             if (bTasks) { bTasks.style.background = tab === 'tasks' ? '#ff7b54' : 'transparent'; bTasks.style.color = tab === 'tasks' ? '#fff' : '#888'; }
-            if (bConfig) { bConfig.style.background = tab === 'config' ? '#ff7b54' : 'transparent'; bConfig.style.color = tab === 'config' ? '#fff' : '#888'; }
         }
 
         async function loadGoogleStatus() {
@@ -3525,11 +3496,13 @@ def read_root():
                     `;
                 }
             } else {
-                if (gText) gText.innerHTML = `<span style="color:#bbb;">⚪ 구글 계정 미연동</span> (로컬 모드)`;
-                if (gSync) gSync.innerText = data.is_configured ? '설정 완료됨. [구글 로그인] 버튼을 눌러 연동하세요.' : '설정 탭에서 Google OAuth Client 정보를 입력하세요.';
+                if (gText) gText.innerHTML = `<span style="color:#bbb;">⚪ 구글 계정 미연동</span>`;
+                if (gSync) gSync.innerText = data.is_configured ? '구글 계정을 연결하여 일정과 할 일을 실시간으로 동기화하세요.' : '서버에 Google OAuth Client 설정 후 로그인을 진행하세요.';
                 if (gBtns) {
                     gBtns.innerHTML = `
-                        <button onclick="switchScheduleTab('config')" style="background:#ff7b54; border:none; color:#fff; border-radius:8px; padding:5px 10px; font-size:0.75rem; font-weight:700; cursor:pointer;">연동하기</button>
+                        <button onclick="window.location.href='/api/google/login'" style="background:#4285F4; border:none; color:#fff; border-radius:8px; padding:6px 12px; font-size:0.78rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:5px;">
+                            <span style="font-weight:900;">G</span><span>구글 로그인</span>
+                        </button>
                     `;
                 }
             }
