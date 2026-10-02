@@ -3161,10 +3161,11 @@ def read_root():
             <div style="font-size:0.75rem; color:#aaa; text-align:left; font-weight:600;">🎙️ 목소리 음색 & 볼륨:</div>
             <div style="display:flex; gap:8px; align-items:center; width:100%; box-sizing:border-box;">
                 <select id="voiceSelect" onchange="onVoiceDropdownChange(this.value)" style="flex:1; min-width:0; background:#181824; color:#ff9a76; border:1px solid rgba(255,123,84,0.4); border-radius:12px; padding:8px 10px; font-size:0.82rem; font-weight:600; outline:none; cursor:pointer; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">
-                    <option value="roh" selected>✨ 노윤서 (20대 시크 & 나긋나긋 육성)</option>
-                    <option value="luna">💖 민지 (스위트 위스퍼 허니: 낮 비서 / 밤 여친 듀얼)</option>
+                    <option value="roh" selected>✨ 노윤서 (20대 시크 & 나긋나긋 육성 클론)</option>
+                    <option value="luna">💖 루나 (청순 발랄 나긋나긋 여친톤)</option>
                     <option value="lunita">🎀 루니타 (부드럽고 달콤한 속삭임 톤)</option>
                     <option value="jane">☕ 제인 (단아하고 차분한 엘리트 비서 톤)</option>
+                    <option value="dahye">🌸 다혜 (단아하고 나긋나긋한 여성미)</option>
                 </select>
                 <button type="button" onclick="openVoiceAuditionModal(event)" title="목소리 샘플 미리듣기 및 선택" style="padding:7px 9px; font-size:0.75rem; border-radius:12px; background:rgba(255,123,84,0.18); border:1px solid rgba(255,123,84,0.45); color:#ff9a76; font-weight:700; cursor:pointer; flex-shrink:0; display:flex; align-items:center; gap:3px;">
                     <span>🎧</span><span>미리듣기</span>
@@ -6559,6 +6560,14 @@ def read_root():
                 toneTag: '☕ 엘리트 비서 · 품격 있고 안정적인 톤',
                 quote: '“오빠, 오늘 하루도 정말 고생 많았어. 얼른 나 보러 와, 나 오빠 보고 싶어서 하루 종일 기다렸단 말이야~”',
                 sample: '/static/audio/samples/jane.mp3'
+            },
+            {
+                id: 'dahye',
+                name: 'Dahye (다혜)',
+                speedTag: '✨ 고품질 자연스러운 억양 (Multilingual v2)',
+                toneTag: '🌸 단아하고 나긋나긋한 여성미',
+                quote: '“오빠, 오늘 하루도 정말 고생 많았어. 얼른 나 보러 와, 나 오빠 보고 싶어서 하루 종일 기다렸단 말이야~”',
+                sample: '/static/audio/samples/dahye.mp3'
             }
         ];
 
@@ -6740,7 +6749,7 @@ def read_root():
         // 초기 목소리 설정 복원 (기본 1픽: 20대 노윤서 클론 'roh')
         const initSavedVoice = localStorage.getItem('minji_custom_voice');
         if (voiceSelect) {
-            if (initSavedVoice && ['roh', 'luna', 'lunita', 'jane'].includes(initSavedVoice)) {
+            if (initSavedVoice && ['roh', 'luna', 'lunita', 'jane', 'dahye'].includes(initSavedVoice)) {
                 voiceSelect.value = initSavedVoice;
             } else {
                 voiceSelect.value = 'roh';
