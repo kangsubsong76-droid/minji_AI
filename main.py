@@ -50,10 +50,9 @@ gemini_client = genai.Client(api_key=gemini_key) if gemini_key else None
 openai_client = OpenAI(api_key=openai_key) if openai_key else None
 anthropic_client = anthropic.Anthropic(api_key=anthropic_key) if anthropic_key else None
 
-# ElevenLabs 키가 만료(401)되어 매 턴마다 3~4초 대기 지연이 발생하므로 기본 비활성화.
-# 유효한 새 키 등록 시 /api/setup-elevenlabs 를 통해 동적 활성화됨.
-elevenlabs_key = None
-elevenlabs_voice_id = os.getenv("ELEVENLABS_VOICE_ID", "PyETHgpGKCClcvneEjgw")
+# ElevenLabs 키: 환경변수 및 등록된 키 우선 활성화 (1순위), 실패 시 OpenAI 자동 폴백 (2순위)
+elevenlabs_key = os.getenv("ELEVENLABS_API_KEY", None)
+elevenlabs_voice_id = os.getenv("ELEVENLABS_VOICE_ID", "3O5O1l8nQtZUboIsdgXN")
 
 import urllib.request
 import json
@@ -3175,6 +3174,18 @@ def read_root():
                     <input type="range" id="volumeSlider" min="0" max="200" value="120" oninput="applyVolume(this.value)" style="width:68px; accent-color:#ff7b54; cursor:pointer; height:4px;">
                     <span id="volumeLabel" style="font-size:0.72rem; color:#ff9a76; min-width:28px;">120%</span>
                 </div>
+            </div>
+        </div>
+
+        <!-- 2-1행: ElevenLabs 보안 API 키 직접 입력 (Ctrl+V) -->
+        <div style="display:flex; flex-direction:column; gap:4px; width:100%; box-sizing:border-box; background:rgba(255,255,255,0.03); padding:8px 10px; border-radius:12px; border:1px solid rgba(255,123,84,0.25);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:0.75rem; color:#ff9a76; font-weight:700;">🔑 ElevenLabs API 키 등록 (직접 붙여넣기):</span>
+                <span id="apiKeyStatus" style="font-size:0.70rem; color:#aaa;">(Ctrl+V 로 입력)</span>
+            </div>
+            <div style="display:flex; gap:6px; align-items:center; width:100%;">
+                <input type="password" id="customApiKeyInput" placeholder="sk_... 키를 여기에 붙여넣으세요" style="flex:1; background:#181824; border:1px solid rgba(255,123,84,0.4); border-radius:10px; padding:7px 10px; color:#fff; font-size:0.80rem; outline:none;" onkeydown="if(event.key==='Enter') saveCustomApiKey()">
+                <button type="button" onclick="saveCustomApiKey()" style="padding:7px 14px; font-size:0.78rem; border-radius:10px; background:linear-gradient(135deg, #ff7b54, #ff5252); border:none; color:#fff; font-weight:700; cursor:pointer; flex-shrink:0;">적용</button>
             </div>
         </div>
 
@@ -6673,7 +6684,50 @@ def read_root():
             }, 2300);
         }
 
+        async function saveCustomApiKey() {
+            const input = document.getElementById('customApiKeyInput');
+            const status = document.getElementById('apiKeyStatus');
+            const key = input ? input.value.trim() : '';
+            if (!key) {
+                alert('API 키를 입력해주세요.');
+                return;
+            }
+            if (status) {
+                status.style.color = '#ff9a76';
+                status.innerText = '인증 및 등록 중...';
+            }
+            try {
+                const resp = await fetch('/api/setup-elevenlabs', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({api_key: key})
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    if (status) {
+                        status.style.color = '#4caf50';
+                        status.innerText = '✅ 등록 성공! (노윤서 클론 연동)';
+                    }
+                    if (input) input.value = '';
+                    showVoiceToast('✨ ElevenLabs 키가 성공적으로 등록되었습니다!');
+                } else {
+                    if (status) {
+                        status.style.color = '#ff5252';
+                        status.innerText = '❌ 인증 실패';
+                    }
+                    alert('ElevenLabs 인증 실패: ' + (data.detail || '키를 확인해주세요.'));
+                }
+            } catch (err) {
+                if (status) {
+                    status.style.color = '#ff5252';
+                    status.innerText = '❌ 통신 오류';
+                }
+                alert('서버 통신 오류: ' + err.message);
+            }
+        }
+
         // 전역 함수 노출
+        window.saveCustomApiKey = saveCustomApiKey;
         window.openVoiceAuditionModal = openVoiceAuditionModal;
         window.closeVoiceAuditionModal = closeVoiceAuditionModal;
         window.handleAuditionOverlayClick = handleAuditionOverlayClick;
