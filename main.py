@@ -346,7 +346,7 @@ class VisionRequest(BaseModel):
 
 class TTSRequest(BaseModel):
     text: str
-    voice: Optional[str] = "luna"  # 기본 보이스: 스위트 위스퍼 허니 (Luna 기반 낮/밤 듀얼 보이스)
+    voice: Optional[str] = "roh"  # 기본 보이스: 노윤서 고유 톤 ("roh")
 
 class ResetMemoryRequest(BaseModel):
     session_id: Optional[str] = "default_user"
@@ -494,41 +494,43 @@ def pitch_shift_audio(
 
 
 ELEVEN_VOICE_MAP = {
-    # ★ 민지 공식 보이스: 스위트 위스퍼 허니 (Luna 기반)
-    "luna": ("Ss1VfT7ri4lqnvTDWII0", 0.35, 0.85, 0.46, "eleven_multilingual_v2"),
-    "minji": ("Ss1VfT7ri4lqnvTDWII0", 0.35, 0.85, 0.46, "eleven_multilingual_v2"),
-    "roh": ("Ss1VfT7ri4lqnvTDWII0", 0.35, 0.85, 0.46, "eleven_multilingual_v2"),
-    "dahye": ("Ss1VfT7ri4lqnvTDWII0", 0.35, 0.85, 0.46, "eleven_multilingual_v2"),
-    "dahye2": ("Ss1VfT7ri4lqnvTDWII0", 0.35, 0.85, 0.46, "eleven_multilingual_v2"),
+    # ★ 민지 음성 프로필 (ElevenLabs 활성 시 고유 클론 보이스)
+    "roh": ("3O5O1l8nQtZUboIsdgXN", 0.45, 0.85, 0.25, "eleven_multilingual_v2"),     # 노윤서 클론
+    "luna": ("Ss1VfT7ri4lqnvTDWII0", 0.52, 0.85, 0.12, "eleven_multilingual_v2"),    # 루나 스위트 위스퍼
+    "lunita": ("kZJ3sOVD7WvNyF75aJZW", 0.48, 0.85, 0.20, "eleven_multilingual_v2"),  # 루니타 소프트
+    "jane": ("ajfBUI2mmJMjvf2H6Yw7", 0.58, 0.85, 0.08, "eleven_multilingual_v2"),    # 제인 엘리트 비서
+    "dahye": ("zXNMXSB7uul4lbmpaVAn", 0.50, 0.85, 0.15, "eleven_multilingual_v2"),   # 다혜
+    "minji": ("3O5O1l8nQtZUboIsdgXN", 0.45, 0.85, 0.25, "eleven_multilingual_v2"),
 }
 
-def generate_tts_bytes(text: str, voice: str = "luna") -> bytes:
-    """ElevenLabs 초저지연 음성 생성기 (스위트 위스퍼 허니: 침실 밀착 위스퍼 & 심야 상무실 듀얼 보이스)"""
+OPENAI_VOICE_MAP = {
+    "roh": {"voice": "nova", "speed": 0.98},      # 맑고 앳된 20대 노윤서 톤
+    "luna": {"voice": "shimmer", "speed": 0.95},  # 부드럽고 촉촉한 여친 위스퍼
+    "lunita": {"voice": "coral", "speed": 0.96},  # 달콤하고 상냥한 톤
+    "jane": {"voice": "sage", "speed": 0.97},     # 단아하고 지적인 비서 톤
+    "dahye": {"voice": "alloy", "speed": 1.0},
+    "minji": {"voice": "nova", "speed": 0.98},
+}
+
+def generate_tts_bytes(text: str, voice: str = "roh") -> bytes:
+    """초저지연 음성 생성기: ElevenLabs 활성 시 고유 클론 보이스 매핑, 쿼터 소진/폴백 시 OpenAI 다채널 감성 음성 매핑"""
     global elevenlabs_key
     cleaned_text = normalize_speech_text(text)
     day = is_daytime()
+    v_key = (voice or "roh").lower().strip()
 
-    voice_id = "Ss1VfT7ri4lqnvTDWII0"
-    if day:
-        # 낮 (09:00~18:00 평일): 단아하고 지적이며 나직한 매혹의 수석 비서 톤
-        settings = {
-            "stability": 0.56,
-            "similarity_boost": 0.85,
-            "style": 0.08,
-            "use_speaker_boost": False
-        }
-    else:
-        # 밤 (18:00~09:00 및 주말): 나지막하고 촉촉하며 숨소리가 섞인 20대 스위트 위스퍼 (Breathy Sweet Whisper)
-        # 의문문 끝음은 자연스럽게 올라가고, 말끝에 불필요한 힘을 주지 않는 초밀착 감미로운 톤
-        settings = {
-            "stability": 0.52,
-            "similarity_boost": 0.85,
-            "style": 0.12,
-            "use_speaker_boost": False
-        }
-
+    # 1. ElevenLabs (유효 키 & 쿼터 보유 시)
     if elevenlabs_key:
-        for model_to_try in ["eleven_multilingual_v2", "eleven_flash_v2_5"]:
+        v_info = ELEVEN_VOICE_MAP.get(v_key, ELEVEN_VOICE_MAP["roh"])
+        voice_id = v_info[0]
+        model_name = v_info[4] if len(v_info) > 4 else "eleven_multilingual_v2"
+        settings = {
+            "stability": v_info[1],
+            "similarity_boost": v_info[2],
+            "style": v_info[3],
+            "use_speaker_boost": False
+        }
+        for model_to_try in [model_name, "eleven_flash_v2_5"]:
             try:
                 tts_url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?optimize_streaming_latency=3"
                 tts_payload = json.dumps({
@@ -549,23 +551,23 @@ def generate_tts_bytes(text: str, voice: str = "luna") -> bytes:
                 with urllib.request.urlopen(tts_req, timeout=8) as resp:
                     audio_data = resp.read()
                     if audio_data and len(audio_data) > 100:
-                        # ffmpeg WSOLA atempo 왜곡 없는 스튜디오 원본 고음질 즉시 반환
                         return audio_data
             except Exception as el_err:
                 print(f"[ElevenLabs {model_to_try} Error]: {el_err}")
-                if "401" in str(el_err) or "Unauthorized" in str(el_err):
+                if "401" in str(el_err) or "quota_exceeded" in str(el_err) or "Unauthorized" in str(el_err):
                     elevenlabs_key = None
-                    print("[ElevenLabs Disabled]: API key is invalid/unauthorized. Permanently using ultra-fast OpenAI Nova TTS.")
+                    print("[ElevenLabs Disabled]: 쿼터 소진/인증 실패로 OpenAI 초고속 다채널 감성 음성 엔진으로 자동 전환합니다.")
                     break
 
-    # 2. OpenAI 고속 음성 (자연스러운 0.96배속 감성 대화)
+    # 2. OpenAI 다채널 감성 음성 (선택된 voice에 따라 nova, shimmer, coral, sage 등 완전히 서로 다른 음색 즉시 제공)
     if openai_client:
         try:
+            oai_cfg = OPENAI_VOICE_MAP.get(v_key, OPENAI_VOICE_MAP["roh"])
             response = openai_client.audio.speech.create(
                 model="tts-1",
-                voice="nova",
+                voice=oai_cfg["voice"],
                 input=cleaned_text,
-                speed=0.96
+                speed=oai_cfg["speed"]
             )
             if response and response.content:
                 return response.content
@@ -899,7 +901,7 @@ class VoiceChatRequest(BaseModel):
     user_text: str
     session_id: Optional[str] = "default_user"
     mode: Optional[str] = "girlfriend"
-    voice: Optional[str] = "luna"
+    voice: Optional[str] = "roh"
 
 
 @app.post("/api/voice-chat")
@@ -929,7 +931,7 @@ async def voice_chat_endpoint(req: VoiceChatRequest, x_minji_auth: Optional[str]
         save_memories()
 
         # 2. 초저지연 TTS 음성 즉시 생성
-        voice_type = req.voice or "luna"
+        voice_type = req.voice or "roh"
         audio_bytes = generate_tts_bytes(reply_text, voice=voice_type)
 
         encoded_reply = urllib.parse.quote(reply_text)
@@ -950,7 +952,7 @@ async def voice_chat_endpoint(req: VoiceChatRequest, x_minji_auth: Optional[str]
         print(f"[Voice Chat Error]: {e}")
         fallback_msg = "상무님, 계속 듣고 있습니다. 편히 말씀해 주십시오." if effective_mode == "secretary" else "응 오빠, 나 계속 듣고 있어~ 편하게 얘기해줘."
         encoded_reply = urllib.parse.quote(fallback_msg)
-        fallback_bytes = generate_tts_bytes(fallback_msg, voice=req.voice or "luna")
+        fallback_bytes = generate_tts_bytes(fallback_msg, voice=req.voice or "roh")
         return Response(
             content=fallback_bytes,
             media_type="audio/mpeg",
@@ -2108,7 +2110,9 @@ def read_root():
 
         /* 6. 관능적인 상체 화끈한 초밀착 클로즈업 & 바디라인 슬로우 스캔 (Living Sensual Bust & Body Scan) */
         .living-anim-sensual .avatar-img,
-        .living-anim-bodyscan .avatar-img {
+        .living-anim-sensual .avatar-video,
+        .living-anim-bodyscan .avatar-img,
+        .living-anim-bodyscan .avatar-video {
             animation: livingSensualBodyScan 12s infinite ease-in-out !important;
             transform-origin: center 36% !important; /* 상체/가슴선/쇄골 중심점 */
             will-change: transform, filter;
@@ -2146,7 +2150,8 @@ def read_root():
         }
 
         /* 7. 초현실 시네마틱 훔쳐보기 리빙 포토 (Living Voyeur Intimate POV - 7.2s 루프) */
-        .living-anim-voyeur .avatar-img {
+        .living-anim-voyeur .avatar-img,
+        .living-anim-voyeur .avatar-video {
             animation: livingVoyeurIntimate 7.2s infinite ease-in-out !important;
             transform-origin: center 38% !important; /* 상체/가슴선/단발 턱선 중심점 */
             will-change: transform, filter;
@@ -3127,11 +3132,14 @@ def read_root():
             <div style="font-size:0.75rem; color:#aaa; text-align:left; font-weight:600;">🎙️ 목소리 음색 & 볼륨:</div>
             <div style="display:flex; gap:8px; align-items:center; width:100%; box-sizing:border-box;">
                 <select id="voiceSelect" onchange="onVoiceDropdownChange(this.value)" style="flex:1; min-width:0; background:#181824; color:#ff9a76; border:1px solid rgba(255,123,84,0.4); border-radius:12px; padding:8px 10px; font-size:0.82rem; font-weight:600; outline:none; cursor:pointer; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">
-                    <option value="luna" selected>💖 민지 (스위트 위스퍼 허니: 낮 비서 / 밤 여친 듀얼)</option>
-                    <option value="roh">✨ 노윤서 (20대 시크 & 나긋나긋 육성)</option>
+                    <option value="roh" selected>✨ 노윤서 (20대 시크 & 나긋나긋 육성)</option>
+                    <option value="luna">💖 민지 (스위트 위스퍼 허니: 낮 비서 / 밤 여친 듀얼)</option>
                     <option value="lunita">🎀 루니타 (부드럽고 달콤한 속삭임 톤)</option>
                     <option value="jane">☕ 제인 (단아하고 차분한 엘리트 비서 톤)</option>
                 </select>
+                <button type="button" onclick="openVoiceAuditionModal(event)" title="목소리 샘플 미리듣기 및 선택" style="padding:7px 9px; font-size:0.75rem; border-radius:12px; background:rgba(255,123,84,0.18); border:1px solid rgba(255,123,84,0.45); color:#ff9a76; font-weight:700; cursor:pointer; flex-shrink:0; display:flex; align-items:center; gap:3px;">
+                    <span>🎧</span><span>미리듣기</span>
+                </button>
                 <div style="display:flex; align-items:center; gap:6px; background:#181824; padding:6px 10px; border-radius:12px; border:1px solid rgba(255,255,255,0.1); flex-shrink:0;">
                     <span style="font-size:0.8rem;">🔊</span>
                     <input type="range" id="volumeSlider" min="0" max="200" value="120" oninput="applyVolume(this.value)" style="width:68px; accent-color:#ff7b54; cursor:pointer; height:4px;">
@@ -3177,9 +3185,9 @@ def read_root():
     <div class="avatar-wrapper" id="avatarWrapper" onclick="handleVisualClick(event)" title="더블 탭 또는 폰 흔들기: 사진 변경 | 탭: 대화">
         <div class="avatar-ambient-glow" id="avatarGlow"></div>
         <div class="avatar-img-container">
-            <video id="avatarVideo" class="avatar-video" src="/static/gallery/gf_15_living_knit_30s.mp4" poster="/static/gallery/minji_canonical_turtleneck_window.jpg" autoplay loop muted playsinline webkit-playsinline preload="auto" style="display:block;"></video>
-            <img id="avatarImgA" src="/static/gallery/minji_canonical_turtleneck_window.jpg" alt="Minji AI Avatar A" class="avatar-img avatar-img-active" style="display:none;">
-            <img id="avatarImgB" src="/static/gallery/minji_canonical_turtleneck_window.jpg" alt="Minji AI Avatar B" class="avatar-img avatar-img-inactive" style="display:none;">
+            <video id="avatarVideo" class="avatar-video" src="/static/gallery/gf_15_living_knit_30s.mp4" autoplay loop muted playsinline webkit-playsinline preload="auto" style="display:block;"></video>
+            <img id="avatarImgA" src="/static/gallery/canonical_minji_reference.png" alt="Minji AI Avatar A" class="avatar-img avatar-img-active" style="display:none;">
+            <img id="avatarImgB" src="/static/gallery/canonical_minji_reference.png" alt="Minji AI Avatar B" class="avatar-img avatar-img-inactive" style="display:none;">
         </div>
         <div class="avatar-vignette"></div>
         <div class="avatar-living-sheen"></div>
@@ -3413,6 +3421,26 @@ def read_root():
                         <button onclick="submitNewTask()" style="background:#ff7b54; border:none; border-radius:8px; color:#fff; padding:0 14px; font-weight:700; font-size:0.82rem; cursor:pointer;">추가</button>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🎙️ 목소리 오디션 및 청취 모달 -->
+    <div id="voiceAuditionModal" class="voice-modal-overlay" style="display:none;" onclick="handleAuditionOverlayClick(event)">
+        <div class="voice-modal-card">
+            <div class="voice-modal-header">
+                <div>
+                    <div class="voice-modal-title">🎙️ 민지 목소리 오디션 & 선택</div>
+                    <div class="voice-modal-subtitle">취향에 맞는 목소리 샘플을 직접 들어보고 즉시 변경할 수 있습니다</div>
+                </div>
+                <button class="voice-modal-close" onclick="closeVoiceAuditionModal()">✕</button>
+            </div>
+            <div class="voice-modal-body" id="voiceAuditionList">
+                <!-- JS renderAuditionList() dynamically populates this -->
+            </div>
+            <div class="voice-modal-footer">
+                <span style="font-size:0.75rem; color:#888;">선택 시 실시간 대화에 바로 적용됩니다</span>
+                <button class="voice-modal-done-btn" onclick="closeVoiceAuditionModal()">완료</button>
             </div>
         </div>
     </div>
@@ -3724,6 +3752,8 @@ def read_root():
 
             if (newSrc.endsWith('.mp4') || newSrc.endsWith('.webm')) {
                 if (videoElem) {
+                    videoElem.removeAttribute('poster');
+                    videoElem.poster = '';
                     videoElem.muted = true;
                     videoElem.defaultMuted = true;
                     videoElem.playsInline = true;
@@ -4372,9 +4402,19 @@ def read_root():
             }
         };
 
-        // 실사 리빙 비디오 & 8K 정품 화보 갤러리 풀 (상무님 원픽: 4번 니트 실루엣 민지 얼굴 100% 통일)
+        // 실사 리빙 비디오 & 8K 정품 화보 갤러리 풀 (상무님 원픽: 1번 원본민지 첫인사 마스터 항상 고정)
         const CANONICAL_MINJI_VIDEOS = [
-            "/static/gallery/gf_15_living_knit_30s.mp4",          // [★ 30초 마스터] 눈맞춤→머리쓸기→귓속말 완전판 (기본 재생)
+            "/static/gallery/gf_15_living_knit_30s.mp4",          // [★ 항상 고정 1번] 원본민지 첫인사 30초 완전판 (눈맞춤→머리쓸기→미소 귓속말)
+            "/static/gallery/canonical_minji_reference.png",      // [★ 원본민지 8K] 상무님 원픽 청순 단발 민지 (기준 페이스)
+            "/static/gallery/gf_03_pink_sofa_30s_master.mp4",    // [★ 30초 마스터] 베이비핑크 스위트하트 소파 30초 완전판 (쏟아지는 클리비지 & 노윤서 미소)
+            "/static/gallery/gf_09_bedroom_slip_30s_master.mp4", // [★ 1순위 30초 마스터] 침실 로즈 실크 슬립 30초 완전판 (비율 보완 & 쏟아지는 클리비지)
+            "/static/gallery/gf_11_peeking_bed_30s_master.mp4",  // [★ 2순위 30초 마스터] 문틈 살구빛 오프숄더 훔쳐보기 30초 완전판 (뒤돌아봄 & 이리와 손짓)
+            "/static/gallery/sec_canonical_desk_30s_master.mp4", // [★ 30초 마스터] A안 청순 민지 데스크 화이트셔츠 30초 완전판 (손 뻗기 & 심쿵 밀착)
+            "/static/gallery/sec_01_silk_office_30s_master.mp4",  // [★ 30초 마스터] 3번 샴페인 실크 셔츠 언버튼 30초 완전판 (결재판 & 귓가 속삭임)
+            "/static/gallery/gf_01_lap_pillow_30s_master.mp4",    // [★ 30초 마스터] 무릎베개 신혼 판타지 30초 완전판 (쏟아지는 바스트 & 귓가 밀착)
+            "/static/gallery/gf_01_deep_vneck_30s_master.mp4",    // [★ 30초 마스터] 딥 V넥 골지 베이글 민지 30초 완전판 (훔쳐보기 & 가슴 굴곡)
+            "/static/gallery/sec_canonical_living_desk.mp4",      // [10초] 청순 민지 화이트셔츠 데스크 10초 리빙 비디오
+            "/static/gallery/sec_01_silk_office_10s_part1.mp4",   // [10초] 샴페인 실크 오피스 데스크 눈맞춤 10초 리빙 비디오
             "/static/gallery/gf_15_living_knit_10s_master.mp4",   // [10초] 원픽 니트 실루엣 마스터 에디션 (밀착 눈맞춤 & 다정한 숨결)
             "/static/gallery/gf_15_living_knit_hair_tuck.mp4",    // [10초] 창가 햇살 머리 쓸어넘기며 미소 짓는 민지
             "/static/gallery/gf_15_living_knit_lean_whisper.mp4", // [10초] 오빠에게 살짝 다가오며 귓속말하는 밀착 민지
@@ -4409,6 +4449,17 @@ def read_root():
         }
 
         const PHOTO_TITLES = {
+            "/static/gallery/gf_15_living_knit_30s.mp4": "🎬 [첫인사 마스터] 원본민지 다정한 눈인사 & 머리쓸기 30초 (항상 첫인사 고정)",
+            "/static/gallery/canonical_minji_reference.png": "📸 [원본민지] 상무님 원픽 청순 단발 민지 (기준 페이스)",
+            "/static/gallery/gf_03_pink_sofa_30s_master.mp4": "🎬 [30초 마스터] 베이비핑크 스위트하트 소파 완전판 (쏟아지는 클리비지)",
+            "/static/gallery/gf_09_bedroom_slip_30s_master.mp4": "🎬 [30초 마스터] 1순위 침실 로즈 실크 슬립 완전판 (비율 보완 & 쏟아지는 클리비지)",
+            "/static/gallery/gf_11_peeking_bed_30s_master.mp4": "🎬 [30초 마스터] 2순위 문틈 살구빛 오프숄더 완전판 (뒤돌아봄 & 이리와 손짓)",
+            "/static/gallery/sec_canonical_desk_30s_master.mp4": "🎬 [30초 마스터] A안 청순 민지 데스크 화이트셔츠 완전판",
+            "/static/gallery/sec_01_silk_office_30s_master.mp4": "🎬 [30초 마스터] 3번 샴페인 실크 셔츠 언버튼 완전판",
+            "/static/gallery/gf_01_lap_pillow_30s_master.mp4": "🎬 [30초 마스터] 무릎베개 신혼 판타지 30초 완전판",
+            "/static/gallery/gf_01_deep_vneck_30s_master.mp4": "🎬 [30초 마스터] 딥 V넥 골지 베이글 민지 30초 완전판",
+            "/static/gallery/sec_canonical_living_desk.mp4": "🎬 [10초] 청순 민지 화이트셔츠 데스크 리빙 비디오",
+            "/static/gallery/sec_01_silk_office_10s_part1.mp4": "🎬 [10초] 샴페인 실크 오피스 데스크 눈맞춤 리빙 비디오",
             "/static/gallery/gf_16_living_turtleneck_window.mp4": "🎬 창가 햇살 골지 터틀넥 & 은은한 바디 실루엣",
             "/static/gallery/minji_living_01_shower_shirt.mp4": "🎬 샤워 후 창가 화이트 셔츠 10초 리빙 비디오",
             "/static/gallery/minji_living_02_sofa_sunlight.mp4": "🎬 일요일 나른한 오후 역광 소파 10초 리빙 비디오",
@@ -4820,9 +4871,9 @@ def read_root():
                     btn.style.background = 'rgba(79, 172, 254, 0.15)';
                 }
                 if (title) title.innerText = '민지 · 서민지 비서';
-                const savedSecVoice = localStorage.getItem('minji_custom_voice');
+                const savedSecVoice = localStorage.getItem('minji_custom_voice') || 'roh';
                 if (voiceSelect) {
-                    voiceSelect.value = (savedSecVoice && ['dahye', 'dahye2'].includes(savedSecVoice)) ? savedSecVoice : 'dahye';
+                    voiceSelect.value = savedSecVoice;
                 }
             } else {
                 if (icon) icon.innerText = '💖';
@@ -4840,9 +4891,9 @@ def read_root():
                     btn.style.background = 'rgba(255, 123, 84, 0.15)';
                 }
                 if (title) title.innerText = '민지 · 베이글 여친';
-                const savedGfVoice = localStorage.getItem('minji_custom_voice');
+                const savedGfVoice = localStorage.getItem('minji_custom_voice') || 'roh';
                 if (voiceSelect) {
-                    voiceSelect.value = (savedGfVoice && ['dahye', 'dahye2'].includes(savedGfVoice)) ? savedGfVoice : 'dahye';
+                    voiceSelect.value = savedGfVoice;
                 }
             }
 
@@ -4998,6 +5049,11 @@ def read_root():
         window.setLivingAnimationMode = setLivingAnimationMode;
 
         function selectManualLivingMode(mode) {
+            if (mode === 'auto') {
+                setAutoLivingDirector(!isAutoDirector);
+                return;
+            }
+            setAutoLivingDirector(false);
             setLivingAnimationMode(mode, true);
         }
         window.selectManualLivingMode = selectManualLivingMode;
@@ -5647,7 +5703,7 @@ def read_root():
                 }
 
                 const voiceSelect = document.getElementById('voiceSelect');
-                const chosenVoice = voiceSelect ? voiceSelect.value : 'luna';
+                const chosenVoice = (voiceSelect && voiceSelect.value) ? voiceSelect.value : (localStorage.getItem('minji_custom_voice') || 'roh');
 
                 const response = await fetch('/api/tts', {
                     method: 'POST',
@@ -5952,7 +6008,7 @@ def read_root():
             statusText.innerText = "민지가 생각하고 있어요...";
 
             try {
-                const chosenVoice = voiceSelect ? voiceSelect.value : 'luna';
+                const chosenVoice = (voiceSelect && voiceSelect.value) ? voiceSelect.value : (localStorage.getItem('minji_custom_voice') || 'roh');
                 const response = await fetch('/api/voice-chat', {
                     method: 'POST',
                     headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
