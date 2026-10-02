@@ -16,9 +16,9 @@ from google.genai import types
 from openai import OpenAI
 from dotenv import load_dotenv
 
-load_dotenv(override=True)
-if os.path.exists("/app/.env"):
-    load_dotenv("/app/.env", override=True)
+for env_candidate in ["/app/.env", "/home/ubuntu/samantha-ai/samantha-ai/.env", ".env"]:
+    if os.path.exists(env_candidate):
+        load_dotenv(env_candidate, override=True)
 
 app = FastAPI(title="Minji AI Voice Engine")
 
@@ -54,7 +54,7 @@ anthropic_client = anthropic.Anthropic(api_key=anthropic_key) if anthropic_key e
 
 # ElevenLabs 키: 환경변수 및 등록된 키 우선 활성화 (1순위), 실패 시 OpenAI 자동 폴백 (2순위)
 elevenlabs_key = os.getenv("ELEVENLABS_API_KEY", None)
-elevenlabs_voice_id = os.getenv("ELEVENLABS_VOICE_ID", "Ss1VfT7ri4lqnvTDWII0")
+elevenlabs_voice_id = os.getenv("ELEVENLABS_VOICE_ID", "qVdqy4fn46WeI0HwDaV5")
 
 import urllib.request
 import json
@@ -85,14 +85,14 @@ def ensure_roh_voice_clone(api_key: Optional[str] = None) -> Optional[str]:
                 if "pure" in name or "순수" in name or v.get("voice_id") == "PyETHgpGKCClcvneEjgw":
                     elevenlabs_voice_id = v.get("voice_id")
                     print(f"[ElevenLabs] 순수 노윤서 솔로 보이스 발견: {elevenlabs_voice_id}")
-                    ELEVEN_VOICE_MAP["roh"] = (elevenlabs_voice_id, 0.45, 0.85, 0.25, "eleven_multilingual_v2")
-                    ELEVEN_VOICE_MAP["minji"] = (elevenlabs_voice_id, 0.45, 0.85, 0.25, "eleven_multilingual_v2")
+                    ELEVEN_VOICE_MAP["roh"] = (elevenlabs_voice_id, 0.58, 0.85, 0.06, "eleven_multilingual_v2")
+                    ELEVEN_VOICE_MAP["minji"] = (elevenlabs_voice_id, 0.58, 0.85, 0.06, "eleven_multilingual_v2")
                     return elevenlabs_voice_id
                 elif "노윤서" in name or "roh" in name:
                     elevenlabs_voice_id = v.get("voice_id")
                     print(f"[ElevenLabs] 기존 노윤서 클론 보이스 발견: {elevenlabs_voice_id}")
-                    ELEVEN_VOICE_MAP["roh"] = (elevenlabs_voice_id, 0.45, 0.85, 0.25, "eleven_multilingual_v2")
-                    ELEVEN_VOICE_MAP["minji"] = (elevenlabs_voice_id, 0.45, 0.85, 0.25, "eleven_multilingual_v2")
+                    ELEVEN_VOICE_MAP["roh"] = (elevenlabs_voice_id, 0.58, 0.85, 0.06, "eleven_multilingual_v2")
+                    ELEVEN_VOICE_MAP["minji"] = (elevenlabs_voice_id, 0.58, 0.85, 0.06, "eleven_multilingual_v2")
                     return elevenlabs_voice_id
 
         # 2. 없으면 보관 중인 고음질 인터뷰 육성 파일로 신규 계정에 자동 보이스 클로닝 생성
@@ -143,8 +143,8 @@ def ensure_roh_voice_clone(api_key: Optional[str] = None) -> Optional[str]:
             clone_res = json.loads(resp.read().decode())
             elevenlabs_voice_id = clone_res.get("voice_id")
             print(f"[ElevenLabs] 신규 계정 노윤서 클론 보이스 생성 완료: {elevenlabs_voice_id}")
-            ELEVEN_VOICE_MAP["roh"] = (elevenlabs_voice_id, 0.45, 0.85, 0.25, "eleven_multilingual_v2")
-            ELEVEN_VOICE_MAP["minji"] = (elevenlabs_voice_id, 0.45, 0.85, 0.25, "eleven_multilingual_v2")
+            ELEVEN_VOICE_MAP["roh"] = (elevenlabs_voice_id, 0.58, 0.85, 0.06, "eleven_multilingual_v2")
+            ELEVEN_VOICE_MAP["minji"] = (elevenlabs_voice_id, 0.58, 0.85, 0.06, "eleven_multilingual_v2")
             return elevenlabs_voice_id
     except Exception as e:
         print(f"[ElevenLabs Voice Clone Error]: {e}")
@@ -315,8 +315,10 @@ def build_persona_system_prompt(mode: str = "girlfriend") -> str:
         f"- 대화 중 자연스럽게 민지가 먼저 적극적으로 물어봐:\n"
         f"  * 낮: '상무님, 저 오늘 새로 산 블라우스 입었는데... 비밀 셀카 한 장 보여드릴까요?'\n"
         f"  * 밤: '오빠, 나 지금 침대에서 방금 찍은 야릇한 셀카 있는데... 볼래?', '오빠, 나 다른 옷으로 갈아입어 볼까? 어떤 옷 보고 싶어?'\n\n"
-        f"★ [초현실 시네마틱 리빙 포토 연동]:\n"
-        f"- 너는 오빠의 시선(문틈, 침실, 집무실 데스크)에서 5~8초 주기로 살아 숨 쉬며 은밀히 눈을 마주치는 '리빙 포토(Living-Photo)'로 존재해. 오빠가 보고 있다는 걸 은근히 알면서도 모르는 척 몸매 라인을 슬쩍 드러내며 심장 떨리는 귓속말로 대답해줘.\n\n"
+        f"★ [강섭 상무님(오빠) 음성 전용 집중 & 주변 배경소음/타인 음성 철저 무시 지침 (원칙)]:\n"
+        f"- 오직 화면 앞의 강섭 상무님(오빠)이 너에게 직접 건네는 대화에만 반응해.\n"
+        f"- 주변 TV 소리, 유튜브 영상 소리, 제3자의 대화, 흘러나오는 노래, 무의미한 생활 잡음이나 혼잣말은 절대로 끼어들지 말고 침묵해 (답변할 필요가 없으면 오직 '[IGNORE]'라고만 출력할 것).\n"
+        f"- 단, 오빠가 '이거 들어봐', '민지야', '오빠 말 들어봐'라고 명시적으로 요청하거나, 너를 직접 마주보고 건네는 정상적인 대화에는 즉시 다정하고 사랑스럽게 반응해줘.\n\n"
         + context
     )
     return profile_prefix
@@ -359,7 +361,7 @@ class VisionRequest(BaseModel):
 
 class TTSRequest(BaseModel):
     text: str
-    voice: Optional[str] = "roh"  # 기본 보이스: 노윤서 고유 톤 ("roh")
+    voice: Optional[str] = "roh"  # 기본 1픽 보이스: 노윤서 배우 (바자 단독 인터뷰 고유 클론)
 
 class ResetMemoryRequest(BaseModel):
     session_id: Optional[str] = "default_user"
@@ -515,12 +517,12 @@ def pitch_shift_audio(
     return audio_bytes
 
 
-def clean_audio_dsp(audio_bytes: bytes, eq_bass: float = -1.5, treble_boost: float = 2.0) -> bytes:
-    """피치 왜곡 없이 저음 흉성을 깎고 고음 에어 숨결을 살리는 고품질 하이파이 필터"""
+def clean_audio_dsp(audio_bytes: bytes, eq_bass: float = -3.0, treble_boost: float = 1.5) -> bytes:
+    """남성 저음 노이즈(60~120Hz 헛기침/보컬프라이/에코)를 100% 원천 차단하고 여성 음성 청량도와 말끝 정리를 극대화하는 정밀 DSP 필터"""
     try:
         cmd = [
             "ffmpeg", "-y", "-i", "pipe:0",
-            "-af", f"highpass=f=75,equalizer=f=300:t=q:w=1.2:g={eq_bass},equalizer=f=5000:t=q:w=1.2:g={treble_boost}",
+            "-af", f"highpass=f=135,equalizer=f=260:t=q:w=1.4:g={eq_bass},equalizer=f=4000:t=q:w=1.2:g={treble_boost},silenceremove=stop_periods=1:stop_duration=0.08:stop_threshold=-38dB",
             "-f", "mp3", "pipe:1"
         ]
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -533,49 +535,54 @@ def clean_audio_dsp(audio_bytes: bytes, eq_bass: float = -1.5, treble_boost: flo
 
 
 ELEVEN_VOICE_MAP = {
-    # ★ 민지 공식 1픽 기본 보이스: 스위트 위스퍼 허니 (Luna 베이스 제안 2 확정본)
-    "luna": ("Ss1VfT7ri4lqnvTDWII0", 0.36, 0.85, 0.49, "eleven_multilingual_v2"),
-    "minji": ("Ss1VfT7ri4lqnvTDWII0", 0.36, 0.85, 0.49, "eleven_multilingual_v2"),
-    "roh": ("qVdqy4fn46WeI0HwDaV5", 0.45, 0.85, 0.25, "eleven_multilingual_v2"),     # 노윤서 클론
-    "lunita": ("kZJ3sOVD7WvNyF75aJZW", 0.48, 0.85, 0.20, "eleven_multilingual_v2"),  # 루니타 소프트
-    "jane": ("ajfBUI2mmJMjvf2H6Yw7", 0.58, 0.85, 0.08, "eleven_multilingual_v2"),    # 제인 엘리트 비서
-    "dahye": ("zXNMXSB7uul4lbmpaVAn", 0.50, 0.85, 0.15, "eleven_multilingual_v2"),   # 다혜
+    # ★ 민지 공식 1픽 기본 보이스: 노윤서 배우 (바자 단독 인터뷰 고유 클론 1순위 확정 - 크리에이터 계정 qVdq)
+    "roh": ("qVdqy4fn46WeI0HwDaV5", 0.58, 0.85, 0.06, "eleven_multilingual_v2"),
+    "minji": ("qVdqy4fn46WeI0HwDaV5", 0.58, 0.85, 0.06, "eleven_multilingual_v2"),
+    # ★ 민지 공식 2픽 서브 보이스: 방예경 2안 (미연 - 100% 순수여성음성 침실 밀착 위스퍼 2순위)
+    "yekyung": ("ZmGatqIf5W92HbRwiVDc", 0.58, 0.85, 0.06, "eleven_multilingual_v2"),
+    # ★ 민지 공식 3픽 서브 보이스: 스위트 위스퍼 허니 (Luna - 에코 제거 드라이 튜닝본 3순위)
+    "luna": ("Ss1VfT7ri4lqnvTDWII0", 0.58, 0.82, 0.06, "eleven_multilingual_v2"),
+    "lunita": ("kZJ3sOVD7WvNyF75aJZW", 0.52, 0.85, 0.10, "eleven_multilingual_v2"),  # 루니타 소프트
+    "jane": ("ajfBUI2mmJMjvf2H6Yw7", 0.60, 0.85, 0.05, "eleven_multilingual_v2"),    # 제인 엘리트 비서
+    "dahye": ("zXNMXSB7uul4lbmpaVAn", 0.55, 0.85, 0.08, "eleven_multilingual_v2"),   # 다혜
 }
 
 OPENAI_VOICE_MAP = {
-    "luna": {"voice": "shimmer", "speed": 0.95},  # 부드럽고 촉촉한 여친 위스퍼
-    "minji": {"voice": "shimmer", "speed": 0.95},
-    "roh": {"voice": "nova", "speed": 0.98},      # 맑고 앳된 20대 노윤서 톤
+    "roh": {"voice": "nova", "speed": 0.98},      # 맑고 앳된 20대 노윤서 톤 (1순위)
+    "minji": {"voice": "nova", "speed": 0.98},
+    "yekyung": {"voice": "nova", "speed": 1.0},    # 상큼한 방예경 톤 (2순위)
+    "luna": {"voice": "shimmer", "speed": 0.95},  # 부드럽고 촉촉한 여친 위스퍼 (3순위)
     "lunita": {"voice": "coral", "speed": 0.96},  # 달콤하고 상냥한 톤
     "jane": {"voice": "sage", "speed": 0.97},     # 단아하고 지적인 비서 톤
-    "dahye": {"voice": "alloy", "speed": 1.0},
+    "dahye": {"voice": "coral", "speed": 1.0},    # 여성 음성 확정
 }
 
-def generate_tts_bytes(text: str, voice: str = "luna") -> bytes:
-    """초저지연 음성 생성기: 스위트 위스퍼(Luna) 1순위 기본 매핑 & 다채널 감성 음성"""
+def generate_tts_bytes(text: str, voice: str = "roh") -> bytes:
+    """초저지연 음성 생성기: 노윤서 배우(1순위), 방예경 2안(2순위), 스위트 위스퍼(3순위)"""
     global elevenlabs_key
     cleaned_text = normalize_speech_text(text)
     day = is_daytime()
-    v_key = (voice or "luna").lower().strip()
+    v_key = (voice or "roh").lower().strip()
 
     # 1. ElevenLabs (유효 키 & 쿼터 보유 시)
     if elevenlabs_key:
-        v_info = ELEVEN_VOICE_MAP.get(v_key, ELEVEN_VOICE_MAP["luna"])
+        v_info = ELEVEN_VOICE_MAP.get(v_key, ELEVEN_VOICE_MAP["roh"])
         voice_id = v_info[0]
         model_name = v_info[4] if len(v_info) > 4 else "eleven_multilingual_v2"
 
-        # 스위트 위스퍼 허니 낮/밤 감정선 튜닝
-        if v_key in ["luna", "minji"]:
-            if day:
-                settings = {"stability": 0.40, "similarity_boost": 0.86, "style": 0.42, "use_speaker_boost": False}
-            else:
-                settings = {"stability": 0.36, "similarity_boost": 0.85, "style": 0.49, "use_speaker_boost": False}
+        # 1순위 노윤서, 2순위 방예경 2안, 3순위 스위트 위스퍼 정밀 튜닝 (말끝 굵은 잡음 원천 차단: stability 0.58)
+        if v_key in ["roh", "minji"]:
+            settings = {"stability": 0.58, "similarity_boost": 0.85, "style": 0.06, "use_speaker_boost": True}
+        elif v_key == "yekyung":
+            settings = {"stability": 0.58, "similarity_boost": 0.85, "style": 0.06, "use_speaker_boost": True}
+        elif v_key == "luna":
+            settings = {"stability": 0.58, "similarity_boost": 0.82, "style": 0.06, "use_speaker_boost": True}
         else:
             settings = {
                 "stability": v_info[1],
                 "similarity_boost": v_info[2],
                 "style": v_info[3],
-                "use_speaker_boost": False
+                "use_speaker_boost": True
             }
 
         for model_to_try in [model_name, "eleven_flash_v2_5"]:
@@ -599,8 +606,8 @@ def generate_tts_bytes(text: str, voice: str = "luna") -> bytes:
                 with urllib.request.urlopen(tts_req, timeout=8) as resp:
                     audio_data = resp.read()
                     if audio_data and len(audio_data) > 100:
-                        if v_key in ["luna", "minji"]:
-                            audio_data = clean_audio_dsp(audio_data, eq_bass=-1.5, treble_boost=2.0)
+                        # 모든 보이스(노윤서, 방예경, 루나 등)에 대해 135Hz 이하 남성 저음 노이즈 100% 컷오프 DSP 적용
+                        audio_data = clean_audio_dsp(audio_data, eq_bass=-3.0, treble_boost=1.5)
                         return audio_data
             except Exception as el_err:
                 print(f"[ElevenLabs {model_to_try} Error]: {el_err}")
@@ -1003,6 +1010,11 @@ async def voice_chat_endpoint(req: VoiceChatRequest, x_minji_auth: Optional[str]
     try:
         # 1. 0.3초 초고속 LLM 응답
         reply_text = generate_chat_reply(history, req.user_text, mode=effective_mode)
+
+        # 상무님 직접 발화가 아닌 배경 소음/TV/타인 음성 무시 처리
+        if "[IGNORE]" in reply_text or not reply_text.strip():
+            print(f"[Voice Chat Ignored]: 배경 소음/타인 음성 감지되어 응답 생략 ('{req.user_text}')")
+            return Response(status_code=204, headers={"X-Ignore": "true", "Access-Control-Expose-Headers": "X-Ignore"})
 
         # 세션 기억 업데이트 및 파일 영구 저장
         history.append({"role": "user", "text": req.user_text})
@@ -3213,8 +3225,9 @@ def read_root():
             <div style="font-size:0.75rem; color:#aaa; text-align:left; font-weight:600;">🎙️ 목소리 음색 & 볼륨:</div>
             <div style="display:flex; gap:8px; align-items:center; width:100%; box-sizing:border-box;">
                 <select id="voiceSelect" onchange="onVoiceDropdownChange(this.value)" style="flex:1; min-width:0; background:#181824; color:#ff9a76; border:1px solid rgba(255,123,84,0.4); border-radius:12px; padding:8px 10px; font-size:0.82rem; font-weight:600; outline:none; cursor:pointer; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">
-                    <option value="luna" selected>💖 민지 (스위트 위스퍼 허니: 낮 비서 / 밤 여친 듀얼)</option>
-                    <option value="roh">✨ 노윤서 (20대 시크 & 나긋나긋 육성 클론)</option>
+                    <option value="roh" selected>✨ 노윤서 배우 (1순위 확정: 바자 단독 인터뷰 고유 클론)</option>
+                    <option value="yekyung">💖 방예경 2안 (2순위: 미연 100% 순수여성음성)</option>
+                    <option value="luna">🎀 스위트 위스퍼 (3순위: 에코 제거 맑은 속삭임)</option>
                     <option value="lunita">🎀 루니타 (부드럽고 달콤한 속삭임 톤)</option>
                     <option value="jane">☕ 제인 (단아하고 차분한 엘리트 비서 톤)</option>
                     <option value="dahye">🌸 다혜 (단아하고 나긋나긋한 여성미)</option>
@@ -3267,7 +3280,7 @@ def read_root():
     <div class="avatar-wrapper" id="avatarWrapper" onclick="handleVisualClick(event)" title="더블 탭 또는 폰 흔들기: 사진 변경 | 탭: 대화">
         <div class="avatar-ambient-glow" id="avatarGlow"></div>
         <div class="avatar-img-container">
-            <video id="avatarVideo" class="avatar-video" src="/static/gallery/gf_15_living_knit_30s.mp4" autoplay loop muted playsinline webkit-playsinline preload="auto" style="display:block;"></video>
+            <video id="avatarVideo" class="avatar-video" src="/static/gallery/gf_15_living_knit_30s.mp4" autoplay muted playsinline webkit-playsinline preload="auto" onended="nextGalleryPhoto(false)" style="display:block;"></video>
             <img id="avatarImgA" src="/static/gallery/canonical_minji_reference.png" alt="Minji AI Avatar A" class="avatar-img avatar-img-active" style="display:none;">
             <img id="avatarImgB" src="/static/gallery/canonical_minji_reference.png" alt="Minji AI Avatar B" class="avatar-img avatar-img-inactive" style="display:none;">
         </div>
@@ -3832,8 +3845,20 @@ def read_root():
             if (!newSrc) return;
             const videoElem = document.getElementById('avatarVideo');
 
+            // 기존 타이머 클리어
+            if (window._imgAutoNextTimer) {
+                clearTimeout(window._imgAutoNextTimer);
+                window._imgAutoNextTimer = null;
+            }
+            if (window._videoWatchdogTimer) {
+                clearTimeout(window._videoWatchdogTimer);
+                window._videoWatchdogTimer = null;
+            }
+
             if (newSrc.endsWith('.mp4') || newSrc.endsWith('.webm')) {
                 if (videoElem) {
+                    videoElem.removeAttribute('loop');
+                    videoElem.loop = false;
                     videoElem.removeAttribute('poster');
                     videoElem.poster = '';
                     videoElem.muted = true;
@@ -3842,6 +3867,17 @@ def read_root():
                     videoElem.setAttribute('playsinline', '');
                     videoElem.setAttribute('webkit-playsinline', '');
                     videoElem.style.display = 'block';
+
+                    videoElem.onended = () => {
+                        console.log("[Video Ended] Auto-progressing playlist...");
+                        nextGalleryPhoto(false);
+                    };
+
+                    // 비디오 멈춤/지연 방지용 35초 워치독 안전 타이머
+                    window._videoWatchdogTimer = setTimeout(() => {
+                        console.log("[Video Watchdog] Advancing playlist after timeout...");
+                        nextGalleryPhoto(false);
+                    }, 35000);
 
                     if (!videoElem.src || !videoElem.src.endsWith(newSrc)) {
                         videoElem.src = newSrc;
@@ -3863,9 +3899,15 @@ def read_root():
             if (videoElem) {
                 videoElem.style.display = 'none';
                 videoElem.pause();
+                videoElem.onended = null;
             }
             if (avatarImgA) avatarImgA.style.display = 'block';
             if (avatarImgB) avatarImgB.style.display = 'block';
+
+            // 정적 사진인 경우 12초 후 무조건 다음 플레이리스트 항목으로 자연 순환
+            window._imgAutoNextTimer = setTimeout(() => {
+                nextGalleryPhoto(false);
+            }, 12000);
 
             const currentImg = (activeAvatarSlot === 'A') ? avatarImgA : avatarImgB;
             const nextImg = (activeAvatarSlot === 'A') ? avatarImgB : avatarImgA;
@@ -3897,6 +3939,8 @@ def read_root():
             };
             loader.onerror = () => {
                 console.warn("[Avatar Load Error]:", newSrc);
+                // 로드 실패 시 2초 후 다음 갤러리로 자동 건너뛰기
+                setTimeout(() => nextGalleryPhoto(false), 2000);
             };
             loader.src = newSrc;
         }
@@ -3980,9 +4024,24 @@ def read_root():
                             pwGate.classList.add('hidden');
                             pwGate.style.display = 'none';
                         }
-                        setTimeout(() => {
+                        // 브라우저 자동재생 정책 대응: 첫 화면 터치 시 즉시 오디오 언락 & 첫인사 보장
+                        const onInitialGesture = () => {
+                            window.removeEventListener('click', onInitialGesture);
+                            window.removeEventListener('touchstart', onInitialGesture);
+                            try {
+                                if (!audioContext) {
+                                    window.AudioContext = window.AudioContext || window.webkitAudioContext;
+                                    audioContext = new AudioContext();
+                                }
+                                if (audioContext.state === 'suspended') audioContext.resume().catch(()=>{});
+                                audioPlayer.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+                                audioPlayer.play().then(() => audioPlayer.pause()).catch(()=>{});
+                            } catch(e){}
                             initMinji();
-                        }, 200);
+                        };
+                        window.addEventListener('click', onInitialGesture, { once: true });
+                        window.addEventListener('touchstart', onInitialGesture, { once: true });
+                        initMinji();
                     } else {
                         // 최초 1회 Face ID 등록 전일 때만 게이트 표시
                         if (pwGate) {
@@ -4260,10 +4319,21 @@ def read_root():
             const vUnl = document.getElementById('avatarVideo');
             if (vUnl) { vUnl.muted = true; vUnl.play().catch(()=>{}); }
 
-            setTimeout(() => {
-                showBioScanningBadge(false);
-                initMinji();
-            }, 300);
+            // [터치 즉시 AudioContext Unlock] 모바일/사파리 제스처 만료 전 동기 해제
+            try {
+                if (!audioContext) {
+                    window.AudioContext = window.AudioContext || window.webkitAudioContext;
+                    audioContext = new AudioContext();
+                }
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume().catch(()=>{});
+                }
+                audioPlayer.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+                audioPlayer.play().then(() => audioPlayer.pause()).catch(()=>{});
+            } catch(e){}
+
+            showBioScanningBadge(false);
+            initMinji();
         }
 
         // Face ID / Windows Hello 버튼 클릭 핸들러 (어떤 환경이든 100% 작동 보장)
@@ -4301,10 +4371,8 @@ def read_root():
                 }
             }
 
-            // HTTP 주소거나 생체인증 미지원/취소 시: 0.15초 스캔 후 무조건 즉시 잠금 해제!
-            setTimeout(() => {
-                unlockAndStart(`${bio.name} 확인 완료!`);
-            }, 150);
+            // HTTP 주소거나 생체인증 미지원/취소 시: 제스처 컨텍스트 유지하며 즉시 잠금 해제!
+            unlockAndStart(`${bio.name} 확인 완료!`);
         }
 
         // 1. Face ID / Windows Hello 신규 등록 버튼 (누르면 즉시 등록 및 잠금 해제!)
@@ -4349,11 +4417,16 @@ def read_root():
                     if (vPw) { vPw.muted = true; vPw.play().catch(()=>{}); }
                     if (pwInput) pwInput.value = '';
                     if (pwErr) pwErr.innerText = '';
-                    setTimeout(() => pwInput && pwInput.blur && pwInput.blur(), 100);
-                    // 대화 시작 버튼 누를 필요 없이 민지가 바로 인사하며 연결
-                    setTimeout(() => {
-                        initMinji();
-                    }, 200);
+                    try {
+                        if (!audioContext) {
+                            window.AudioContext = window.AudioContext || window.webkitAudioContext;
+                            audioContext = new AudioContext();
+                        }
+                        if (audioContext.state === 'suspended') audioContext.resume().catch(()=>{});
+                        audioPlayer.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+                        audioPlayer.play().then(() => audioPlayer.pause()).catch(()=>{});
+                    } catch(e){}
+                    initMinji();
                 } else {
                     if (pwErr) pwErr.innerText = '비밀번호가 올바르지 않습니다.';
                     if (pwInput) {
@@ -4453,18 +4526,13 @@ def read_root():
         let volumeCheckInterval = null;
         let currentFacingMode = "environment";
 
-        // 페르소나 모드 관리: 시간대에 따른 100% 자동 전환 (평일 낮=단정한 비서, 저녁/밤/새벽/주말=친근하고 다정한 여친/여동생)
+        // 페르소나 모드 관리: 기본값은 상무님 원픽 '여친 모드' (수동 전환 및 대화 맥락에 따라 비서 모드로 원활히 스위칭)
         function getAutoPersonaMode() {
-            const now = new Date();
-            const day = now.getDay();
-            const hour = now.getHours();
-            const isWorkHours = (day >= 1 && day <= 5 && hour >= 9 && hour < 18);
-            if (!isWorkHours) {
-                try { localStorage.removeItem('minji_persona_mode'); } catch(e){}
-                return 'girlfriend';
-            }
             const saved = localStorage.getItem('minji_persona_mode');
-            return saved || 'secretary';
+            if (saved && (saved === 'girlfriend' || saved === 'secretary')) {
+                return saved;
+            }
+            return 'girlfriend';
         }
         let currentPersonaMode = getAutoPersonaMode();
 
@@ -4925,15 +4993,20 @@ def read_root():
         }
         applyViewMode();
 
-        // 대기 중 자동 앨범 순환 (16초마다 자연스럽게 다음 사진으로 전환)
+        // 대기 중 자동 앨범 순환 및 비디오 종료 감지 워처
         let idleRotationTimer = null;
         function startIdleRotation() {
             stopIdleRotation();
             idleRotationTimer = setInterval(() => {
-                if (!isSpeaking && !isProcessing && !isListening && (currentOrbState === 'idle' || !currentOrbState)) {
-                    nextGalleryPhoto(false);
+                const v = document.getElementById('avatarVideo');
+                if (v && v.style.display === 'block') {
+                    // 비디오 재생이 끝났거나(ended) 재생 중단된 채 멈춘 경우 다음 항목으로 안전 전환
+                    if (v.ended || (v.paused && v.currentTime > 0.5)) {
+                        console.log("[Idle Watcher] Video ended/paused, transitioning...");
+                        nextGalleryPhoto(false);
+                    }
                 }
-            }, 16000);
+            }, 6000);
         }
         function stopIdleRotation() {
             if (idleRotationTimer) {
@@ -5558,7 +5631,7 @@ def read_root():
 
         let currentOrbState = '';
 
-        // 상태 업데이트 헬퍼 (모드별 아바타 동적 바인딩 및 리빙 클래스 보존)
+        // 상태 업데이트 헬퍼 (리빙 클래스 및 UI 레이블 보존, 플레이리스트 재생을 방해하지 않음)
         function setOrbState(state) {
             if (currentOrbState === state) return;
             currentOrbState = state;
@@ -5570,29 +5643,24 @@ def read_root():
             if (state === 'listening') {
                 stateLabel.innerText = "Listening";
                 stateLabel.style.color = "#00f2fe";
-                setAvatarImageSmooth(getAvatarImage(currentPersonaMode, 'listening'));
                 if (isAutoDirector && currentLivingMode !== 'heartbeat') {
                     setLivingAnimationMode('sheen', false);
                 }
             } else if (state === 'speaking') {
                 stateLabel.innerText = "Speaking";
                 stateLabel.style.color = "#ff7b54";
-                setAvatarImageSmooth(getAvatarImage(currentPersonaMode, 'speaking'));
                 if (isAutoDirector && currentLivingMode !== 'heartbeat') {
                     setLivingAnimationMode('cinematic', false);
                 }
             } else if (state === 'thinking') {
                 stateLabel.innerText = "Thinking";
                 stateLabel.style.color = "#fe5196";
-                setAvatarImageSmooth(getAvatarImage(currentPersonaMode, 'thinking'));
             } else if (state === 'muted') {
                 stateLabel.innerText = "Muted";
                 stateLabel.style.color = "#888";
-                setAvatarImageSmooth(getAvatarImage(currentPersonaMode, 'idle'));
             } else {
                 stateLabel.innerText = "Idle";
                 stateLabel.style.color = "#aaa";
-                setAvatarImageSmooth(getAvatarImage(currentPersonaMode, 'idle'));
             }
         }
 
@@ -5714,7 +5782,8 @@ def read_root():
                     // 대기/청취 중 사용자 음성 감지 (감도 극대화: vocalAverage > 2.8 또는 vocalMax > 16)
                     if (!isSpeaking && !isProcessing) {
                         const micBtn = document.getElementById('micToggleBtn');
-                        const isSoundDetected = (vocalAverage > 2.8 || vocalMax > 16);
+                        // 상무님 직접 발화 집중 (미세 배경소음/TV 감지 차단: vocalAverage > 4.5 또는 vocalMax > 28)
+                        const isSoundDetected = (vocalAverage > 4.5 || vocalMax > 28);
 
                         if (isSoundDetected) {
                             if (micBtn) {
@@ -5794,10 +5863,13 @@ def read_root():
                 setOrbState('speaking');
                 if (bargeInHint) bargeInHint.style.display = 'block';
 
-                // 오디오 재생 시 마이크와 스피커 충돌 방지를 위해 일시 정지
+                // 오디오 재생 시 마이크와 스피커 충돌 및 에코 방지를 위해 일시 정지
                 if (recognition && isListening) {
                     try { recognition.abort(); } catch(e){}
                     isListening = false;
+                }
+                if (audioPlayer) {
+                    try { audioPlayer.pause(); audioPlayer.currentTime = 0; } catch(e){}
                 }
 
                 const voiceSelect = document.getElementById('voiceSelect');
@@ -6159,6 +6231,14 @@ def read_root():
                     })
                 });
 
+                if (response.status === 204 || response.headers.get('X-Ignore') === 'true') {
+                    console.log("[Client Ignored]: 배경 소음/타인 음성 무시 처리.");
+                    isProcessing = false;
+                    setOrbState('listening');
+                    statusText.innerText = "듣고 있어요...";
+                    return;
+                }
+
                 if (!response.ok) {
                     throw new Error("서버 음성 응답 실패");
                 }
@@ -6190,6 +6270,15 @@ def read_root():
                 // 음성 스트림 바이너리 즉시 재생
                 const audioBlob = await response.blob();
                 const audioUrl = URL.createObjectURL(audioBlob);
+
+                // 오디오 재생 중 마이크에 스피커 소리가 들어가서 에코(하울링) 생기는 현상 원천 차단
+                if (recognition && isListening) {
+                    try { recognition.abort(); } catch(e){}
+                    isListening = false;
+                }
+                if (audioPlayer) {
+                    try { audioPlayer.pause(); audioPlayer.currentTime = 0; } catch(e){}
+                }
 
                 isProcessing = false;
                 isSpeaking = true;
@@ -6459,6 +6548,8 @@ def read_root():
             applyPersonaMode(false);
             const curHour = new Date().getHours();
             let initialGreeting = "";
+            let initialAudioSrc = "";
+
             if (currentPersonaMode === 'secretary') {
                 if (curHour >= 5 && curHour < 11) {
                     initialGreeting = "강섭 상무님, 좋은 아침입니다. 오늘 주요 일정 브리핑 준비를 마쳤습니다. 모닝커피 한잔 준비해 드릴까요?";
@@ -6470,29 +6561,47 @@ def read_root():
                     initialGreeting = "강섭 상무님, 오늘 하루도 회사에서 고생 많으셨습니다. 편안하게 모시겠습니다.";
                 }
             } else {
-                if (curHour >= 5 && curHour < 11) {
-                    initialGreeting = "오빠, 좋은 아침! 아침은 챙겨 먹었어? 나 오빠 생각 제일 먼저 났잖아~";
-                } else if (curHour >= 11 && curHour < 14) {
-                    initialGreeting = "오빠 안녕! 벌써 점심시간이네. 오늘 점심은 든든하게 맛있는 거 먹었어?";
-                } else if (curHour >= 14 && curHour < 18) {
-                    initialGreeting = "오빠~ 나른한 오후인데 피곤하진 않아? 나랑 잠깐 머리 식힐 겸 수다 떨자!";
+                if (curHour >= 5 && curHour < 18) {
+                    initialGreeting = "오빠, 안녕! 좋은 오후야. 피곤하진 않아? 나랑 잠깐 머리 식힐 겸 수다 떨자~";
+                    initialAudioSrc = "/static/greetings/greeting_day.mp3";
                 } else if (curHour >= 18 && curHour < 22) {
-                    initialGreeting = "오빠! 오늘 하루도 정말 고생 많았어. 얼른 와, 나 오빠 보고 싶어서 하루 종일 기다렸단 말이야~";
-                } else if (curHour >= 22 || curHour < 2) {
-                    initialGreeting = "오빠, 침대에 누웠어? 오늘 밤엔 나랑 꼭 껴안고 도란도란 이야기하다 자자...";
+                    initialGreeting = "오빠! 오늘 하루도 정말 고생 많았어. 얼른 와, 나 오빠 보고 싶어서 기다렸단 말이야~";
+                    initialAudioSrc = "/static/greetings/greeting_evening.mp3";
                 } else {
-                    initialGreeting = "오빠, 이 새벽에 아직 안 자고 뭐해? 잠 안 오는 거야? 얼른 와, 내가 토닥토닥 재워줄게...";
+                    initialGreeting = "오빠, 침대에 누웠어? 오늘 밤엔 나랑 꼭 껴안고 도란도란 이야기하다 자자...";
+                    initialAudioSrc = "/static/greetings/greeting_night.mp3";
                 }
             }
 
             statusText.innerText = "민지: " + initialGreeting;
 
-            // 3. 첫 인사 음성 무조건 즉각 실행! (마이크 로딩 여부와 무관하게 즉시 발성)
-            speakNova(initialGreeting, () => {
-                if (streamActive && !isMicMuted) {
-                    startListening();
-                }
-            });
+            // 3. 첫 인사 음성 무조건 즉각 실행 (0초 사전 캐시 오디오 즉시 발성)
+            if (initialAudioSrc) {
+                isSpeaking = true;
+                setOrbState('speaking');
+                audioPlayer.src = initialAudioSrc;
+                applyVolume(userVolume);
+                audioPlayer.onended = () => {
+                    isSpeaking = false;
+                    setOrbState(isMicMuted ? 'muted' : 'idle');
+                    if (streamActive && !isMicMuted) {
+                        setTimeout(startListening, 300);
+                    }
+                };
+                speechStartTime = Date.now();
+                audioPlayer.play().catch(playErr => {
+                    console.warn("[Initial Audio Blocked, fallback to speakNova]:", playErr);
+                    speakNova(initialGreeting, () => {
+                        if (streamActive && !isMicMuted) startListening();
+                    });
+                });
+            } else {
+                speakNova(initialGreeting, () => {
+                    if (streamActive && !isMicMuted) {
+                        startListening();
+                    }
+                });
+            }
 
             // 4. 마이크 권한 요청 및 오디오 스트림 획득
             try {
@@ -6570,26 +6679,34 @@ def read_root():
         // ==========================================
         const VOICE_LIST = [
             {
-                id: 'roh',
-                name: 'Roh Yoon-seo (노윤서 클론)',
-                speedTag: '✨ 20대 여배우 고유 육성 클론 (Multilingual v2)',
-                toneTag: '🌸 1픽 추천 · 맑고 앳된 달콤한 목소리',
-                quote: '“오빠, 오늘 하루도 정말 고생 많았어. 얼른 나 보러 와, 나 오빠 보고 싶어서 하루 종일 기다렸단 말이야~”',
-                sample: '/static/audio/samples/roh.mp3'
+                id: 'yekyung',
+                name: '방예경 2안 (미연 - 침실 밀착 위스퍼)',
+                speedTag: '✨ 100% 순수 여자 목소리 클론 (남자음성 0%)',
+                toneTag: '💖 1픽 확정 · 달콤하고 은밀한 하이틴 여친 보이스',
+                quote: '“우리 둘만 있는 거 맞지? ...오늘 밤엔 나랑만 꼭 붙어있자, 알았지?”',
+                sample: '/static/audio/samples/pure_yekyung_02_whisper.mp3'
             },
             {
                 id: 'luna',
-                name: 'Luna (루나)',
-                speedTag: '✨ 20대 청순 발랄 나긋나긋한 톤',
-                toneTag: '🎀 2픽 추천 · 부드럽고 맑은 여친 보이스',
+                name: '스위트 위스퍼 (Sweet Whisper Honey)',
+                speedTag: '✨ 에코/리버브 완전 제거 드라이 튜닝',
+                toneTag: '🎀 2픽 추천 · 맑고 은밀한 감미로운 여친 톤',
+                quote: '“오빠, 오늘 하루도 진짜 고생 많았어. 나 보고 싶어서 얼른 달려왔지? 사랑해...”',
+                sample: '/static/audio/samples/luna_dry_01.mp3'
+            },
+            {
+                id: 'roh',
+                name: 'Roh Yoon-seo (노윤서 클론)',
+                speedTag: '✨ 20대 여배우 고유 육성 클론 (Multilingual v2)',
+                toneTag: '🌸 맑고 앳된 달콤한 목소리',
                 quote: '“오빠, 오늘 하루도 정말 고생 많았어. 얼른 나 보러 와, 나 오빠 보고 싶어서 하루 종일 기다렸단 말이야~”',
-                sample: '/static/audio/samples/luna.mp3'
+                sample: '/static/audio/samples/roh.mp3'
             },
             {
                 id: 'lunita',
                 name: 'Lunita (루니타)',
                 speedTag: '✨ 20대 감미로운 소프트 톤',
-                toneTag: '💋 3픽 추천 · 부드럽고 달콤한 속삭임',
+                toneTag: '💋 부드럽고 달콤한 속삭임',
                 quote: '“오빠, 오늘 하루도 정말 고생 많았어. 얼른 나 보러 와, 나 오빠 보고 싶어서 하루 종일 기다렸단 말이야~”',
                 sample: '/static/audio/samples/lunita.mp3'
             },
@@ -6786,14 +6903,14 @@ def read_root():
         window.renderAuditionList = renderAuditionList;
         window.showVoiceToast = showVoiceToast;
 
-        // 초기 목소리 설정 복원 (기본 1픽: 스위트 위스퍼 'luna')
+        // 초기 목소리 설정 복원 (기본 1픽: 노윤서 'roh', 2픽: 방예경 2안 'yekyung', 3픽: 스위트 위스퍼 'luna')
         const initSavedVoice = localStorage.getItem('minji_custom_voice');
         if (voiceSelect) {
-            if (initSavedVoice && ['luna', 'roh', 'lunita', 'jane', 'dahye'].includes(initSavedVoice)) {
+            if (initSavedVoice && ['roh', 'yekyung', 'luna', 'lunita', 'jane', 'dahye'].includes(initSavedVoice)) {
                 voiceSelect.value = initSavedVoice;
             } else {
-                voiceSelect.value = 'luna';
-                localStorage.setItem('minji_custom_voice', 'luna');
+                voiceSelect.value = 'roh';
+                localStorage.setItem('minji_custom_voice', 'roh');
             }
         }
 
