@@ -4615,9 +4615,10 @@ def read_root():
         // 🎬 갤러리 플레이리스트 (가장 덜 섹시 -> 가장 섹시 순 정렬 & 아웃핏/장소별 그룹핑)
         // ==========================================
 
-        // 1. [여친 전용 30초 마스터 풀]: 청순 첫인사 -> 핑크 소파 -> 무릎베개 -> 딥 V넥
+        // 1. [여친 전용 30초 마스터 풀]: 청순 첫인사 -> 상체 숙임 훔쳐보기 -> 핑크 소파 -> 무릎베개 -> 딥 V넥
         const GIRLFRIEND_VIDEOS = [
             "/static/gallery/gf_15_living_knit_30s.mp4",          // [1번 항상 고정] 원본민지 청순 아이보리 니트 첫인사 30초 완전판
+            "/static/gallery/gf_21_lean_knit_30s_master.mp4",    // [신규 판타지] 상체 45도 숙임 안쪽 실루엣 훔쳐보기 30초 완전판 (무페이딩 RAW 실사)
             "/static/gallery/gf_03_pink_sofa_30s_master.mp4",    // 베이비핑크 스위트하트 소파 데이트 30초 완전판
             "/static/gallery/gf_01_lap_pillow_30s_master.mp4",    // 무릎베개 신혼 판타지 귓가 속삭임 30초 완전판
             "/static/gallery/gf_01_deep_vneck_30s_master.mp4"     // 딥 V넥 골지 베이글 민지 30초 완전판
@@ -4644,7 +4645,8 @@ def read_root():
         // 📸 스틸컷 전용 고화질 실사 화보 풀 (스틸컷 모드 선택 시 활성화)
         const GIRLFRIEND_STILLS = [
             "/static/gallery/canonical_minji_reference.png",
-            "/static/gallery/minji_lean_table_still.png",
+            "/static/gallery/minji_lean_still_A_knit.png",
+            "/static/gallery/minji_lean_still_B_silk.png",
             "/static/gallery/minji_scenario_02_sofa_sunlight.jpg",
             "/static/gallery/minji_scenario_01_shower_shirt.jpg",
             "/static/gallery/minji_scenario_03_park_bench.jpg",
@@ -4652,7 +4654,6 @@ def read_root():
             "/static/gallery/minji_scenario_07_rain_window.jpg",
             "/static/gallery/minji_scenario_09_chin_lift.jpg",
             "/static/gallery/gf_02_wrap_knit_peach.jpg",
-            "/static/gallery/gf_09_bedroom_slip_balanced.jpg",
             "/static/gallery/gf_12_onsen_webcam_close.jpg"
         ];
 
@@ -4701,8 +4702,9 @@ def read_root():
             "/static/gallery/sec_01_silk_office_10s_part1.mp4": "🎬 [10초] 샴페인 실크 오피스 데스크 눈맞춤 리빙 비디오",
             "/static/gallery/sec_02_living_silk_desk.mp4": "🎬 [10초] 샴페인 실크 데스크 밀착 리빙 비디오",
             "/static/gallery/sec_09_living_silk_unbutton.mp4": "🎬 [10초] 심야 상무실 샴페인 실크 셔츠 언버튼 리빙 비디오",
-            "/static/gallery/gf_20_lean_peek_30s_master.mp4": "🎬 [30초 마스터] 상체 숙임 훔쳐보기 완전판 (네크라인 안쪽 실루엣 & 수줍은 눈맞춤)",
-            "/static/gallery/minji_lean_table_still.png": "📸 [여친 화보] 커피잔 건네며 상체 45도 숙이기 (안쪽 실루엣 POV)",
+            "/static/gallery/gf_21_lean_knit_30s_master.mp4": "🎬 [30초 마스터] 상체 숙임 훔쳐보기 완전판 (안쪽 실루엣 & 수줍은 눈맞춤)",
+            "/static/gallery/minji_lean_still_A_knit.png": "📸 [여친 화보] 커피잔 건네며 상체 45도 숙이기 (아이보리 니트 POV)",
+            "/static/gallery/minji_lean_still_B_silk.png": "📸 [비서 화보] 집무실 데스크 서류 건네며 숙이기 (샴페인 실크 POV)",
             "/static/gallery/gf_03_pink_sofa_30s_master.mp4": "🎬 [30초 마스터] 베이비핑크 스위트하트 소파 완전판 (쏟아지는 클리비지)",
             "/static/gallery/gf_02_living_wrap_knit.mp4": "🎬 [10초] 피치 랩 니트 부드러운 가슴선 실루엣 리빙 비디오",
             "/static/gallery/gf_01_lap_pillow_30s_master.mp4": "🎬 [30초 마스터] 무릎베개 신혼 판타지 30초 완전판",
