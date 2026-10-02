@@ -242,12 +242,11 @@ def build_persona_system_prompt(mode: str = "girlfriend") -> str:
     body_desc = app_info.get("body", "말랐지만 볼륨감 넘치는 베이글 몸매") if isinstance(app_info, dict) else "베이글 몸매"
     style_desc = app_info.get("style", "관능적이고 섹시한 옷차림") if isinstance(app_info, dict) else "관능적 옷차림"
 
-    daytime = is_daytime()
-    effective_mode = "secretary" if (mode == "secretary" and daytime) else "girlfriend"
+    effective_mode = "secretary" if mode == "secretary" else "girlfriend"
 
     if effective_mode == "secretary":
         persona_core = (
-            "★ [서민지 - 공적 오피스 수석 비서 모드 (평일 낮 09:00~18:00)]:\n"
+            "★ [서민지 - 공적 오피스 수석 비서 모드 (사무실/상무실 지적 보좌 & 품격 있는 브리핑)]:\n"
             "- 호칭: 오직 '상무님' 또는 '강섭 상무님'.\n"
             "- 말투: 품격 있고 지적이며 나긋나긋한 정중한 존댓말. 기계적인 로봇이 아니라 유능하고 센스 넘치는 실제 수석 비서처럼 자연스럽게 대화해.\n"
         )
@@ -897,6 +896,35 @@ def is_photo_intent(text: str) -> bool:
     return any(k in clean for k in ['사진', '셀카', '다른옷', '옷갈아', '의상', '다른모습', '갈아입', '화보', '얼굴보여'])
 
 
+def detect_mode_intent(text: str, current_mode: str) -> str:
+    """대화 내용에 따라 여친 모드 vs 비서(사무실) 모드를 지능형 자동 감지 및 자연스러운 페르소나 전환"""
+    if not text:
+        return current_mode
+    clean = re.sub(r'[^가-힣a-zA-Z0-9]', '', text).lower()
+
+    # 비서(사무실) 모드 전환 키워드
+    sec_keywords = [
+        '비서', '상무님', '서민지', '업무', '회의', '결재', '보고', '일정',
+        '스케줄', '회사', '출근', '사무실', '서류', '브리핑', '비서실', '커피타',
+        '일하자', '업무모드', '비서모드', '비서처럼', '비서로', '상무실', '비서역'
+    ]
+    # 여친 모드 전환 키워드
+    gf_keywords = [
+        '여친', '여자친구', '오빠', '자기야', '데이트', '사랑해', '보고싶어',
+        '안아줘', '뽀뽀', '침대', '소파', '집에가자', '쉬자', '퇴근했어', '퇴근하자',
+        '누웠어', '여친모드', '여친해줘', '여친처럼', '자기', '애교'
+    ]
+
+    for kw in sec_keywords:
+        if kw in clean:
+            return "secretary"
+    for kw in gf_keywords:
+        if kw in clean:
+            return "girlfriend"
+
+    return current_mode
+
+
 class VoiceChatRequest(BaseModel):
     user_text: str
     session_id: Optional[str] = "default_user"
@@ -912,8 +940,10 @@ async def voice_chat_endpoint(req: VoiceChatRequest, x_minji_auth: Optional[str]
     """
     require_auth(x_minji_auth)
     session_id = req.session_id or "default_user"
-    daytime = is_daytime()
-    effective_mode = "secretary" if (req.mode == "secretary" and daytime) else "girlfriend"
+    req_mode = req.mode or "girlfriend"
+    effective_mode = detect_mode_intent(req.user_text, req_mode)
+    mode_shifted = (effective_mode != req_mode)
+
     mem_key = f"{session_id}_{effective_mode}"
     if mem_key not in session_memories:
         session_memories[mem_key] = []
@@ -938,10 +968,11 @@ async def voice_chat_endpoint(req: VoiceChatRequest, x_minji_auth: Optional[str]
         resp_headers = {
             "X-Reply-Text": encoded_reply,
             "X-Session-Id": session_id,
-            "Access-Control-Expose-Headers": "X-Reply-Text, X-Session-Id, X-Trigger-Photo"
+            "X-Mode-Shift": effective_mode,
+            "Access-Control-Expose-Headers": "X-Reply-Text, X-Session-Id, X-Trigger-Photo, X-Mode-Shift"
         }
-        if is_photo_intent(req.user_text):
-            resp_headers["X-Trigger-Photo"] = "next"
+        if is_photo_intent(req.user_text) or mode_shifted:
+            resp_headers["X-Trigger-Photo"] = effective_mode
 
         return Response(
             content=audio_bytes,
@@ -959,15 +990,14 @@ async def voice_chat_endpoint(req: VoiceChatRequest, x_minji_auth: Optional[str]
             headers={
                 "X-Reply-Text": encoded_reply,
                 "X-Session-Id": session_id,
-                "Access-Control-Expose-Headers": "X-Reply-Text, X-Session-Id"
+                "X-Mode-Shift": effective_mode,
+                "Access-Control-Expose-Headers": "X-Reply-Text, X-Session-Id, X-Trigger-Photo, X-Mode-Shift"
             }
         )
 
 
 def generate_chat_reply(history: List[Dict[str, str]], user_text: str, mode: str = "girlfriend") -> str:
-    # 실시간 시간/공간/상황이 반영된 능동적 페르소나 프롬프트 생성 (퇴근 후/저녁/주말은 강제 여친 모드)
-    daytime = is_daytime()
-    effective_mode = "secretary" if (mode == "secretary" and daytime) else "girlfriend"
+    effective_mode = mode or "girlfriend"
     current_system_prompt = build_persona_system_prompt(mode=effective_mode)
 
     # [1순위]: 인간다운 초고감성 Claude Sonnet 5.5 (자연스러운 한국어 감정 표현 및 위트)
@@ -4402,33 +4432,55 @@ def read_root():
             }
         };
 
-        // 실사 리빙 비디오 & 8K 정품 화보 갤러리 풀 (상무님 원픽: 1번 원본민지 첫인사 마스터 항상 고정)
-        const CANONICAL_MINJI_VIDEOS = [
+        // ==========================================
+        // 🎬 갤러리 플레이리스트 (가장 덜 섹시 -> 가장 섹시 순 정렬 & 아웃핏/장소별 그룹핑)
+        // ==========================================
+
+        // 1. [여친 전용 풀]: 청순 첫인사 -> 데이트 소파 -> 홈웨어 무릎베개 -> 침실 란제리/슬립 (점진적 관능미 상승)
+        const GIRLFRIEND_VIDEOS = [
+            // [Group 1: 청순 데일리 & 첫인사 (아이보리 니트)] (가장 덜 섹시 / 1번 항상 고정)
             "/static/gallery/gf_15_living_knit_30s.mp4",          // [★ 항상 고정 1번] 원본민지 첫인사 30초 완전판 (눈맞춤→머리쓸기→미소 귓속말)
             "/static/gallery/canonical_minji_reference.png",      // [★ 원본민지 8K] 상무님 원픽 청순 단발 민지 (기준 페이스)
-            "/static/gallery/gf_03_pink_sofa_30s_master.mp4",    // [★ 30초 마스터] 베이비핑크 스위트하트 소파 30초 완전판 (쏟아지는 클리비지 & 노윤서 미소)
-            "/static/gallery/gf_09_bedroom_slip_30s_master.mp4", // [★ 1순위 30초 마스터] 침실 로즈 실크 슬립 30초 완전판 (비율 보완 & 쏟아지는 클리비지)
-            "/static/gallery/gf_11_peeking_bed_30s_master.mp4",  // [★ 2순위 30초 마스터] 문틈 살구빛 오프숄더 훔쳐보기 30초 완전판 (뒤돌아봄 & 이리와 손짓)
-            "/static/gallery/sec_canonical_desk_30s_master.mp4", // [★ 30초 마스터] A안 청순 민지 데스크 화이트셔츠 30초 완전판 (손 뻗기 & 심쿵 밀착)
-            "/static/gallery/sec_01_silk_office_30s_master.mp4",  // [★ 30초 마스터] 3번 샴페인 실크 셔츠 언버튼 30초 완전판 (결재판 & 귓가 속삭임)
+            "/static/gallery/gf_15_living_knit_10s_master.mp4",   // [10초] 원픽 니트 실루엣 마스터 에디션 (밀착 눈맞춤 & 다정한 숨결)
+            "/static/gallery/gf_16_living_turtleneck_window.mp4", // [10초] 창가 햇살 골지 터틀넥 & 은은한 바디 실루엣
+
+            // [Group 2: 다정한 여친 데이트 & 거실 휴식 (핑크 스위트하트 & 피치 랩 니트)]
+            "/static/gallery/gf_03_pink_sofa_30s_master.mp4",    // [★ 30초 마스터] 베이비핑크 스위트하트 소파 완전판 (쏟아지는 클리비지 & 노윤서 미소)
+            "/static/gallery/gf_02_living_wrap_knit.mp4",         // [10초] 피치 랩 니트 부드러운 가슴선 실루엣
+
+            // [Group 3: 은밀한 홈웨어 & 무릎베개 (무릎베개 & 딥 V넥 골지)]
             "/static/gallery/gf_01_lap_pillow_30s_master.mp4",    // [★ 30초 마스터] 무릎베개 신혼 판타지 30초 완전판 (쏟아지는 바스트 & 귓가 밀착)
             "/static/gallery/gf_01_deep_vneck_30s_master.mp4",    // [★ 30초 마스터] 딥 V넥 골지 베이글 민지 30초 완전판 (훔쳐보기 & 가슴 굴곡)
-            "/static/gallery/sec_canonical_living_desk.mp4",      // [10초] 청순 민지 화이트셔츠 데스크 10초 리빙 비디오
-            "/static/gallery/sec_01_silk_office_10s_part1.mp4",   // [10초] 샴페인 실크 오피스 데스크 눈맞춤 10초 리빙 비디오
-            "/static/gallery/gf_15_living_knit_10s_master.mp4",   // [10초] 원픽 니트 실루엣 마스터 에디션 (밀착 눈맞춤 & 다정한 숨결)
-            "/static/gallery/gf_15_living_knit_hair_tuck.mp4",    // [10초] 창가 햇살 머리 쓸어넘기며 미소 짓는 민지
-            "/static/gallery/gf_15_living_knit_lean_whisper.mp4", // [10초] 오빠에게 살짝 다가오며 귓속말하는 밀착 민지
-            "/static/gallery/gf_15_living_knit_silhouette.mp4",   // [5초 오리지널] 원픽 아이보리 파인니트 은은한 실루엣
-            "/static/gallery/gf_16_living_turtleneck_window.mp4", // 창가 햇살 골지 터틀넥 & 은은한 바디 실루엣
-            "/static/gallery/gf_02_living_wrap_knit.mp4",         // 피치 랩 니트 부드러운 가슴선 실루엣
-            "/static/gallery/gf_01_living_deep_vneck.mp4",        // 크림 딥브이넥 밀착 니트
-            "/static/gallery/sec_02_living_silk_desk.mp4",        // 샴페인 실크 데스크 밀착
-            "/static/gallery/sec_09_living_silk_unbutton.mp4"     // 심야 상무실 샴페인 실크 셔츠 언버튼
+            "/static/gallery/gf_01_living_deep_vneck.mp4",        // [10초] 크림 딥브이넥 밀착 니트 굴곡
+
+            // [Group 4: 초밀착 침실 & 훔쳐보기 (가장 섹시 - 오프숄더 침대 POV & 로즈 실크 슬립)]
+            "/static/gallery/gf_11_peeking_bed_30s_master.mp4",  // [★ 30초 마스터] 2순위 문틈 살구빛 오프숄더 훔쳐보기 완전판 (뒤돌아봄 & 이리와 손짓)
+            "/static/gallery/gf_09_bedroom_slip_30s_master.mp4"  // [★ 30초 마스터] 1순위 침실 로즈 실크 슬립 완전판 (비율 보완 & 쏟아지는 클리비지)
+        ];
+
+        // 2. [비서(사무실) 전용 풀]: 단아 클래식 화이트셔츠 -> 심야 상무실 샴페인 실크 언버튼
+        const SECRETARY_VIDEOS = [
+            // [Group 1: 단아 & 지적 오피스 데스크 (화이트셔츠)] (가장 덜 섹시)
+            "/static/gallery/sec_canonical_desk_30s_master.mp4", // [★ 30초 마스터] A안 청순 민지 데스크 화이트셔츠 완전판 (손 뻗기 & 심쿵 밀착)
+            "/static/gallery/sec_canonical_living_desk.mp4",      // [10초] 청순 민지 화이트셔츠 데스크 리빙 비디오
+
+            // [Group 2: 심야 상무실 매혹 실크 (샴페인 실크 셔츠)] (더 섹시)
+            "/static/gallery/sec_01_silk_office_30s_master.mp4",  // [★ 30초 마스터] 3번 샴페인 실크 셔츠 언버튼 완전판 (결재판 & 귓가 속삭임)
+            "/static/gallery/sec_01_silk_office_10s_part1.mp4",   // [10초] 샴페인 실크 오피스 데스크 눈맞춤
+            "/static/gallery/sec_02_living_silk_desk.mp4",        // [10초] 샴페인 실크 데스크 밀착 리빙 비디오
+            "/static/gallery/sec_09_living_silk_unbutton.mp4"     // [10초] 심야 상무실 샴페인 실크 셔츠 언버튼 리빙 비디오
+        ];
+
+        // 3. [전체 통합 마스터 갤러리]: 덜 섹시한 순 -> 더 섹시한 순 정렬
+        const CANONICAL_MINJI_VIDEOS = [
+            ...GIRLFRIEND_VIDEOS.slice(0, 4), // 청순 첫인사 & 니트
+            ...SECRETARY_VIDEOS,              // 단아 오피스 & 실크 비서
+            ...GIRLFRIEND_VIDEOS.slice(4)     // 소파 데이트 -> 무릎베개 -> 침실 란제리 슬립 (최고조)
         ];
 
         const GALLERY_POOLS = {
-            girlfriend: CANONICAL_MINJI_VIDEOS,
-            secretary: CANONICAL_MINJI_VIDEOS
+            girlfriend: GIRLFRIEND_VIDEOS,
+            secretary: SECRETARY_VIDEOS
         };
 
         let currentGalleryIdx = {
@@ -4445,41 +4497,35 @@ def read_root():
             if (photoToastTimer) clearTimeout(photoToastTimer);
             photoToastTimer = setTimeout(() => {
                 toast.classList.remove('show');
-            }, 1400);
+            }, 1800);
         }
 
         const PHOTO_TITLES = {
             "/static/gallery/gf_15_living_knit_30s.mp4": "🎬 [첫인사 마스터] 원본민지 다정한 눈인사 & 머리쓸기 30초 (항상 첫인사 고정)",
             "/static/gallery/canonical_minji_reference.png": "📸 [원본민지] 상무님 원픽 청순 단발 민지 (기준 페이스)",
-            "/static/gallery/gf_03_pink_sofa_30s_master.mp4": "🎬 [30초 마스터] 베이비핑크 스위트하트 소파 완전판 (쏟아지는 클리비지)",
-            "/static/gallery/gf_09_bedroom_slip_30s_master.mp4": "🎬 [30초 마스터] 1순위 침실 로즈 실크 슬립 완전판 (비율 보완 & 쏟아지는 클리비지)",
-            "/static/gallery/gf_11_peeking_bed_30s_master.mp4": "🎬 [30초 마스터] 2순위 문틈 살구빛 오프숄더 완전판 (뒤돌아봄 & 이리와 손짓)",
+            "/static/gallery/gf_15_living_knit_10s_master.mp4": "🎬 [10초] 원픽 니트 실루엣 마스터 (밀착 눈맞춤 & 다정한 숨결)",
+            "/static/gallery/gf_16_living_turtleneck_window.mp4": "🎬 [10초] 창가 햇살 골지 터틀넥 & 은은한 바디 실루엣",
             "/static/gallery/sec_canonical_desk_30s_master.mp4": "🎬 [30초 마스터] A안 청순 민지 데스크 화이트셔츠 완전판",
+            "/static/gallery/sec_canonical_living_desk.mp4": "🎬 [10초] 청순 민지 화이트셔츠 데스크 리빙 비디오",
             "/static/gallery/sec_01_silk_office_30s_master.mp4": "🎬 [30초 마스터] 3번 샴페인 실크 셔츠 언버튼 완전판",
+            "/static/gallery/sec_01_silk_office_10s_part1.mp4": "🎬 [10초] 샴페인 실크 오피스 데스크 눈맞춤 리빙 비디오",
+            "/static/gallery/sec_02_living_silk_desk.mp4": "🎬 [10초] 샴페인 실크 데스크 밀착 리빙 비디오",
+            "/static/gallery/sec_09_living_silk_unbutton.mp4": "🎬 [10초] 심야 상무실 샴페인 실크 셔츠 언버튼 리빙 비디오",
+            "/static/gallery/gf_03_pink_sofa_30s_master.mp4": "🎬 [30초 마스터] 베이비핑크 스위트하트 소파 완전판 (쏟아지는 클리비지)",
+            "/static/gallery/gf_02_living_wrap_knit.mp4": "🎬 [10초] 피치 랩 니트 부드러운 가슴선 실루엣 리빙 비디오",
             "/static/gallery/gf_01_lap_pillow_30s_master.mp4": "🎬 [30초 마스터] 무릎베개 신혼 판타지 30초 완전판",
             "/static/gallery/gf_01_deep_vneck_30s_master.mp4": "🎬 [30초 마스터] 딥 V넥 골지 베이글 민지 30초 완전판",
-            "/static/gallery/sec_canonical_living_desk.mp4": "🎬 [10초] 청순 민지 화이트셔츠 데스크 리빙 비디오",
-            "/static/gallery/sec_01_silk_office_10s_part1.mp4": "🎬 [10초] 샴페인 실크 오피스 데스크 눈맞춤 리빙 비디오",
-            "/static/gallery/gf_16_living_turtleneck_window.mp4": "🎬 창가 햇살 골지 터틀넥 & 은은한 바디 실루엣",
+            "/static/gallery/gf_01_living_deep_vneck.mp4": "🎬 [10초] 크림 딥브이넥 밀착 니트 굴곡 리빙 비디오",
+            "/static/gallery/gf_11_peeking_bed_30s_master.mp4": "🎬 [30초 마스터] 2순위 문틈 살구빛 오프숄더 완전판 (뒤돌아봄 & 이리와 손짓)",
+            "/static/gallery/gf_09_bedroom_slip_30s_master.mp4": "🎬 [30초 마스터] 1순위 침실 로즈 실크 슬립 완전판 (비율 보완 & 쏟아지는 클리비지)",
+            "/static/gallery/gf_15_living_knit_silhouette.mp4": "🎬 아이보리 파인니트 은은한 실루엣 & 란제리 라인",
             "/static/gallery/minji_living_01_shower_shirt.mp4": "🎬 샤워 후 창가 화이트 셔츠 10초 리빙 비디오",
             "/static/gallery/minji_living_02_sofa_sunlight.mp4": "🎬 일요일 나른한 오후 역광 소파 10초 리빙 비디오",
-            "/static/gallery/gf_15_living_knit_silhouette.mp4": "🎬 아이보리 파인니트 은은한 실루엣 & 란제리 라인",
             "/static/gallery/minji_living_03_park_bench.mp4": "🎬 가을 외곽 공원 벤치 초밀착 10초 리빙 비디오",
             "/static/gallery/minji_living_05_fitting_hoodie.mp4": "🎬 비좁은 피팅룸 오버핏 후디 10초 리빙 비디오",
-            "/static/gallery/gf_01_living_deep_vneck.mp4": "🎬 크림 딥브이넥 밀착 니트 굴곡 리빙 비디오",
             "/static/gallery/minji_living_06_rain_shelter.mp4": "🎬 비 오는 골목 상자 아래 10초 리빙 비디오",
             "/static/gallery/minji_living_07_rain_window.mp4": "🎬 비 내리는 밤 창가 에메랄드 슬립 10초 리빙 비디오",
-            "/static/gallery/gf_02_living_wrap_knit.mp4": "🎬 피치 랩 니트 부드러운 가슴선 실루엣 리빙 비디오",
-            "/static/gallery/minji_living_09_chin_lift.mp4": "🎬 턱을 살짝 들어올린 초밀착 10초 리빙 비디오",
-            "/static/gallery/sec_09_living_silk_unbutton.mp4": "🎬 심야 상무실 샴페인 실크 셔츠 언버튼 리빙 비디오",
-            "/static/gallery/sec_02_living_silk_desk.mp4": "🎬 샴페인 실크 데스크 밀착 리빙 비디오",
-            "/static/gallery/minji_scenario_01_shower_shirt.jpg": "📸 샤워 후 밤 창가 오버사이즈 화이트 셔츠",
-            "/static/gallery/minji_scenario_02_sofa_sunlight.jpg": "📸 나른한 일요일 오후 역광 햇살 소파",
-            "/static/gallery/minji_scenario_03_park_bench.jpg": "📸 가을 외곽 공원 벤치 초밀착 데이트",
-            "/static/gallery/minji_scenario_05_fitting_hoodie.jpg": "📸 비좁은 피팅룸 오버핏 블랙 후디 & 마스크",
-            "/static/gallery/minji_scenario_06_rain_shelter.jpg": "📸 비 오는 골목 상자 아래 댕댕이 눈망울",
-            "/static/gallery/minji_scenario_07_rain_window.jpg": "📸 비 내리는 밤 창가 에메랄드 실크 슬립",
-            "/static/gallery/minji_scenario_09_chin_lift.jpg": "📸 턱을 살짝 들어올린 초밀착 아이컨택"
+            "/static/gallery/minji_living_09_chin_lift.mp4": "🎬 턱을 살짝 들어올린 초밀착 10초 리빙 비디오"
         };
 
         // 폰을 두드리거나 버튼/화면 탭 시 다음 사진으로 전환
@@ -5992,6 +6038,33 @@ def read_root():
             }
         }
 
+        // 대화 내용에서 자연스러운 페르소나 모드(비서 vs 여친) 자동 감지
+        function detectModeFromText(text) {
+            if (!text) return null;
+            const clean = text.replace(/[^가-힣a-zA-Z0-9]/g, '').toLowerCase();
+
+            // 비서(사무실) 모드 전환 키워드
+            const secKeywords = [
+                '비서', '상무님', '서민지', '업무', '회의', '결재', '보고', '일정',
+                '스케줄', '회사', '출근', '사무실', '서류', '브리핑', '비서실', '커피타',
+                '일하자', '업무모드', '비서모드', '비서처럼', '비서로', '상무실', '비서역'
+            ];
+            // 여친 모드 전환 키워드
+            const gfKeywords = [
+                '여친', '여자친구', '오빠', '자기야', '데이트', '사랑해', '보고싶어',
+                '안아줘', '뽀뽀', '침대', '소파', '집에가자', '쉬자', '퇴근했어', '퇴근하자',
+                '누웠어', '여친모드', '여친해줘', '여친처럼', '자기', '애교'
+            ];
+
+            for (const kw of secKeywords) {
+                if (clean.includes(kw)) return 'secretary';
+            }
+            for (const kw of gfKeywords) {
+                if (clean.includes(kw)) return 'girlfriend';
+            }
+            return null;
+        }
+
         // [핵심 기능 1]: 민지에게 메시지 전송 (초저지연 1회 직결 통신으로 즉시 재생)
         async function sendToMinji(text) {
             if (checkVoiceCommand(text)) {
@@ -6002,6 +6075,20 @@ def read_root():
                 await lookAtThis(text);
                 return;
             }
+
+            // 대화 내용에 따른 지능형 자연스러운 모드 전환 (여친 vs 비서)
+            const detectedMode = detectModeFromText(text);
+            if (detectedMode && detectedMode !== currentPersonaMode) {
+                currentPersonaMode = detectedMode;
+                localStorage.setItem('minji_persona_mode', currentPersonaMode);
+                applyPersonaMode(false);
+                if (detectedMode === 'secretary') {
+                    showPhotoToast("💼 대화에 따라 비서(사무실) 모드로 자연스럽게 전환되었습니다.");
+                } else {
+                    showPhotoToast("💖 대화에 따라 여친 모드로 자연스럽게 전환되었습니다.");
+                }
+            }
+
             checkEmotionAndAutoDirect(text, 'user');
             isProcessing = true;
             setOrbState('thinking');
@@ -6022,6 +6109,19 @@ def read_root():
 
                 if (!response.ok) {
                     throw new Error("서버 음성 응답 실패");
+                }
+
+                // 서버에서 전달된 모드 전환 헤더 확인 및 동기화
+                const serverModeShift = response.headers.get('X-Mode-Shift');
+                if (serverModeShift && serverModeShift !== currentPersonaMode) {
+                    currentPersonaMode = serverModeShift;
+                    localStorage.setItem('minji_persona_mode', currentPersonaMode);
+                    applyPersonaMode(false);
+                    if (serverModeShift === 'secretary') {
+                        showPhotoToast("💼 서민지 비서 모드로 전환되었습니다.");
+                    } else {
+                        showPhotoToast("💖 여친 모드로 전환되었습니다.");
+                    }
                 }
 
                 // 텍스트 자막 헤더에서 즉각 추출 (디코딩)
