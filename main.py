@@ -1063,56 +1063,11 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str, mode: str
     effective_mode = mode or "girlfriend"
     current_system_prompt = build_persona_system_prompt(mode=effective_mode)
 
-    # [1순위]: 인간다운 초고감성 Claude Sonnet 5.5 (자연스러운 한국어 감정 표현 및 위트)
-    if anthropic_client:
-        try:
-            claude_messages = []
-            for item in history[-18:]:
-                if not isinstance(item, dict):
-                    continue
-                c_text = item.get("text", "").strip()
-                if not c_text:
-                    continue
-                role = "assistant" if item.get("role") == "model" else "user"
-                if effective_mode == "girlfriend" and role == "assistant":
-                    c_text = (
-                        c_text
-                        .replace("강섭 상무님", "오빠")
-                        .replace("상무님", "오빠")
-                        .replace("하십시오", "해")
-                        .replace("하셨습니까", "했어")
-                        .replace("하셨어요", "했어")
-                        .replace("고생 많으셨습니다", "고생 많았어")
-                    )
-                claude_messages.append({"role": role, "content": c_text})
-            claude_messages.append({"role": "user", "content": user_text})
-
-            response = anthropic_client.messages.create(
-                model="claude-sonnet-5-5",
-                max_tokens=250,
-                system=current_system_prompt,
-                thinking={"type": "between_tools"},
-                messages=claude_messages
-            )
-            if response and response.content:
-                reply_parts = []
-                for block in response.content:
-                    if hasattr(block, 'text') and block.text:
-                        reply_parts.append(block.text)
-                reply = " ".join(reply_parts).strip()
-                if reply:
-                    reply = strip_hearts(reply)
-                    if effective_mode == "girlfriend":
-                        reply = reply.replace("강섭 상무님", "오빠").replace("상무님", "오빠")
-                    return reply
-        except Exception as ce:
-            print(f"[Claude Sonnet 5.5 Error -> Fallback to Gemini 3.8 Flash]: {ce}")
-
-    # [2순위]: 최신 Gemini 3.8 Flash (초고속 차세대 제미나이 엔진)
+    # [1순위]: 초저지연 Gemini 3.8 Flash (0.4초대 초고속 음성 대화 특화 생성)
     if gemini_client:
         try:
             contents = []
-            for item in history[-18:]:
+            for item in history[-14:]:
                 if not isinstance(item, dict):
                     continue
                 g_text = item.get("text", "").strip()
@@ -1132,8 +1087,8 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str, mode: str
                 contents=contents,
                 config=types.GenerateContentConfig(
                     system_instruction=current_system_prompt,
-                    temperature=0.85,
-                    max_output_tokens=200,
+                    temperature=0.75,
+                    max_output_tokens=75,
                 )
             )
             if response and response.text and response.text.strip():
@@ -1143,6 +1098,34 @@ def generate_chat_reply(history: List[Dict[str, str]], user_text: str, mode: str
                 return reply
         except Exception as ge:
             print(f"[Gemini 3.8 Flash Error -> Fallback to OpenAI]: {ge}")
+
+    # [2순위]: 초고속 OpenAI GPT-4o-mini (안정적인 고감성 보좌 및 즉각 폴백)
+    if openai_client:
+        try:
+            oai_messages = [{"role": "system", "content": current_system_prompt}]
+            for item in history[-10:]:
+                if not isinstance(item, dict):
+                    continue
+                m_text = item.get("text", "").strip()
+                if not m_text:
+                    continue
+                role = "assistant" if item.get("role") == "model" else "user"
+                oai_messages.append({"role": role, "content": m_text})
+            oai_messages.append({"role": "user", "content": user_text})
+
+            res = openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=oai_messages,
+                max_tokens=80,
+                temperature=0.75
+            )
+            if res.choices and res.choices[0].message.content:
+                reply = strip_hearts(res.choices[0].message.content.strip())
+                if effective_mode == "girlfriend":
+                    reply = reply.replace("강섭 상무님", "오빠").replace("상무님", "오빠")
+                return reply
+        except Exception as oe:
+            print(f"[OpenAI Fallback Error]: {oe}")
 
     # [3순위]: OpenAI GPT-4o-mini (비상 백업 엔진)
     if openai_client:
@@ -3243,6 +3226,25 @@ def read_root():
             </div>
         </div>
 
+        <!-- 2-1행: 페르소나 모드 선택 (비서 vs 여친 vs 시간대 자동) -->
+        <div style="display:flex; flex-direction:column; gap:6px; width:100%; box-sizing:border-box;">
+            <div style="font-size:0.75rem; color:#aaa; text-align:left; font-weight:600;">👑 모드 선택 (평일 일과시간 비서 / 그 외 여친):</div>
+            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; width:100%; box-sizing:border-box;">
+                <button type="button" class="living-preset-btn" id="btnModeSecretary" onclick="selectPersonaMode('secretary')" style="padding:8px 4px; font-size:0.75rem; text-align:center;">💼 비서 모드</button>
+                <button type="button" class="living-preset-btn" id="btnModeGirlfriend" onclick="selectPersonaMode('girlfriend')" style="padding:8px 4px; font-size:0.75rem; text-align:center;">💖 여친 모드</button>
+                <button type="button" class="living-preset-btn active" id="btnModeAuto" onclick="selectPersonaMode('auto')" style="padding:8px 4px; font-size:0.75rem; text-align:center;">⏰ 시간대 자동</button>
+            </div>
+        </div>
+
+        <!-- 2-2행: 화면 미디어 모드 선택 (영상 vs 스틸컷) -->
+        <div style="display:flex; flex-direction:column; gap:6px; width:100%; box-sizing:border-box;">
+            <div style="font-size:0.75rem; color:#aaa; text-align:left; font-weight:600;">🖼️ 화면 미디어 모드:</div>
+            <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:6px; width:100%; box-sizing:border-box;">
+                <button type="button" class="living-preset-btn active" id="btnMediaVideo" onclick="selectMediaDisplayMode('video')" style="padding:8px 6px; font-size:0.75rem; text-align:center;">🎬 영상 모드 (리빙 비디오)</button>
+                <button type="button" class="living-preset-btn" id="btnMediaStill" onclick="selectMediaDisplayMode('still')" style="padding:8px 6px; font-size:0.75rem; text-align:center;">📸 스틸컷 모드 (고화질 화보)</button>
+            </div>
+        </div>
+
         <!-- 3행: 60fps GPU 리빙 애니메이션 모드 (반응형 2행 그리드, 절대 삐져나가지 않음) -->
         <div style="display:flex; flex-direction:column; gap:6px; width:100%; box-sizing:border-box;">
             <div style="font-size:0.75rem; color:#aaa; text-align:left; font-weight:600;">🎬 모션 효과:</div>
@@ -4215,20 +4217,23 @@ def read_root():
             try {
                 if (activeMediaStream) {
                     activeMediaStream.getTracks().forEach(track => {
+                        try { track.stop(); } catch(e){}
                         track.enabled = false;
                     });
+                    activeMediaStream = null;
                 }
             } catch(e){}
 
             try {
                 if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                     mediaRecorder.stop();
+                    mediaRecorder = null;
                 }
             } catch(e){}
 
             try {
                 if (audioContext && audioContext.state === 'running') {
-                    audioContext.suspend();
+                    audioContext.suspend().catch(()=>{});
                 }
             } catch(e){}
 
@@ -4242,11 +4247,14 @@ def read_root():
                 if (audioContext && audioContext.state === 'suspended') {
                     await audioContext.resume().catch(()=>{});
                 }
-                // 기존 스트림 트랙 즉시 활성화
-                if (activeMediaStream) {
-                    activeMediaStream.getTracks().forEach(track => {
-                        track.enabled = true;
-                    });
+                const needsNewStream = !activeMediaStream || activeMediaStream.getTracks().some(t => t.readyState === 'ended');
+                if (needsNewStream) {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+                    }).catch(() => navigator.mediaDevices.getUserMedia({ audio: true }).catch(()=>null));
+                    if (stream) {
+                        setupAudioAnalyser(stream);
+                    }
                 }
                 if (!isSpeaking && !isProcessing) {
                     startListening();
@@ -4280,11 +4288,17 @@ def read_root():
         window.addEventListener('touchstart', ensureMicGesture, { passive: true });
         window.addEventListener('click', ensureMicGesture, { passive: true });
 
-        // 탭을 닫거나 다른 앱으로 전환 시 백그라운드 리소스 자동 해제
-        window.addEventListener('pagehide', cleanupAllMediaAndTimers);
-        window.addEventListener('beforeunload', cleanupAllMediaAndTimers);
+        // 탭을 닫거나, 위로 스와이프하여 화면을 끌 때 마이크/카메라 하드웨어 100% 완전 정지
+        const fullExitHandler = () => {
+            cleanupAllMediaAndTimers();
+            pauseMicrophoneAndSTT();
+        };
+        window.addEventListener('pagehide', fullExitHandler);
+        window.addEventListener('beforeunload', fullExitHandler);
+        window.addEventListener('freeze', fullExitHandler);
         document.addEventListener('visibilitychange', async () => {
             if (document.visibilityState === 'hidden') {
+                // 화면이 숨겨지거나 위로 쓸어올려 끌 때 하드웨어 마이크 즉시 전원 OFF (적색/녹색 표시 즉시 해제)
                 pauseMicrophoneAndSTT();
             } else if (document.visibilityState === 'visible') {
                 if (streamActive && !isMicMuted && !isSpeaking && !isProcessing) {
@@ -4526,13 +4540,17 @@ def read_root():
         let volumeCheckInterval = null;
         let currentFacingMode = "environment";
 
-        // 페르소나 모드 관리: 기본값은 상무님 원픽 '여친 모드' (수동 전환 및 대화 맥락에 따라 비서 모드로 원활히 스위칭)
+        // 페르소나 모드 관리: 평일 일과시간(월~금 09:00~18:00)은 비서 모드 우선, 그 외 퇴근 후/주말은 여친 모드 우선
         function getAutoPersonaMode() {
             const saved = localStorage.getItem('minji_persona_mode');
             if (saved && (saved === 'girlfriend' || saved === 'secretary')) {
                 return saved;
             }
-            return 'girlfriend';
+            const now = new Date();
+            const day = now.getDay(); // 0: 일, 1~5: 월~금, 6: 토
+            const hour = now.getHours();
+            const isWorkHours = (day >= 1 && day <= 5 && hour >= 9 && hour < 18);
+            return isWorkHours ? 'secretary' : 'girlfriend';
         }
         let currentPersonaMode = getAutoPersonaMode();
 
@@ -4603,6 +4621,37 @@ def read_root():
             secretary: SECRETARY_VIDEOS
         };
 
+        // 📸 스틸컷 전용 고화질 실사 화보 풀 (스틸컷 모드 선택 시 활성화)
+        const GIRLFRIEND_STILLS = [
+            "/static/gallery/canonical_minji_reference.png",
+            "/static/gallery/minji_scenario_02_sofa_sunlight.jpg",
+            "/static/gallery/minji_scenario_01_shower_shirt.jpg",
+            "/static/gallery/minji_scenario_03_park_bench.jpg",
+            "/static/gallery/minji_scenario_05_fitting_hoodie.jpg",
+            "/static/gallery/minji_scenario_07_rain_window.jpg",
+            "/static/gallery/minji_scenario_09_chin_lift.jpg",
+            "/static/gallery/gf_02_wrap_knit_peach.jpg",
+            "/static/gallery/gf_09_bedroom_slip_balanced.jpg",
+            "/static/gallery/gf_12_onsen_webcam_close.jpg"
+        ];
+
+        const SECRETARY_STILLS = [
+            "/static/gallery/sec_5.jpg",
+            "/static/gallery/sec_15.jpg",
+            "/static/gallery/sec_25.jpg",
+            "/static/gallery/silk_30s_frame_5s.jpg",
+            "/static/gallery/silk_30s_frame_15s.jpg",
+            "/static/gallery/canonical_desk_30s_5s.jpg",
+            "/static/gallery/canonical_desk_30s_15s.jpg"
+        ];
+
+        const STILL_PHOTO_POOLS = {
+            girlfriend: GIRLFRIEND_STILLS,
+            secretary: SECRETARY_STILLS
+        };
+
+        let currentMediaDisplayMode = localStorage.getItem('minji_media_display_mode') || 'video'; // 'video' | 'still'
+
         let currentGalleryIdx = {
             girlfriend: 0,
             secretary: 0
@@ -4645,24 +4694,76 @@ def read_root():
             "/static/gallery/minji_living_05_fitting_hoodie.mp4": "🎬 비좁은 피팅룸 오버핏 후디 10초 리빙 비디오",
             "/static/gallery/minji_living_06_rain_shelter.mp4": "🎬 비 오는 골목 상자 아래 10초 리빙 비디오",
             "/static/gallery/minji_living_07_rain_window.mp4": "🎬 비 내리는 밤 창가 에메랄드 슬립 10초 리빙 비디오",
-            "/static/gallery/minji_living_09_chin_lift.mp4": "🎬 턱을 살짝 들어올린 초밀착 10초 리빙 비디오"
+            "/static/gallery/minji_living_09_chin_lift.mp4": "🎬 턱을 살짝 들어올린 초밀착 10초 리빙 비디오",
+            "/static/gallery/sec_5.jpg": "📸 [오피스 스틸컷] 화이트 실크 블라우스 서민지 비서",
+            "/static/gallery/sec_15.jpg": "📸 [오피스 스틸컷] 상무실 데스크 서민지 수석 비서",
+            "/static/gallery/sec_25.jpg": "📸 [오피스 스틸컷] 브리핑 데스크 서민지 눈맞춤",
+            "/static/gallery/gf_02_wrap_knit_peach.jpg": "📸 [여친 스틸컷] 피치 랩 니트 베이글 민지",
+            "/static/gallery/gf_09_bedroom_slip_balanced.jpg": "📸 [여친 스틸컷] 로맨틱 침실 로즈 실크 슬립"
         };
+
+        // 모드 및 미디어 전환 핸들러
+        function selectPersonaMode(mode) {
+            if (mode === 'auto') {
+                localStorage.removeItem('minji_persona_mode');
+            } else {
+                localStorage.setItem('minji_persona_mode', mode);
+            }
+            currentPersonaMode = getAutoPersonaMode();
+            applyPersonaMode(true);
+            updatePersonaButtons();
+            showPhotoToast(mode === 'secretary' ? '💼 서민지 비서 모드로 전환되었습니다.' : (mode === 'girlfriend' ? '💖 베이글 여친 모드로 전환되었습니다.' : '⏰ 시간대 자동 모드 (평일 일과: 비서 / 퇴근 후: 여친)로 전환되었습니다.'));
+        }
+        window.selectPersonaMode = selectPersonaMode;
+
+        function updatePersonaButtons() {
+            const saved = localStorage.getItem('minji_persona_mode');
+            const isAuto = !saved || saved === 'auto';
+            const btnSec = document.getElementById('btnModeSecretary');
+            const btnGf = document.getElementById('btnModeGirlfriend');
+            const btnAuto = document.getElementById('btnModeAuto');
+            if (btnSec) btnSec.classList.toggle('active', !isAuto && saved === 'secretary');
+            if (btnGf) btnGf.classList.toggle('active', !isAuto && saved === 'girlfriend');
+            if (btnAuto) btnAuto.classList.toggle('active', isAuto);
+        }
+
+        function selectMediaDisplayMode(mode) {
+            currentMediaDisplayMode = mode;
+            localStorage.setItem('minji_media_display_mode', mode);
+            updateMediaDisplayButtons();
+            const pool = (currentMediaDisplayMode === 'still')
+                ? (STILL_PHOTO_POOLS[currentPersonaMode] || STILL_PHOTO_POOLS.girlfriend)
+                : (GALLERY_POOLS[currentPersonaMode] || GALLERY_POOLS.girlfriend);
+            const nextSrc = pool[currentGalleryIdx[currentPersonaMode] % pool.length];
+            setAvatarImageSmooth(nextSrc);
+            showPhotoToast(mode === 'still' ? '📸 고화질 스틸컷 화보 모드로 전환되었습니다.' : '🎬 실사 리빙 영상 모드로 전환되었습니다.');
+        }
+        window.selectMediaDisplayMode = selectMediaDisplayMode;
+
+        function updateMediaDisplayButtons() {
+            const btnVid = document.getElementById('btnMediaVideo');
+            const btnStl = document.getElementById('btnMediaStill');
+            if (btnVid) btnVid.classList.toggle('active', currentMediaDisplayMode === 'video');
+            if (btnStl) btnStl.classList.toggle('active', currentMediaDisplayMode === 'still');
+        }
 
         // 폰을 두드리거나 버튼/화면 탭 시 다음 사진으로 전환
         function nextGalleryPhoto(manual = false) {
-            const pool = GALLERY_POOLS[currentPersonaMode] || GALLERY_POOLS.girlfriend;
+            const pool = (currentMediaDisplayMode === 'still')
+                ? (STILL_PHOTO_POOLS[currentPersonaMode] || STILL_PHOTO_POOLS.girlfriend)
+                : (GALLERY_POOLS[currentPersonaMode] || GALLERY_POOLS.girlfriend);
             if (!pool || pool.length === 0) return;
             currentGalleryIdx[currentPersonaMode] = (currentGalleryIdx[currentPersonaMode] + 1) % pool.length;
             const nextSrc = pool[currentGalleryIdx[currentPersonaMode]];
             setAvatarImageSmooth(nextSrc);
 
-            const title = PHOTO_TITLES[nextSrc] || `민지 실사 화보`;
+            const title = PHOTO_TITLES[nextSrc] || (currentMediaDisplayMode === 'still' ? '📸 민지 고화질 실사 화보' : '🎬 민지 실사 리빙 비디오');
             const badge = document.getElementById('photoBadgeText');
             if (badge) {
-                badge.innerText = `📸 ${title} (${currentGalleryIdx[currentPersonaMode] + 1}/${pool.length})`;
+                badge.innerText = `${title} (${currentGalleryIdx[currentPersonaMode] + 1}/${pool.length})`;
             }
             if (manual) {
-                showPhotoToast(`📸 ${title} (${currentGalleryIdx[currentPersonaMode] + 1}/${pool.length})`);
+                showPhotoToast(`${title} (${currentGalleryIdx[currentPersonaMode] + 1}/${pool.length})`);
             }
         }
         window.nextGalleryPhoto = nextGalleryPhoto;
@@ -6034,14 +6135,17 @@ def read_root():
                         statusText.innerText = "나: " + currentSpeech;
                     }
 
-                    // [핵심 2: 사용자 발화 인식 및 '생각 중...' 판정 느슨하게 완화]
-                    // 1글자짜리 단순 헛기침이나 미세 잡음("어", "응", "아") 단독은 민지가 성급하게 생각하지 않음
+                    // [핵심 2: 사용자 발화 인식 및 '생각 중...' 판정 최적화]
                     if (finalText.trim()) {
                         const targetText = finalText.trim();
                         if (targetText.length <= 1) {
                             return;
                         }
-                        if (interimSpeechTimeout) clearTimeout(interimSpeechTimeout);
+                        if (interimSpeechTimeout) {
+                            clearTimeout(interimSpeechTimeout);
+                            interimSpeechTimeout = null;
+                        }
+                        interimText = '';
                         hasSpeechTranscribed = true;
                         if (mediaRecorder && mediaRecorder.state === 'recording') {
                             try { mediaRecorder.stop(); } catch(e){}
@@ -6055,20 +6159,22 @@ def read_root():
                         if (targetInterim.length <= 1) {
                             return;
                         }
-                        // 중간 텍스트 자동 확정 대기 시간을 0.85초로 최적화 (말 끝난 직후 0.85초 만에 신속하게 발화 전송)
+                        // 중간 텍스트 자동 확정 대기 시간을 350ms로 단축 (말 끝난 직후 0.35초 만에 신속하게 발화 전송하여 시간공백 해소)
                         if (interimSpeechTimeout) clearTimeout(interimSpeechTimeout);
                         interimSpeechTimeout = setTimeout(async () => {
                             if (interimText.trim() && !hasSpeechTranscribed && !isSpeaking && !isProcessing) {
                                 hasSpeechTranscribed = true;
+                                const textToSend = interimText.trim();
+                                interimText = '';
                                 if (mediaRecorder && mediaRecorder.state === 'recording') {
                                     try { mediaRecorder.stop(); } catch(e){}
                                     isAudioRecording = false;
                                 }
                                 isListening = false;
                                 try { recognition.stop(); } catch(e){}
-                                await sendToMinji(interimText.trim());
+                                await sendToMinji(textToSend);
                             }
-                        }, 850);
+                        }, 350);
                     }
                 };
 
@@ -6191,12 +6297,30 @@ def read_root():
 
         // [핵심 기능 1]: 민지에게 메시지 전송 (초저지연 1회 직결 통신으로 즉시 재생)
         async function sendToMinji(text) {
-            if (checkVoiceCommand(text)) {
+            if (!text || !text.trim()) return;
+            const cleanText = text.trim();
+
+            // [중복 발화 방지 가드 1]: 이미 응답 처리 중인 경우 중복 호출 원천 차단
+            if (isProcessing) {
+                console.log("[SendToMinji Guard] Already processing, ignoring:", cleanText);
+                return;
+            }
+            // [중복 발화 방지 가드 2]: 직전 전송 텍스트와 2.2초 이내 동일 발화 중복 전송 방지 (같은 말 두 번 반복 버그 해결)
+            const now = Date.now();
+            if (window._lastSentText === cleanText && (now - (window._lastSentTime || 0)) < 2200) {
+                console.log("[SendToMinji Guard] Duplicate speech within 2.2s dropped:", cleanText);
+                return;
+            }
+            window._lastSentText = cleanText;
+            window._lastSentTime = now;
+            hasSpeechTranscribed = true;
+
+            if (checkVoiceCommand(cleanText)) {
                 return;
             }
             // 카메라가 켜져 있는 상태에서 질문을 하면, 카메라에 비친 물체/인물에 대한 질문으로 인식하여 시각 분석 수행
             if (camOverlay && camOverlay.classList.contains('active') && video && video.srcObject && video.videoWidth > 0) {
-                await lookAtThis(text);
+                await lookAtThis(cleanText);
                 return;
             }
 
@@ -6530,7 +6654,7 @@ def read_root():
             if (connectGroup) connectGroup.style.display = 'none';
             if (activeControls) activeControls.style.display = 'flex';
 
-            // 1. [iOS Safari & Chrome 대응] 터치 스택에서 동기적으로 Audio Unlock
+            // 1. [iOS Safari & Chrome 대응] AudioContext 활성화
             try {
                 if (!audioContext) {
                     window.AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -6539,11 +6663,9 @@ def read_root():
                 if (audioContext.state === 'suspended') {
                     audioContext.resume().catch(()=>{});
                 }
-                audioPlayer.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
-                audioPlayer.play().then(() => audioPlayer.pause()).catch(()=>{});
             } catch (unlockErr) {}
 
-            // 2. 현재 시간대 및 모드에 맞는 첫 인사 결정 (퇴근 후/저녁/밤은 무조건 여친 모드)
+            // 2. 현재 시간대 및 모드에 맞는 첫 인사 결정 (평일 일과시간: 비서 모드 / 그 외 퇴근 후·주말: 여친 모드)
             currentPersonaMode = getAutoPersonaMode();
             applyPersonaMode(false);
             const curHour = new Date().getHours();
@@ -6551,24 +6673,25 @@ def read_root():
             let initialAudioSrc = "";
 
             if (currentPersonaMode === 'secretary') {
-                if (curHour >= 5 && curHour < 11) {
+                if (curHour >= 5 && curHour < 12) {
                     initialGreeting = "강섭 상무님, 좋은 아침입니다. 오늘 주요 일정 브리핑 준비를 마쳤습니다. 모닝커피 한잔 준비해 드릴까요?";
-                } else if (curHour >= 11 && curHour < 14) {
-                    initialGreeting = "강섭 상무님, 점심시간입니다. 식사는 든든하게 챙기셨습니까? 상무님 컨디션이 저의 최우선입니다.";
-                } else if (curHour >= 14 && curHour < 18) {
+                    initialAudioSrc = "/static/greetings/greeting_sec_morning.mp3";
+                } else if (curHour >= 12 && curHour < 18) {
                     initialGreeting = "상무님, 오후 업무로 많이 피로하시지요? 잠시 서류 내려놓으시고 쉬어가십시오... 커피라도 타 드릴까요?";
+                    initialAudioSrc = "/static/greetings/greeting_sec_afternoon.mp3";
                 } else {
                     initialGreeting = "강섭 상무님, 오늘 하루도 회사에서 고생 많으셨습니다. 편안하게 모시겠습니다.";
+                    initialAudioSrc = "/static/greetings/greeting_sec_evening.mp3";
                 }
             } else {
                 if (curHour >= 5 && curHour < 18) {
-                    initialGreeting = "오빠, 안녕! 좋은 오후야. 피곤하진 않아? 나랑 잠깐 머리 식힐 겸 수다 떨자~";
+                    initialGreeting = "오빠, 안녕! 좋은 오후야. 피곤하진 않아? 나랑 잠깐 머리 식힐 겸 수다 떨자..";
                     initialAudioSrc = "/static/greetings/greeting_day.mp3";
                 } else if (curHour >= 18 && curHour < 22) {
-                    initialGreeting = "오빠! 오늘 하루도 정말 고생 많았어. 얼른 와, 나 오빠 보고 싶어서 기다렸단 말이야~";
+                    initialGreeting = "오빠! 오늘 하루도 정말 고생 많았어. 얼른 와, 나 오빠 보고 싶어서 기다렸단 말이야..";
                     initialAudioSrc = "/static/greetings/greeting_evening.mp3";
                 } else {
-                    initialGreeting = "오빠, 침대에 누웠어? 오늘 밤엔 나랑 꼭 껴안고 도란도란 이야기하다 자자...";
+                    initialGreeting = "오빠, 침대에 누웠어? 오늘 밤엔 나랑 꼭 껴안고 도란도란 이야기하다 자자..";
                     initialAudioSrc = "/static/greetings/greeting_night.mp3";
                 }
             }
