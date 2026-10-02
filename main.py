@@ -52,19 +52,18 @@ anthropic_client = anthropic.Anthropic(api_key=anthropic_key) if anthropic_key e
 
 # ElevenLabs 키: 환경변수 및 등록된 키 우선 활성화 (1순위), 실패 시 OpenAI 자동 폴백 (2순위)
 elevenlabs_key = os.getenv("ELEVENLABS_API_KEY", None)
-elevenlabs_voice_id = os.getenv("ELEVENLABS_VOICE_ID", "3O5O1l8nQtZUboIsdgXN")
+elevenlabs_voice_id = os.getenv("ELEVENLABS_VOICE_ID", "qVdqy4fn46WeI0HwDaV5")
 
 import urllib.request
 import json
 import uuid
+import io
 
 def ensure_roh_voice_clone(api_key: Optional[str] = None) -> Optional[str]:
     global elevenlabs_voice_id, elevenlabs_key
     key = api_key or elevenlabs_key
     if not key:
         return None
-    if elevenlabs_voice_id:
-        return elevenlabs_voice_id
 
     try:
         # 1. ElevenLabs 계정에 이미 생성된 순수 노윤서 클론이 있는지 검색
@@ -74,20 +73,31 @@ def ensure_roh_voice_clone(api_key: Optional[str] = None) -> Optional[str]:
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode())
-            for v in data.get("voices", []):
+            voices = data.get("voices", [])
+            # 계정 내 보이스 중 기존 voice_id 유효성 우선 검증
+            if elevenlabs_voice_id and any(v.get("voice_id") == elevenlabs_voice_id for v in voices):
+                return elevenlabs_voice_id
+
+            for v in voices:
                 name = v.get("name", "").lower()
                 if "pure" in name or "순수" in name or v.get("voice_id") == "PyETHgpGKCClcvneEjgw":
                     elevenlabs_voice_id = v.get("voice_id")
                     print(f"[ElevenLabs] 순수 노윤서 솔로 보이스 발견: {elevenlabs_voice_id}")
+                    ELEVEN_VOICE_MAP["roh"] = (elevenlabs_voice_id, 0.45, 0.85, 0.25, "eleven_multilingual_v2")
+                    ELEVEN_VOICE_MAP["minji"] = (elevenlabs_voice_id, 0.45, 0.85, 0.25, "eleven_multilingual_v2")
                     return elevenlabs_voice_id
-                elif "노윤서" in name or "roh" in name or "minji" in name:
+                elif "노윤서" in name or "roh" in name:
                     elevenlabs_voice_id = v.get("voice_id")
                     print(f"[ElevenLabs] 기존 노윤서 클론 보이스 발견: {elevenlabs_voice_id}")
+                    ELEVEN_VOICE_MAP["roh"] = (elevenlabs_voice_id, 0.45, 0.85, 0.25, "eleven_multilingual_v2")
+                    ELEVEN_VOICE_MAP["minji"] = (elevenlabs_voice_id, 0.45, 0.85, 0.25, "eleven_multilingual_v2")
                     return elevenlabs_voice_id
 
-        # 2. 없으면 보관 중인 20MB 고음질 인터뷰 육성 파일로 자동 보이스 클로닝 생성
-        sample1 = "static/audio/roh_sample_1.webm"
-        sample2 = "static/audio/roh_sample_2.webm"
+        # 2. 없으면 보관 중인 고음질 인터뷰 육성 파일로 신규 계정에 자동 보이스 클로닝 생성
+        sample1 = "static/audio/roh_sample_1.mp3"
+        sample2 = "static/audio/roh_sample_2.mp3"
+        if not os.path.exists(sample1): sample1 = "static/audio/roh_sample_1.webm"
+        if not os.path.exists(sample2): sample2 = "static/audio/roh_sample_2.webm"
         if not os.path.exists(sample1) and not os.path.exists(sample2):
             print("[ElevenLabs] 음성 샘플 파일이 없습니다.")
             return None
@@ -104,16 +114,17 @@ def ensure_roh_voice_clone(api_key: Optional[str] = None) -> Optional[str]:
             if os.path.exists(file_path):
                 with open(file_path, "rb") as f:
                     content = f.read()
+                mime = "audio/mpeg" if filename.endswith(".mp3") else "audio/webm"
                 body.write(f"--{boundary}\r\n".encode())
                 body.write(f'Content-Disposition: form-data; name="{n}"; filename="{filename}"\r\n'.encode())
-                body.write(b"Content-Type: audio/webm\r\n\r\n")
+                body.write(f"Content-Type: {mime}\r\n\r\n".encode())
                 body.write(content)
                 body.write(b"\r\n")
 
         add_field("name", "Roh Yoon-seo (노윤서)")
         add_field("description", "배우 노윤서 고유 인터뷰 육성 클론 (맑고 앳된 서울 억양의 20대 초반 음색)")
-        add_file("files", sample1, "roh_sample_1.webm")
-        add_file("files", sample2, "roh_sample_2.webm")
+        add_file("files", sample1, os.path.basename(sample1))
+        add_file("files", sample2, os.path.basename(sample2))
         body.write(f"--{boundary}--\r\n".encode())
 
         clone_url = "https://api.elevenlabs.io/v1/voices/add"
@@ -129,7 +140,9 @@ def ensure_roh_voice_clone(api_key: Optional[str] = None) -> Optional[str]:
         with urllib.request.urlopen(c_req, timeout=50) as resp:
             clone_res = json.loads(resp.read().decode())
             elevenlabs_voice_id = clone_res.get("voice_id")
-            print(f"[ElevenLabs] 신규 노윤서 클론 보이스 생성 완료: {elevenlabs_voice_id}")
+            print(f"[ElevenLabs] 신규 계정 노윤서 클론 보이스 생성 완료: {elevenlabs_voice_id}")
+            ELEVEN_VOICE_MAP["roh"] = (elevenlabs_voice_id, 0.45, 0.85, 0.25, "eleven_multilingual_v2")
+            ELEVEN_VOICE_MAP["minji"] = (elevenlabs_voice_id, 0.45, 0.85, 0.25, "eleven_multilingual_v2")
             return elevenlabs_voice_id
     except Exception as e:
         print(f"[ElevenLabs Voice Clone Error]: {e}")
@@ -414,6 +427,15 @@ async def setup_elevenlabs(req: ElevenLabsSetupRequest):
         "message": "✨ 노윤서 공식 클론 보이스가 성공적으로 연동되었습니다!"
     }
 
+@app.get("/api/voice-debug")
+def voice_debug():
+    global elevenlabs_key, elevenlabs_voice_id
+    return {
+        "has_key": elevenlabs_key is not None,
+        "key_suffix": (elevenlabs_key[-6:] if elevenlabs_key else None),
+        "voice_id": elevenlabs_voice_id
+    }
+
 
 
 def strip_hearts(text: str) -> str:
@@ -493,12 +515,12 @@ def pitch_shift_audio(
 
 ELEVEN_VOICE_MAP = {
     # ★ 민지 음성 프로필 (ElevenLabs 활성 시 고유 클론 보이스)
-    "roh": ("3O5O1l8nQtZUboIsdgXN", 0.45, 0.85, 0.25, "eleven_multilingual_v2"),     # 노윤서 클론
+    "roh": ("qVdqy4fn46WeI0HwDaV5", 0.45, 0.85, 0.25, "eleven_multilingual_v2"),     # 노윤서 클론 (30만 크레딧 신규 계정)
     "luna": ("Ss1VfT7ri4lqnvTDWII0", 0.52, 0.85, 0.12, "eleven_multilingual_v2"),    # 루나 스위트 위스퍼
     "lunita": ("kZJ3sOVD7WvNyF75aJZW", 0.48, 0.85, 0.20, "eleven_multilingual_v2"),  # 루니타 소프트
     "jane": ("ajfBUI2mmJMjvf2H6Yw7", 0.58, 0.85, 0.08, "eleven_multilingual_v2"),    # 제인 엘리트 비서
     "dahye": ("zXNMXSB7uul4lbmpaVAn", 0.50, 0.85, 0.15, "eleven_multilingual_v2"),   # 다혜
-    "minji": ("3O5O1l8nQtZUboIsdgXN", 0.45, 0.85, 0.25, "eleven_multilingual_v2"),
+    "minji": ("qVdqy4fn46WeI0HwDaV5", 0.45, 0.85, 0.25, "eleven_multilingual_v2"),
 }
 
 OPENAI_VOICE_MAP = {
@@ -3175,18 +3197,6 @@ def read_root():
                     <input type="range" id="volumeSlider" min="0" max="200" value="120" oninput="applyVolume(this.value)" style="width:68px; accent-color:#ff7b54; cursor:pointer; height:4px;">
                     <span id="volumeLabel" style="font-size:0.72rem; color:#ff9a76; min-width:28px;">120%</span>
                 </div>
-            </div>
-        </div>
-
-        <!-- 2-1행: ElevenLabs 보안 API 키 직접 입력 (Ctrl+V) -->
-        <div style="display:flex; flex-direction:column; gap:4px; width:100%; box-sizing:border-box; background:rgba(255,255,255,0.03); padding:8px 10px; border-radius:12px; border:1px solid rgba(255,123,84,0.25);">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-size:0.75rem; color:#ff9a76; font-weight:700;">🔑 ElevenLabs API 키 등록 (직접 붙여넣기):</span>
-                <span id="apiKeyStatus" style="font-size:0.70rem; color:#aaa;">(Ctrl+V 로 입력)</span>
-            </div>
-            <div style="display:flex; gap:6px; align-items:center; width:100%;">
-                <input type="password" id="customApiKeyInput" placeholder="sk_... 키를 여기에 붙여넣으세요" style="flex:1; background:#181824; border:1px solid rgba(255,123,84,0.4); border-radius:10px; padding:7px 10px; color:#fff; font-size:0.80rem; outline:none;" onkeydown="if(event.key==='Enter') saveCustomApiKey()">
-                <button type="button" onclick="saveCustomApiKey()" style="padding:7px 14px; font-size:0.78rem; border-radius:10px; background:linear-gradient(135deg, #ff7b54, #ff5252); border:none; color:#fff; font-weight:700; cursor:pointer; flex-shrink:0;">적용</button>
             </div>
         </div>
 
