@@ -16,7 +16,9 @@ from google.genai import types
 from openai import OpenAI
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
+if os.path.exists("/app/.env"):
+    load_dotenv("/app/.env", override=True)
 
 app = FastAPI(title="Minji AI Voice Engine")
 
@@ -52,7 +54,7 @@ anthropic_client = anthropic.Anthropic(api_key=anthropic_key) if anthropic_key e
 
 # ElevenLabs 키: 환경변수 및 등록된 키 우선 활성화 (1순위), 실패 시 OpenAI 자동 폴백 (2순위)
 elevenlabs_key = os.getenv("ELEVENLABS_API_KEY", None)
-elevenlabs_voice_id = os.getenv("ELEVENLABS_VOICE_ID", "qVdqy4fn46WeI0HwDaV5")
+elevenlabs_voice_id = os.getenv("ELEVENLABS_VOICE_ID", "Ss1VfT7ri4lqnvTDWII0")
 
 import urllib.request
 import json
@@ -513,43 +515,69 @@ def pitch_shift_audio(
     return audio_bytes
 
 
+def clean_audio_dsp(audio_bytes: bytes, eq_bass: float = -1.5, treble_boost: float = 2.0) -> bytes:
+    """피치 왜곡 없이 저음 흉성을 깎고 고음 에어 숨결을 살리는 고품질 하이파이 필터"""
+    try:
+        cmd = [
+            "ffmpeg", "-y", "-i", "pipe:0",
+            "-af", f"highpass=f=75,equalizer=f=300:t=q:w=1.2:g={eq_bass},equalizer=f=5000:t=q:w=1.2:g={treble_boost}",
+            "-f", "mp3", "pipe:1"
+        ]
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, _ = proc.communicate(input=audio_bytes)
+        if proc.returncode == 0 and out and len(out) > 100:
+            return out
+    except Exception as e:
+        print(f"[clean_audio_dsp Error]: {e}")
+    return audio_bytes
+
+
 ELEVEN_VOICE_MAP = {
-    # ★ 민지 음성 프로필 (ElevenLabs 활성 시 고유 클론 보이스)
-    "roh": ("qVdqy4fn46WeI0HwDaV5", 0.45, 0.85, 0.25, "eleven_multilingual_v2"),     # 노윤서 클론 (30만 크레딧 신규 계정)
-    "luna": ("Ss1VfT7ri4lqnvTDWII0", 0.52, 0.85, 0.12, "eleven_multilingual_v2"),    # 루나 스위트 위스퍼
+    # ★ 민지 공식 1픽 기본 보이스: 스위트 위스퍼 허니 (Luna 베이스 제안 2 확정본)
+    "luna": ("Ss1VfT7ri4lqnvTDWII0", 0.36, 0.85, 0.49, "eleven_multilingual_v2"),
+    "minji": ("Ss1VfT7ri4lqnvTDWII0", 0.36, 0.85, 0.49, "eleven_multilingual_v2"),
+    "roh": ("qVdqy4fn46WeI0HwDaV5", 0.45, 0.85, 0.25, "eleven_multilingual_v2"),     # 노윤서 클론
     "lunita": ("kZJ3sOVD7WvNyF75aJZW", 0.48, 0.85, 0.20, "eleven_multilingual_v2"),  # 루니타 소프트
     "jane": ("ajfBUI2mmJMjvf2H6Yw7", 0.58, 0.85, 0.08, "eleven_multilingual_v2"),    # 제인 엘리트 비서
     "dahye": ("zXNMXSB7uul4lbmpaVAn", 0.50, 0.85, 0.15, "eleven_multilingual_v2"),   # 다혜
-    "minji": ("qVdqy4fn46WeI0HwDaV5", 0.45, 0.85, 0.25, "eleven_multilingual_v2"),
 }
 
 OPENAI_VOICE_MAP = {
-    "roh": {"voice": "nova", "speed": 0.98},      # 맑고 앳된 20대 노윤서 톤
     "luna": {"voice": "shimmer", "speed": 0.95},  # 부드럽고 촉촉한 여친 위스퍼
+    "minji": {"voice": "shimmer", "speed": 0.95},
+    "roh": {"voice": "nova", "speed": 0.98},      # 맑고 앳된 20대 노윤서 톤
     "lunita": {"voice": "coral", "speed": 0.96},  # 달콤하고 상냥한 톤
     "jane": {"voice": "sage", "speed": 0.97},     # 단아하고 지적인 비서 톤
     "dahye": {"voice": "alloy", "speed": 1.0},
-    "minji": {"voice": "nova", "speed": 0.98},
 }
 
-def generate_tts_bytes(text: str, voice: str = "roh") -> bytes:
-    """초저지연 음성 생성기: ElevenLabs 활성 시 고유 클론 보이스 매핑, 쿼터 소진/폴백 시 OpenAI 다채널 감성 음성 매핑"""
+def generate_tts_bytes(text: str, voice: str = "luna") -> bytes:
+    """초저지연 음성 생성기: 스위트 위스퍼(Luna) 1순위 기본 매핑 & 다채널 감성 음성"""
     global elevenlabs_key
     cleaned_text = normalize_speech_text(text)
     day = is_daytime()
-    v_key = (voice or "roh").lower().strip()
+    v_key = (voice or "luna").lower().strip()
 
     # 1. ElevenLabs (유효 키 & 쿼터 보유 시)
     if elevenlabs_key:
-        v_info = ELEVEN_VOICE_MAP.get(v_key, ELEVEN_VOICE_MAP["roh"])
+        v_info = ELEVEN_VOICE_MAP.get(v_key, ELEVEN_VOICE_MAP["luna"])
         voice_id = v_info[0]
         model_name = v_info[4] if len(v_info) > 4 else "eleven_multilingual_v2"
-        settings = {
-            "stability": v_info[1],
-            "similarity_boost": v_info[2],
-            "style": v_info[3],
-            "use_speaker_boost": False
-        }
+
+        # 스위트 위스퍼 허니 낮/밤 감정선 튜닝
+        if v_key in ["luna", "minji"]:
+            if day:
+                settings = {"stability": 0.40, "similarity_boost": 0.86, "style": 0.42, "use_speaker_boost": False}
+            else:
+                settings = {"stability": 0.36, "similarity_boost": 0.85, "style": 0.49, "use_speaker_boost": False}
+        else:
+            settings = {
+                "stability": v_info[1],
+                "similarity_boost": v_info[2],
+                "style": v_info[3],
+                "use_speaker_boost": False
+            }
+
         for model_to_try in [model_name, "eleven_flash_v2_5"]:
             try:
                 tts_url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?optimize_streaming_latency=3"
@@ -571,6 +599,8 @@ def generate_tts_bytes(text: str, voice: str = "roh") -> bytes:
                 with urllib.request.urlopen(tts_req, timeout=8) as resp:
                     audio_data = resp.read()
                     if audio_data and len(audio_data) > 100:
+                        if v_key in ["luna", "minji"]:
+                            audio_data = clean_audio_dsp(audio_data, eq_bass=-1.5, treble_boost=2.0)
                         return audio_data
             except Exception as el_err:
                 print(f"[ElevenLabs {model_to_try} Error]: {el_err}")
@@ -3183,8 +3213,8 @@ def read_root():
             <div style="font-size:0.75rem; color:#aaa; text-align:left; font-weight:600;">🎙️ 목소리 음색 & 볼륨:</div>
             <div style="display:flex; gap:8px; align-items:center; width:100%; box-sizing:border-box;">
                 <select id="voiceSelect" onchange="onVoiceDropdownChange(this.value)" style="flex:1; min-width:0; background:#181824; color:#ff9a76; border:1px solid rgba(255,123,84,0.4); border-radius:12px; padding:8px 10px; font-size:0.82rem; font-weight:600; outline:none; cursor:pointer; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">
-                    <option value="roh" selected>✨ 노윤서 (20대 시크 & 나긋나긋 육성 클론)</option>
-                    <option value="luna">💖 루나 (청순 발랄 나긋나긋 여친톤)</option>
+                    <option value="luna" selected>💖 민지 (스위트 위스퍼 허니: 낮 비서 / 밤 여친 듀얼)</option>
+                    <option value="roh">✨ 노윤서 (20대 시크 & 나긋나긋 육성 클론)</option>
                     <option value="lunita">🎀 루니타 (부드럽고 달콤한 속삭임 톤)</option>
                     <option value="jane">☕ 제인 (단아하고 차분한 엘리트 비서 톤)</option>
                     <option value="dahye">🌸 다혜 (단아하고 나긋나긋한 여성미)</option>
@@ -6756,14 +6786,14 @@ def read_root():
         window.renderAuditionList = renderAuditionList;
         window.showVoiceToast = showVoiceToast;
 
-        // 초기 목소리 설정 복원 (기본 1픽: 20대 노윤서 클론 'roh')
+        // 초기 목소리 설정 복원 (기본 1픽: 스위트 위스퍼 'luna')
         const initSavedVoice = localStorage.getItem('minji_custom_voice');
         if (voiceSelect) {
-            if (initSavedVoice && ['roh', 'luna', 'lunita', 'jane', 'dahye'].includes(initSavedVoice)) {
+            if (initSavedVoice && ['luna', 'roh', 'lunita', 'jane', 'dahye'].includes(initSavedVoice)) {
                 voiceSelect.value = initSavedVoice;
             } else {
-                voiceSelect.value = 'roh';
-                localStorage.setItem('minji_custom_voice', 'roh');
+                voiceSelect.value = 'luna';
+                localStorage.setItem('minji_custom_voice', 'luna');
             }
         }
 
